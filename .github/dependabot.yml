@@ -1,0 +1,54 @@
+# Dependabot version updates. PR titles (= squash commit subjects) must be
+# Conventional Commits to pass commit-lint, and the prefix decides whether
+# release-please cuts a library release:
+#   fix(deps):   the library's own go.mod — a dependency bump is a patch release
+#   chore(deps): the demo, GitHub Actions and Docker images — no library release
+# Security updates (enabled in repo settings) follow the same commit-message
+# rules.
+
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      include: scope
+
+  - package-ecosystem: gomod
+    directory: /examples/demo
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      # Resolved from the local tree via `replace ... => ../..`; its version
+      # in the demo's go.mod is a placeholder.
+      - dependency-name: github.com/osanderson/singpass-client-go
+    groups:
+      demo-go:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /examples/demo
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      demo-images:
+        patterns: ["*"]

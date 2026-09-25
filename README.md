@@ -410,3 +410,10 @@ version) and publishes a GitHub release. Before 1.0, `feat` bumps the minor
 version, `fix` the patch, and breaking changes (`!` / `BREAKING CHANGE:`) the
 minor. Changes only under `examples/` don't trigger a library release. To force
 a version, add a `Release-As: X.Y.Z` footer to a commit.
+
+### Dependencies
+
+[Dependabot](.github/dependabot.yml) opens weekly update PRs (plus security
+updates) for Go modules, GitHub Actions and the demo's Docker images. Library
+dependency bumps are titled `fix(deps): …`, so they produce a patch release;
+demo, Actions and Docker bumps are `chore(deps): …` and don't.
