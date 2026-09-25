@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -84,6 +85,14 @@ func main() {
 			demoapp.RenderHome(w, homeApps(apps), "Login with "+app.Title+" was declined: "+denied.Code)
 		},
 		OnError: func(w http.ResponseWriter, _ *http.Request, app *web.App, err error) {
+			// A stale login (expired, reloaded callback, other browser) isn't a
+			// failure worth alarming the user about: ask them to try again.
+			if errors.Is(err, singpass.ErrLoginExpired) {
+				logger.Warn("login expired", "app", app.Name, "err", err)
+				w.WriteHeader(http.StatusBadRequest)
+				demoapp.RenderHome(w, homeApps(apps), "Your "+app.Title+" login expired. Please try again.")
+				return
+			}
 			logger.Error("login error", "app", app.Name, "err", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			demoapp.RenderHome(w, homeApps(apps), "Login with "+app.Title+" failed. See server logs.")

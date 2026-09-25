@@ -21,6 +21,14 @@ const DefaultMaxPendingLogins = 10_000
 // hitting the login route in a loop — and a caller may map it to 503.
 var ErrTooManyPendingLogins = errors.New("singpass: too many pending logins")
 
+// ErrLoginExpired is returned (wrapped) by Client.Complete when the callback's
+// state is unknown, already used or past its lifetime — typically the user took
+// too long, pressed back, or reloaded the callback page, or the process
+// restarted mid-login. It is not a protocol failure: show a "please try again"
+// page, e.g. with errors.Is(err, singpass.ErrLoginExpired). A custom
+// SessionStore should return (or wrap) it from Consume in the same cases.
+var ErrLoginExpired = errors.New("singpass: login expired or already used")
+
 // sessionSweepInterval bounds how often Create scans for expired sessions, so
 // the O(n) sweep is amortised across many logins rather than run on each one.
 const sessionSweepInterval = time.Minute
@@ -36,8 +44,8 @@ const sessionSweepInterval = time.Minute
 // memory stays bounded however fast the login route is hit.
 //
 // It is still per-process and non-durable, declares no storage.StoreAssurance,
-// and so — like memstore — is refused under client.AssuranceProduction.
-func NewMemorySessionStore(maxPending int) storage.SessionStore {
+// and so — like memstore — is refused under AssuranceProduction.
+func NewMemorySessionStore(maxPending int) SessionStore {
 	return newMemorySessionStore(maxPending, time.Now)
 }
 
@@ -90,16 +98,17 @@ func (s *memorySessionStore) sweepLocked(now time.Time) {
 }
 
 // Consume implements storage.SessionStore. The entry is deleted whether or not
-// it exists, so a State can be consumed at most once. An expired entry not yet
-// swept is still returned: FAPIgo checks ExpiresAt itself and reports it as
-// expired, a clearer error than "unknown state".
+// it exists, so a State can be consumed at most once. An unknown, already-used
+// or expired (but not yet swept) state is reported as ErrLoginExpired, so the
+// caller can tell a stale login from a protocol failure.
 func (s *memorySessionStore) Consume(_ context.Context, c storage.SessionConsumption) (storage.ConsumedSession, error) {
+	now := s.now()
 	s.mu.Lock()
 	sess, ok := s.sessions[c.State]
 	delete(s.sessions, c.State)
 	s.mu.Unlock()
-	if !ok {
-		return storage.ConsumedSession{}, errors.New("singpass: unknown, expired or already-consumed state")
+	if !ok || !now.Before(sess.ExpiresAt) {
+		return storage.ConsumedSession{}, ErrLoginExpired
 	}
 	return storage.ConsumedSession{
 		Nonce:                sess.Nonce,

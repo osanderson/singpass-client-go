@@ -19,7 +19,7 @@ by Corppass (`id.corppass.gov.sg`). Each product is onboarded as its **own clien
 > DPoP-protected `/userinfo` call. This library supplies only key material and
 > small hooks — a `keys.KeyManager` (signs client assertions + DPoP proofs), a
 > `keys.Decrypter` assembled from FAPIgo's own helpers, and a
-> `storage.SessionStore`. There is **no JOSE code of its own**.
+> `SessionStore`. There is **no JOSE code of its own**.
 
 ## Where each Singpass/Corppass requirement is handled
 

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	singpass "github.com/osanderson/singpass-client-go"
 )
@@ -127,6 +128,9 @@ func TestCallbackStateMismatch(t *testing.T) {
 			if got.err == nil || got.authenticated != nil {
 				t.Errorf("outcome = %+v, want OnError only", got)
 			}
+			if !errors.Is(got.err, ErrStateMismatch) || !errors.Is(got.err, singpass.ErrLoginExpired) {
+				t.Errorf("OnError err = %v, want ErrStateMismatch wrapping singpass.ErrLoginExpired", got.err)
+			}
 			if c := cookieNamed(rec, "sp_state_login"); c == nil || c.MaxAge >= 0 {
 				t.Errorf("state cookie = %+v, want cleared", c)
 			}
@@ -214,14 +218,14 @@ func TestCallbackReplacesPreviousSession(t *testing.T) {
 	auth := &fakeAuth{id: &singpass.Identity{Subject: "S"}}
 	h, app, _ := newTestHandlers(auth)
 
-	oldSID := h.sessions.Create(&singpass.Identity{Subject: "old"}, h.cookies.SessionTTL)
+	oldSID := mustCreate(t, h.sessions, &singpass.Identity{Subject: "old"}, h.cookies.SessionTTL)
 	req := callbackRequest("st-1", "st-1")
 	req.AddCookie(&http.Cookie{Name: "sid", Value: oldSID})
 
 	rec := httptest.NewRecorder()
 	h.Callback(app)(rec, req)
 
-	if _, ok := h.sessions.Get(oldSID); ok {
+	if _, ok := lookup(t, h.sessions, oldSID); ok {
 		t.Error("previous session still valid after re-login")
 	}
 	if c := cookieNamed(rec, "sid"); c == nil || c.Value == oldSID {
@@ -245,7 +249,7 @@ func TestCurrentIdentityWithoutSession(t *testing.T) {
 func TestLogout(t *testing.T) {
 	newLoggedIn := func() (*Handlers, string) {
 		h, _, _ := newTestHandlers(&fakeAuth{})
-		return h, h.sessions.Create(&singpass.Identity{Subject: "S"}, h.cookies.SessionTTL)
+		return h, mustCreate(t, h.sessions, &singpass.Identity{Subject: "S"}, h.cookies.SessionTTL)
 	}
 
 	t.Run("POST same-origin logs out", func(t *testing.T) {
@@ -260,7 +264,7 @@ func TestLogout(t *testing.T) {
 		if rec.Code != http.StatusFound {
 			t.Fatalf("status = %d, want 302", rec.Code)
 		}
-		if _, ok := h.sessions.Get(sid); ok {
+		if _, ok := lookup(t, h.sessions, sid); ok {
 			t.Error("session still valid after logout")
 		}
 		if c := cookieNamed(rec, "sid"); c == nil || c.MaxAge >= 0 {
@@ -279,7 +283,7 @@ func TestLogout(t *testing.T) {
 		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != http.MethodPost {
 			t.Fatalf("status = %d Allow=%q, want 405 Allow=POST", rec.Code, rec.Header().Get("Allow"))
 		}
-		if _, ok := h.sessions.Get(sid); !ok {
+		if _, ok := lookup(t, h.sessions, sid); !ok {
 			t.Error("GET logged the user out")
 		}
 	})
@@ -296,7 +300,7 @@ func TestLogout(t *testing.T) {
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("status = %d, want 403", rec.Code)
 		}
-		if _, ok := h.sessions.Get(sid); !ok {
+		if _, ok := lookup(t, h.sessions, sid); !ok {
 			t.Error("cross-site POST logged the user out")
 		}
 	})
@@ -333,5 +337,47 @@ func TestRegisterRoutes(t *testing.T) {
 		if rec.Code != want {
 			t.Errorf("GET %s = %d, want %d", path, rec.Code, want)
 		}
+	}
+}
+
+// failingStore is a LoginSessionStore whose backend is down.
+type failingStore struct{ err error }
+
+func (f failingStore) Create(context.Context, *singpass.Identity, time.Duration) (string, error) {
+	return "", f.err
+}
+func (f failingStore) Get(context.Context, string) (*singpass.Identity, bool, error) {
+	return nil, false, f.err
+}
+func (f failingStore) Delete(context.Context, string) error { return f.err }
+
+// TestCallbackSessionStoreFailure checks that a store error on Create reaches
+// OnError (wrapped) instead of a signed-in response, and sets no session cookie.
+func TestCallbackSessionStoreFailure(t *testing.T) {
+	storeErr := errors.New("redis down")
+	auth := &fakeAuth{id: &singpass.Identity{Subject: "S"}}
+	h, app, got := newTestHandlers(auth)
+	h.sessions = failingStore{err: storeErr}
+
+	rec := httptest.NewRecorder()
+	h.Callback(app)(rec, callbackRequest("st-1", "st-1"))
+
+	if !errors.Is(got.err, storeErr) || got.authenticated != nil {
+		t.Fatalf("outcome = %+v, want OnError wrapping the store error", got)
+	}
+	if c := cookieNamed(rec, "sid"); c != nil && c.MaxAge >= 0 {
+		t.Error("session cookie set despite store failure")
+	}
+}
+
+// TestCurrentIdentityStoreFailure checks a store error reads as signed out.
+func TestCurrentIdentityStoreFailure(t *testing.T) {
+	h, _, _ := newTestHandlers(&fakeAuth{})
+	h.sessions = failingStore{err: errors.New("redis down")}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "sid", Value: "abc"})
+	if id, ok := h.CurrentIdentity(req); ok || id != nil {
+		t.Errorf("CurrentIdentity = %v, %v; want nil, false", id, ok)
 	}
 }

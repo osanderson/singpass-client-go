@@ -28,15 +28,15 @@ func TestMemoryStoreExpiry(t *testing.T) {
 	st := newTestStore(clk)
 	want := &singpass.Identity{Subject: "S1234567D"}
 
-	sid := st.Create(want, 30*time.Minute)
+	sid := mustCreate(t, st, want, 30*time.Minute)
 
 	clk.t = clk.t.Add(30*time.Minute - time.Second)
-	if got, ok := st.Get(sid); !ok || got != want {
+	if got, ok := lookup(t, st, sid); !ok || got != want {
 		t.Fatalf("Get before expiry = %v, %v; want identity, true", got, ok)
 	}
 
 	clk.t = clk.t.Add(time.Second)
-	if got, ok := st.Get(sid); ok || got != nil {
+	if got, ok := lookup(t, st, sid); ok || got != nil {
 		t.Fatalf("Get at expiry = %v, %v; want nil, false", got, ok)
 	}
 }
@@ -47,9 +47,9 @@ func TestMemoryStoreSweep(t *testing.T) {
 	clk := &fakeClock{t: time.Unix(1_700_000_000, 0)}
 	st := newTestStore(clk)
 
-	old := st.Create(&singpass.Identity{}, time.Minute)
+	old := mustCreate(t, st, &singpass.Identity{}, time.Minute)
 	clk.t = clk.t.Add(2 * time.Minute) // past both the TTL and sweepInterval
-	fresh := st.Create(&singpass.Identity{}, time.Hour)
+	fresh := mustCreate(t, st, &singpass.Identity{}, time.Hour)
 
 	if _, present := st.m[old]; present {
 		t.Errorf("expired session %q still in map after sweep", old)
@@ -72,9 +72,9 @@ type recordingStore struct {
 	ttl time.Duration
 }
 
-func (r *recordingStore) Create(id *singpass.Identity, ttl time.Duration) string {
+func (r *recordingStore) Create(ctx context.Context, id *singpass.Identity, ttl time.Duration) (string, error) {
 	r.ttl = ttl
-	return r.LoginSessionStore.Create(id, ttl)
+	return r.LoginSessionStore.Create(ctx, id, ttl)
 }
 
 // TestCallbackPassesSessionTTL checks that the server-side session is created
@@ -101,4 +101,22 @@ func TestCallbackPassesSessionTTL(t *testing.T) {
 			t.Errorf("sid cookie MaxAge = %d, want %d", c.MaxAge, int((7 * time.Minute).Seconds()))
 		}
 	}
+}
+
+func mustCreate(t *testing.T, st LoginSessionStore, id *singpass.Identity, ttl time.Duration) string {
+	t.Helper()
+	sid, err := st.Create(context.Background(), id, ttl)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	return sid
+}
+
+func lookup(t *testing.T, st LoginSessionStore, sid string) (*singpass.Identity, bool) {
+	t.Helper()
+	id, ok, err := st.Get(context.Background(), sid)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	return id, ok
 }

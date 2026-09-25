@@ -16,7 +16,7 @@ import (
 // The private key never leaves this process. A KMS/HSM deployment would instead
 // implement keys.ECDHAgreer / keys.KeyDecrypter over its own backend and inject
 // the result via Dependencies.Decryption.
-func NewECDHDecrypter(encKey *ecdsa.PrivateKey, encKID string) (keys.Decrypter, error) {
+func NewECDHDecrypter(encKey *ecdsa.PrivateKey, encKID string) (Decrypter, error) {
 	if encKey == nil {
 		return nil, fmt.Errorf("singpass: encryption key is required")
 	}
@@ -46,7 +46,7 @@ func NewECDHDecrypter(encKey *ecdsa.PrivateKey, encKID string) (keys.Decrypter, 
 // /userinfo response. There is no kid parameter: the agreer reports its own key
 // id (keys.RecipientKey), which is what the published JWKS and JWE "kid"
 // matching use.
-func NewAgreerDecrypter(agreer keys.ECDHAgreer) (keys.Decrypter, error) {
+func NewAgreerDecrypter(agreer ECDHAgreer) (Decrypter, error) {
 	if agreer == nil {
 		return nil, fmt.Errorf("singpass: encryption agreer is required")
 	}

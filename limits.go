@@ -26,7 +26,7 @@ import (
 // Everything else (client-assertion lifetime, session lifetime, clock skew,
 // HTTP response-size cap) takes the library's recommended value. A caller that
 // needs different bounds sets Dependencies.Limits to its own client.Limits.
-func RecommendedLimits(httpTimeout time.Duration) client.Limits {
+func RecommendedLimits(httpTimeout time.Duration) Limits {
 	lim := client.RecommendedLimits()
 	lim.MaxIDTokenLifetime = time.Hour
 	lim.HTTPTimeout = httpTimeout

@@ -14,6 +14,7 @@ package web
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -21,9 +22,16 @@ import (
 	singpass "github.com/osanderson/singpass-client-go"
 )
 
-// authClient is the slice of *singpass.Client the web helper depends on, narrowed to
-// an interface so handlers are trivial to reason about (and to test).
-type authClient interface {
+// ErrStateMismatch is passed to Config.OnError when a callback's state doesn't
+// match the state cookie set at /{name}/login — usually because the cookie
+// expired (CookieConfig.StateTTL), the login was started in another browser,
+// or the callback page was reloaded. It wraps singpass.ErrLoginExpired, so one
+// errors.Is(err, singpass.ErrLoginExpired) check covers every stale-login case.
+var ErrStateMismatch = fmt.Errorf("web: login state mismatch: %w", singpass.ErrLoginExpired)
+
+// Authenticator is the part of *singpass.Client the handlers use. Any
+// *singpass.Client satisfies it; tests can substitute a stub.
+type Authenticator interface {
 	BeginLogin(ctx context.Context) (redirectURL, state string, err error)
 	Complete(ctx context.Context, rawQuery string) (*singpass.Identity, error)
 }
@@ -37,7 +45,7 @@ type authClient interface {
 type App struct {
 	Name  string
 	Title string
-	Auth  authClient
+	Auth  Authenticator
 	JWKS  []byte
 }
 
@@ -180,7 +188,7 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 		if c, err := r.Cookie(stateCookie); err != nil || c.Value == "" || c.Value != r.URL.Query().Get("state") {
 			h.log.Warn("callback state mismatch", "app", a.Name)
 			http.SetCookie(w, h.cookies.clear(stateCookie))
-			h.onError(w, r, a, errors.New("state mismatch"))
+			h.onError(w, r, a, ErrStateMismatch)
 			return
 		}
 		http.SetCookie(w, h.cookies.clear(stateCookie))
@@ -212,9 +220,16 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 		// Replace, rather than add to, any session this browser already holds, so
 		// re-logging in (or switching apps) does not leave the old entry live.
 		if c, err := r.Cookie(h.cookies.SessionName); err == nil && c.Value != "" {
-			h.sessions.Delete(c.Value)
+			if err := h.sessions.Delete(r.Context(), c.Value); err != nil {
+				h.log.Warn("drop previous session", "app", a.Name, "err", err)
+			}
 		}
-		sid := h.sessions.Create(id, h.cookies.SessionTTL)
+		sid, err := h.sessions.Create(r.Context(), id, h.cookies.SessionTTL)
+		if err != nil {
+			h.log.Error("create session", "app", a.Name, "err", err)
+			h.onError(w, r, a, fmt.Errorf("web: create session: %w", err))
+			return
+		}
 		http.SetCookie(w, h.cookies.set(h.cookies.SessionName, sid, h.cookies.SessionTTL))
 		h.onAuthenticated(w, r, a, id)
 	}
@@ -238,7 +253,9 @@ func (h *Handlers) Logout() http.HandlerFunc {
 			return
 		}
 		if c, err := r.Cookie(h.cookies.SessionName); err == nil {
-			h.sessions.Delete(c.Value)
+			if err := h.sessions.Delete(r.Context(), c.Value); err != nil {
+				h.log.Warn("delete session on logout", "err", err)
+			}
 		}
 		http.SetCookie(w, h.cookies.clear(h.cookies.SessionName))
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -262,5 +279,10 @@ func (h *Handlers) CurrentIdentity(r *http.Request) (*singpass.Identity, bool) {
 	if err != nil || c.Value == "" {
 		return nil, false
 	}
-	return h.sessions.Get(c.Value)
+	id, ok, err := h.sessions.Get(r.Context(), c.Value)
+	if err != nil {
+		h.log.Error("load session", "err", err)
+		return nil, false
+	}
+	return id, ok
 }

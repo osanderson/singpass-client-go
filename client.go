@@ -28,7 +28,6 @@ import (
 	"github.com/idfoundry/fapigo/client"
 	"github.com/idfoundry/fapigo/extension"
 	"github.com/idfoundry/fapigo/fapihttp"
-	"github.com/idfoundry/fapigo/keys"
 	"github.com/idfoundry/fapigo/storage"
 
 	"github.com/osanderson/singpass-client-go/myinfo"
@@ -62,29 +61,28 @@ type Options struct {
 // are required; every other field's zero value selects a sensible staging
 // default, so the simple path is Dependencies{Keys: km, Decryption: dec}. A
 // production deployment sets the fields it needs to harden — most importantly a
-// durable Sessions store together with Assurance: client.AssuranceProduction.
+// durable Sessions store together with Assurance: AssuranceProduction.
 type Dependencies struct {
 	// Keys performs this client's signing operations (client assertion + DPoP
 	// proof). Required. See NewKeyManager.
-	Keys keys.KeyManager
+	Keys KeyManager
 
 	// Decryption recovers the content-encryption key of the encrypted id_token
 	// (and /userinfo response). Required. See NewECDHDecrypter.
-	Decryption keys.Decrypter
+	Decryption Decrypter
 
 	// Sessions persists in-progress authorization-flow state. Nil installs
 	// NewMemorySessionStore(0): per-process and non-durable, but expired
 	// sessions are dropped and pending logins are capped, so abandoned logins
 	// cannot grow memory without bound. Fine for a single instance /
 	// development; refused under AssuranceProduction.
-	Sessions storage.SessionStore
+	Sessions SessionStore
 
 	// Assurance gates how strict FAPIgo's dependency validation is. Zero means
-	// client.AssuranceDevelopment (permits the in-memory Sessions default).
-	// client.AssuranceProduction requires a Sessions store declaring
-	// storage.StoreAssurance (Durable + AtomicConsume), so the in-memory
-	// default is refused.
-	Assurance client.AssuranceLevel
+	// AssuranceDevelopment (permits the in-memory Sessions default).
+	// AssuranceProduction requires a Sessions store declaring StoreAssurance
+	// (Durable + AtomicConsume), so the in-memory default is refused.
+	Assurance AssuranceLevel
 
 	// HTTPClient is the base client for discovery, JWKS, PAR, token and
 	// /userinfo calls. Nil builds &http.Client{Timeout: HTTPTimeout}.
@@ -95,7 +93,7 @@ type Dependencies struct {
 	HTTPTimeout time.Duration
 
 	// Clock supplies the current time. Nil means client.SystemClock{}.
-	Clock client.Clock
+	Clock Clock
 
 	// Random is the randomness source for state/nonce/PKCE. Nil means
 	// crypto/rand.Reader.
@@ -103,14 +101,14 @@ type Dependencies struct {
 
 	// Limits bounds token lifetimes and JOSE/HTTP sizes. Nil means
 	// RecommendedLimits(HTTPTimeout).
-	Limits *client.Limits
+	Limits *Limits
 
 	// Algorithms overrides the FAPI algorithm suite. Nil selects the
 	// Singpass/Corppass suite (ES256; id_token ECDH-ES+A256KW / A256CBC-HS512;
 	// and, when Options.FetchUserInfo is set, /userinfo A256GCM). When you set
 	// this, it is used verbatim and the FetchUserInfo augmentation is skipped —
 	// declare the /userinfo algorithms yourself.
-	Algorithms *client.Algorithms
+	Algorithms *Algorithms
 
 	// Debug, when true, logs outbound PAR/token/userinfo requests and responses
 	// (method, URL, form body, sizes) via Logger. The request dump includes the
