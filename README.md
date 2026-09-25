@@ -235,7 +235,7 @@ exp validation — is FAPIgo's.
 The id_token only proves *who* logged in; person data lives behind the
 DPoP-protected `/userinfo` endpoint. When `FetchUserInfo` is set, `Complete` calls
 FAPIgo's native `Client.FetchUserInfo`, which: makes the DPoP-bound `GET` (RFC
-9449, with `ath`), retries once on a `401` + `DPoP-Nonce` challenge (§8), decrypts
+9449, with `ath`), retries once on a `401` + `DPoP-Nonce` challenge (§9), decrypts
 the response JWE (`ECDH-ES+A256KW` / **`A256GCM`** — note the content encryption
 differs from the id_token's `A256CBC-HS512`) through the same `keys.Decrypter`
 (which serves both `IDTokenDecryption` and `UserInfoDecryption`), verifies the
