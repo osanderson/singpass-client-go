@@ -26,6 +26,17 @@ Singpass pieces.
   an external ECDH agreer, so private keys needn't enter the process.
 - **Optional `net/http` helper** — login, callback, logout and JWKS routes; you
   render the pages.
+- **Test without onboarding** — `singpasstest` runs a fake Singpass/Corppass
+  server in-process for integration tests, and the demo runs against it with
+  one environment variable.
+
+**Try it now**, no Singpass account or onboarding needed:
+
+```sh
+git clone https://github.com/osanderson/singpass-client-go
+cd singpass-client-go/examples/demo
+DEMO_MOCK=1 go run ./cmd/server   # open http://localhost:8088
+```
 
 ## Install
 
@@ -115,6 +126,17 @@ claims have typed accessors too: `id.Issuer()`, `id.AuthMethods()`,
 | [`…/myinfo`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/myinfo) | Myinfo data model; standard library only |
 | [`…/web`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/web) | Optional `net/http` handlers and login sessions |
 | [`…/keyfile`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/keyfile) | Generate and load EC P-256 PEM keys |
+| [`…/singpasstest`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest) | Fake Singpass / Corppass server for tests and demos |
+
+## Testing your integration
+
+`singpasstest` runs a fake Singpass or Corppass authorization server in-process,
+built on FAPIgo's real server engine: PAR, DPoP, `private_key_jwt`, PKCE,
+encrypted id_tokens and signed, encrypted `/userinfo`, plus the
+Singpass/Corppass quirks. Register your client with it, point the client at
+`srv.Issuer()` with `Dependencies{AllowLoopbackHTTP: true}`, and drive a full
+login in a test — see the
+[example](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest#example-package).
 
 ## Going to production
 

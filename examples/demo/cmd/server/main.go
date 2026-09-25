@@ -51,6 +51,16 @@ func main() {
 		Logger:      logger,
 	}
 
+	if cfg.Mock {
+		closeMock, err := startMock(&cfg, logger)
+		if err != nil {
+			logger.Error("start mock servers", "err", err)
+			os.Exit(1)
+		}
+		defer closeMock()
+		deps.AllowLoopbackHTTP = true
+	}
+
 	var apps []*web.App
 	for _, ac := range cfg.Apps {
 		client, jwks, err := buildApp(ctx, ac, deps)
@@ -192,13 +202,17 @@ func newLogger(jsonFormat bool) *slog.Logger {
 // exercises all three. Key material is loaded from the PEM files the config
 // points at.
 func buildApp(ctx context.Context, ac config.AppConfig, deps singpass.Dependencies) (*singpass.Client, []byte, error) {
-	sigKey, err := keyfile.LoadECPrivateKey(ac.SigKeyPath)
-	if err != nil {
-		return nil, nil, err
+	sigKey, encKey := ac.SigKey, ac.EncKey
+	var err error
+	if sigKey == nil {
+		if sigKey, err = keyfile.LoadECPrivateKey(ac.SigKeyPath); err != nil {
+			return nil, nil, err
+		}
 	}
-	encKey, err := keyfile.LoadECPrivateKey(ac.EncKeyPath)
-	if err != nil {
-		return nil, nil, err
+	if encKey == nil {
+		if encKey, err = keyfile.LoadECPrivateKey(ac.EncKeyPath); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	var client *singpass.Client
