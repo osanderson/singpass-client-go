@@ -53,7 +53,7 @@ type LoginOptions struct {
 	// process), and the kid comes from the agreer itself — EncryptionKID is not
 	// used. Ignored when Dependencies.Decryption is supplied. See
 	// NewAgreerDecrypter.
-	EncryptionAgreer keys.ECDHAgreer
+	EncryptionAgreer ECDHAgreer
 }
 
 // MyinfoOptions configures a Singpass Myinfo relying party: authentication plus
@@ -77,7 +77,7 @@ type MyinfoOptions struct {
 	// this process), and the kid comes from the agreer itself — EncryptionKID is
 	// not used. Ignored when Dependencies.Decryption is supplied. See
 	// NewAgreerDecrypter.
-	EncryptionAgreer keys.ECDHAgreer
+	EncryptionAgreer ECDHAgreer
 }
 
 // MyinfoBusinessOptions configures a Corppass Myinfo Business relying party: the
@@ -102,7 +102,7 @@ type MyinfoBusinessOptions struct {
 	// this process), and the kid comes from the agreer itself — EncryptionKID is
 	// not used. Ignored when Dependencies.Decryption is supplied. See
 	// NewAgreerDecrypter.
-	EncryptionAgreer keys.ECDHAgreer
+	EncryptionAgreer ECDHAgreer
 }
 
 // NewLogin constructs a Login relying party. It fills in the Login-specific

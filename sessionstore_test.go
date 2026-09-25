@@ -106,3 +106,29 @@ func TestBeginLoginReportsPendingCap(t *testing.T) {
 		t.Fatalf("second BeginLogin err = %v, want ErrTooManyPendingLogins", err)
 	}
 }
+
+// TestMemorySessionStoreLoginExpired checks that every stale-callback case —
+// unknown state, a replayed state, and a session past its lifetime that the
+// sweep hasn't removed yet — surfaces as ErrLoginExpired, so callers can show
+// "please try again" rather than a protocol error.
+func TestMemorySessionStoreLoginExpired(t *testing.T) {
+	ctx := context.Background()
+	now := time.Unix(1_700_000_000, 0)
+	clk := &now
+	s := newMemorySessionStore(0, func() time.Time { return *clk })
+	for _, st := range []string{"used", "stale"} {
+		if err := s.Create(ctx, storage.NewSession{State: st, ExpiresAt: now.Add(5 * time.Minute)}); err != nil {
+			t.Fatalf("Create %s: %v", st, err)
+		}
+	}
+	if _, err := s.Consume(ctx, storage.SessionConsumption{State: "used"}); err != nil {
+		t.Fatalf("first Consume: %v", err)
+	}
+	*clk = now.Add(6 * time.Minute) // "stale" is expired but not yet swept
+
+	for _, st := range []string{"never-issued", "used", "stale"} {
+		if _, err := s.Consume(ctx, storage.SessionConsumption{State: st}); !errors.Is(err, ErrLoginExpired) {
+			t.Errorf("Consume(%q) err = %v, want ErrLoginExpired", st, err)
+		}
+	}
+}

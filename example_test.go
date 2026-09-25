@@ -86,7 +86,7 @@ func ExampleOfflineClientJWKS() {
 	enc, _ := keyfile.GenerateECKey()
 	// Persist both with keyfile.MarshalECPrivateKeyPEM (file mode 0600).
 
-	jwks, err := singpass.OfflineClientJWKS(context.Background(), sig, "login-sig-1", enc, "login-enc-1")
+	jwks, err := singpass.OfflineClientJWKS(context.Background(), &sig.PublicKey, "login-sig-1", &enc.PublicKey, "login-enc-1")
 	if err != nil {
 		log.Fatal(err)
 	}

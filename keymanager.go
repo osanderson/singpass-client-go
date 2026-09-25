@@ -31,7 +31,7 @@ import (
 // The id_token encryption key is NOT handled here — FAPIgo never signs with it.
 // It is used only for JWE decryption, driven through the separate keys.Decrypter
 // (see NewECDHDecrypter), which is why it lives outside the KeyManager contract.
-func NewKeyManager(sig crypto.Signer, sigKID string) (keys.KeyManager, error) {
+func NewKeyManager(sig crypto.Signer, sigKID string) (KeyManager, error) {
 	if sig == nil {
 		return nil, fmt.Errorf("singpass: client authentication key is required")
 	}

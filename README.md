@@ -75,7 +75,10 @@ Not using the helper? `client.BeginLogin(ctx)` returns the redirect URL and a
 state handle, and `client.Complete(ctx, r.URL.RawQuery)` validates the callback
 and returns the `*singpass.Identity` — see the
 [`Client.Complete` example](https://pkg.go.dev/github.com/osanderson/singpass-client-go#example-Client.Complete).
-A cancelled or denied login comes back as a `*singpass.DeniedError`.
+A cancelled or denied login comes back as a `*singpass.DeniedError`, and a stale
+one (expired, reloaded or replayed callback) matches
+`errors.Is(err, singpass.ErrLoginExpired)` — show a "please try again" page for
+it rather than an error.
 
 Need keys to register? `keyfile.GenerateECKey` and `singpass.OfflineClientJWKS`
 produce them and the public JWKS

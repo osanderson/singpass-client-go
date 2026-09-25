@@ -9,9 +9,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -360,4 +362,22 @@ func TestEnsureKeyDepsPrecedence(t *testing.T) {
 			t.Error("no encryption key or agreer: want error")
 		}
 	})
+}
+
+// TestCompleteStaleStateIsLoginExpired checks that ErrLoginExpired from the
+// session store survives FAPIgo's and Complete's error wrapping, so a caller's
+// errors.Is check works on what Complete returns.
+func TestCompleteStaleStateIsLoginExpired(t *testing.T) {
+	deps := testKeyDeps(t)
+	deps.HTTPClient = fakeIssuer(t, discoveryDoc())
+	c, err := New(context.Background(), baseOptions(), deps)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	q := url.Values{"state": {"never-issued"}, "code": {"x"}, "iss": {testIssuer}}
+	_, err = c.Complete(context.Background(), q.Encode())
+	if !errors.Is(err, ErrLoginExpired) {
+		t.Fatalf("Complete err = %v, want ErrLoginExpired", err)
+	}
 }

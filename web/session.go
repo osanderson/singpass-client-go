@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"sync"
@@ -16,17 +17,22 @@ import (
 // which holds in-flight authorization state between BeginLogin and Complete and
 // is a different concept with a different interface.
 //
-// Implementations must be safe for concurrent use.
+// Implementations must be safe for concurrent use. The context is the
+// request's, for a store backed by Redis, SQL or similar; an error means the
+// store itself failed, not that a session is missing.
 type LoginSessionStore interface {
 	// Create stores id for ttl and returns a fresh opaque session id. The
 	// handlers pass the session cookie's lifetime (CookieConfig.SessionTTL), so
 	// the server-side entry dies with the cookie: a copied session id stops
 	// working once ttl has elapsed, whatever the browser does with the cookie.
-	Create(id *singpass.Identity, ttl time.Duration) string
-	// Get returns the identity for sid, or ok=false if none or expired.
-	Get(sid string) (*singpass.Identity, bool)
-	// Delete removes the session for sid (a no-op if absent).
-	Delete(sid string)
+	// The session id must be unguessable (e.g. 32 bytes from crypto/rand).
+	Create(ctx context.Context, id *singpass.Identity, ttl time.Duration) (sid string, err error)
+	// Get returns the identity for sid, or ok=false (and a nil error) if there
+	// is none or it has expired.
+	Get(ctx context.Context, sid string) (id *singpass.Identity, ok bool, err error)
+	// Delete removes the session for sid; deleting an absent session is not
+	// an error.
+	Delete(ctx context.Context, sid string) error
 }
 
 // NewMemoryLoginSessionStore returns an in-memory LoginSessionStore. Entries
@@ -54,7 +60,7 @@ type memoryLoginSessionStore struct {
 // the O(n) sweep is amortised over many logins rather than run on each one.
 const sweepInterval = time.Minute
 
-func (st *memoryLoginSessionStore) Create(id *singpass.Identity, ttl time.Duration) string {
+func (st *memoryLoginSessionStore) Create(_ context.Context, id *singpass.Identity, ttl time.Duration) (string, error) {
 	sid := newSessionID()
 	now := st.now()
 	st.mu.Lock()
@@ -68,23 +74,24 @@ func (st *memoryLoginSessionStore) Create(id *singpass.Identity, ttl time.Durati
 		st.nextSweep = now.Add(sweepInterval)
 	}
 	st.m[sid] = memorySession{id: id, expires: now.Add(ttl)}
-	return sid
+	return sid, nil
 }
 
-func (st *memoryLoginSessionStore) Get(sid string) (*singpass.Identity, bool) {
+func (st *memoryLoginSessionStore) Get(_ context.Context, sid string) (*singpass.Identity, bool, error) {
 	st.mu.RLock()
 	s, ok := st.m[sid]
 	st.mu.RUnlock()
 	if !ok || !st.now().Before(s.expires) {
-		return nil, false
+		return nil, false, nil
 	}
-	return s.id, true
+	return s.id, true, nil
 }
 
-func (st *memoryLoginSessionStore) Delete(sid string) {
+func (st *memoryLoginSessionStore) Delete(_ context.Context, sid string) error {
 	st.mu.Lock()
 	delete(st.m, sid)
 	st.mu.Unlock()
+	return nil
 }
 
 func newSessionID() string {

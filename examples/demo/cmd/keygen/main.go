@@ -78,7 +78,7 @@ func generate(ctx context.Context, a keyapp, force bool) error {
 		return err
 	}
 
-	jwks, err := singpass.OfflineClientJWKS(ctx, sigKey, a.sigKID, encKey, a.encKID)
+	jwks, err := singpass.OfflineClientJWKS(ctx, &sigKey.PublicKey, a.sigKID, &encKey.PublicKey, a.encKID)
 	if err != nil {
 		return err
 	}
