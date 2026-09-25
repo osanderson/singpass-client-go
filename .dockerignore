@@ -1,0 +1,10 @@
+# Keep secrets and local state out of the build context: private keys and the
+# demo's .env must never end up in an image layer.
+.git
+.github
+**/.env
+**/*.pem
+examples/demo/keys
+go.work
+go.work.sum
+**/.DS_Store

@@ -30,3 +30,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Private key material (demo keygen output, registered with Singpass/Corppass)
+examples/demo/keys/
+*.pem
+
+# macOS
+.DS_Store

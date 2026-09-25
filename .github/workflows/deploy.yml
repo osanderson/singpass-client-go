@@ -1,0 +1,122 @@
+name: Deploy Singpass Demo
+
+# Tests both modules, then builds the demo image and deploys it to Cloud Run.
+# Google auth is keyless: GitHub OIDC -> Workload Identity Federation ->
+# singpass-demo-deployer. The WIF provider only accepts this repo on main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two deploys at once; let an in-progress one finish.
+concurrency:
+  group: deploy-rp-demo
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: singpass-demo-rp
+  REGION: asia-southeast1
+  AR_REPOSITORY: singpass-demo
+  # Cloud Run service name, which becomes the public hostname. It must not
+  # contain "singpass", "corppass" or "myinfo": Singpass/Corppass reject
+  # redirect URIs with those words.
+  SERVICE: rp-demo
+  IMAGE: demo
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            examples/demo/go.sum
+
+      - name: Test library
+        run: |
+          go vet ./...
+          go test -race ./...
+
+      - name: Test demo
+        working-directory: examples/demo
+        run: |
+          go vet ./...
+          go test -race ./...
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: >-
+            projects/1090410730433/locations/global/workloadIdentityPools/github/providers/github
+          service_account: >-
+            singpass-demo-deployer@singpass-demo-rp.iam.gserviceaccount.com
+
+      - name: Set up Google Cloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        run: |
+          IMAGE_REF="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE}:${GITHUB_SHA}"
+          echo "IMAGE_REF=${IMAGE_REF}" >> "$GITHUB_ENV"
+          # Context is the repo root: the demo module replaces the library with ../..
+          docker build -f examples/demo/Dockerfile -t "${IMAGE_REF}" .
+          docker push "${IMAGE_REF}"
+
+      # --env-vars-file replaces all env vars, so the committed file is the
+      # service's whole non-secret config. Each private key is mounted from
+      # Secret Manager into its own directory (Cloud Run allows one secret per
+      # mount directory); only singpass-demo-runtime can read them.
+      #
+      # --max-instances=1: the demo keeps pending logins and app sessions in
+      # memory, so a callback must reach the instance that started the login.
+      - name: Deploy to Cloud Run
+        run: |
+          SECRETS=""
+          for app in login myinfo myinfobiz; do
+            for use in sig enc; do
+              SECRETS="${SECRETS:+${SECRETS},}/secrets/${app}-${use}/key.pem=singpass-demo-${app}-${use}:latest"
+            done
+          done
+          gcloud run deploy "${SERVICE}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --image="${IMAGE_REF}" \
+            --service-account="singpass-demo-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --env-vars-file=examples/demo/deploy/cloudrun.env.yaml \
+            --set-secrets="${SECRETS}" \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=1 \
+            --quiet
+
+      - name: Show deployment URL
+        run: |
+          URL=$(gcloud run services describe "${SERVICE}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --format="value(status.url)")
+          echo "Deployed: ${URL}" | tee -a "$GITHUB_STEP_SUMMARY"
