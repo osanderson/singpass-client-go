@@ -1,0 +1,33 @@
+name: Commit Lint
+
+# Pull requests: the PR title and every commit must be Conventional Commits.
+# The repo squash-merges with the PR title as the commit subject, so a passing
+# title is what lands on main. Pushes to main are checked in deploy.yml.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  commit-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Title passed via env, never interpolated into the script.
+      - name: Check PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "${PR_TITLE}" | scripts/check-commit-msg.sh -
+
+      - name: Check commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: scripts/check-commit-range.sh "${BASE_SHA}" "${HEAD_SHA}"

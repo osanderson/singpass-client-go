@@ -375,3 +375,21 @@ gracefully on `SIGTERM`.
   (`limits.go`), since a full-scope Myinfo `/userinfo` response runs well past
   the 16 KiB baseline; fixed-shape artifacts (DPoP proofs, client assertions) are
   unaffected.
+
+## Contributing
+
+Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/):
+`<type>(<scope>)?!?: <summary>`, with type one of `build`, `chore`, `ci`,
+`docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` or `test`, e.g.
+`feat(myinfo): expose container-level source`. The rule lives in
+[`scripts/check-commit-msg.sh`](scripts/check-commit-msg.sh) and is enforced
+in three places:
+
+- **Locally** — enable the bundled `commit-msg` hook once per clone:
+  `git config core.hooksPath .githooks`.
+- **Pull requests** — [`commit-lint.yml`](.github/workflows/commit-lint.yml)
+  checks the PR title and every commit. PRs are squash-merged with the PR title
+  as the commit subject.
+- **Pushes to `main`** — the `commit-lint` job in
+  [`deploy.yml`](.github/workflows/deploy.yml) checks the pushed commits and
+  blocks the deploy if any fails.

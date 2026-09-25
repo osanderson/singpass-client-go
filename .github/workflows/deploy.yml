@@ -28,6 +28,22 @@ env:
   IMAGE: demo
 
 jobs:
+  # GitHub Free can't protect branches on a private repo, so this is the
+  # enforcement point for pushes to main: a non-Conventional Commit can land,
+  # but it blocks the deploy. Checks only the commits this push added.
+  commit-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: scripts/check-commit-range.sh "${BEFORE}" "${GITHUB_SHA}"
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -54,7 +70,7 @@ jobs:
           go test -race ./...
 
   deploy:
-    needs: test
+    needs: [commit-lint, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
