@@ -378,6 +378,12 @@ gracefully on `SIGTERM`.
 
 ## Contributing
 
+`main` is protected by a repository ruleset: changes land only through pull
+requests, squash-merged (linear history, no force pushes or deletion), and
+require passing checks — `commit-lint` plus [`ci.yml`](.github/workflows/ci.yml)
+(`gofmt`, `go mod tidy`, `go vet`, staticcheck, build, `go test -race`,
+govulncheck for both modules; a no-push build of the demo image; actionlint).
+
 Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/):
 `<type>(<scope>)?!?: <summary>`, with type one of `build`, `chore`, `ci`,
 `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` or `test`, e.g.
@@ -391,5 +397,5 @@ in three places:
   checks the PR title and every commit. PRs are squash-merged with the PR title
   as the commit subject.
 - **Pushes to `main`** — the `commit-lint` job in
-  [`deploy.yml`](.github/workflows/deploy.yml) checks the pushed commits and
-  blocks the deploy if any fails.
+  [`deploy.yml`](.github/workflows/deploy.yml) re-checks the pushed commits (and
+  `deploy.yml` re-runs `ci.yml`) before deploying.
