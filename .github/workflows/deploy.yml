@@ -1,6 +1,6 @@
 name: Deploy Singpass Demo
 
-# Tests both modules, then builds the demo image and deploys it to Cloud Run.
+# Runs CI (ci.yml), then builds the demo image and deploys it to Cloud Run.
 # Google auth is keyless: GitHub OIDC -> Workload Identity Federation ->
 # singpass-demo-deployer. The WIF provider only accepts this repo on main.
 
@@ -28,9 +28,9 @@ env:
   IMAGE: demo
 
 jobs:
-  # GitHub Free can't protect branches on a private repo, so this is the
-  # enforcement point for pushes to main: a non-Conventional Commit can land,
-  # but it blocks the deploy. Checks only the commits this push added.
+  # Backstop for the protect-main ruleset (which already requires PRs with a
+  # passing commit-lint): checks the commits this push added and blocks the
+  # deploy if any isn't a Conventional Commit.
   commit-lint:
     runs-on: ubuntu-latest
     steps:
@@ -44,33 +44,13 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: scripts/check-commit-range.sh "${BEFORE}" "${GITHUB_SHA}"
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            examples/demo/go.sum
-
-      - name: Test library
-        run: |
-          go vet ./...
-          go test -race ./...
-
-      - name: Test demo
-        working-directory: examples/demo
-        run: |
-          go vet ./...
-          go test -race ./...
+  # The same checks pull requests must pass (ci.yml), run again on the
+  # exact commit being deployed.
+  ci:
+    uses: ./.github/workflows/ci.yml
 
   deploy:
-    needs: [commit-lint, test]
+    needs: [commit-lint, ci]
     runs-on: ubuntu-latest
     permissions:
       contents: read

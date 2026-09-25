@@ -1,0 +1,115 @@
+name: CI
+
+# Format, vet, lint, build, test and vulnerability-check both modules, check
+# the demo image builds, and lint the workflows. Runs on every pull request
+# (required by the protect-main ruleset) and is reused by deploy.yml, so a
+# push to main is checked before it deploys.
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  STATICCHECK_VERSION: v0.8.1
+  GOVULNCHECK_VERSION: v1.8.0
+  ACTIONLINT_VERSION: v1.7.12
+
+jobs:
+  go:
+    name: go (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: library
+            dir: .
+          - name: demo
+            dir: examples/demo
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    env:
+      # go.work is gitignored; the demo resolves the library via its replace.
+      GOWORK: "off"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            examples/demo/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt needed on:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Check go.mod / go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Staticcheck
+        run: go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Vulnerability check
+        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
+  docker:
+    name: docker (demo image)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Build only (no push) so Dockerfile / build-context breakage shows up
+      # on the PR rather than at deploy time.
+      - name: Build demo image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: examples/demo/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Lint workflows
+        run: go run "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
