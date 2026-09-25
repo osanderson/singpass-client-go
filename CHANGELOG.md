@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/osanderson/singpass-client-go/compare/v0.1.1...v0.2.0) (2026-09-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* tidy the public API before 1.0 ([#8](https://github.com/osanderson/singpass-client-go/issues/8))
+
+### Features
+
+* tidy the public API before 1.0 ([#8](https://github.com/osanderson/singpass-client-go/issues/8)) ([6436b3b](https://github.com/osanderson/singpass-client-go/commit/6436b3be764f80e854a7248823e0a8ca5523b164))
+
 ## [0.1.1](https://github.com/osanderson/singpass-client-go/compare/v0.1.0...v0.1.1) (2026-09-25)
 
 
