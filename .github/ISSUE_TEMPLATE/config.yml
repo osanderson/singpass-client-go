@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/osanderson/singpass-client-go/security/advisories/new
+    about: Please report security issues privately, not as a public issue.
+  - name: Singpass developer documentation
+    url: https://docs.developer.singpass.gov.sg/
+    about: Questions about Singpass itself (onboarding, scopes, policies).
