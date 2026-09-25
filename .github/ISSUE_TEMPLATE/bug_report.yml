@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in the library or demo doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security issue? Please report it privately instead — see SECURITY.md.
+        **Never paste private keys, access tokens, id_tokens or real personal data.**
+  - type: input
+    id: version
+    attributes:
+      label: Library version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      multiple: true
+      options: [Singpass Login, Myinfo, Myinfo Business (Corppass), Not product-specific]
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options: [Staging, Production, Tests / offline]
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the error message (with any secrets redacted).
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps or code to reproduce
+      render: go
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version
+      placeholder: go1.27.1
