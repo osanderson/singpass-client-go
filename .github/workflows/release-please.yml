@@ -1,0 +1,36 @@
+name: Release Please
+
+# Maintains a release PR from the Conventional Commits on main; merging it
+# tags vX.Y.Z (the Go module version), updates CHANGELOG.md and publishes a
+# GitHub release. Config: release-please-config.json and
+# .release-please-manifest.json.
+#
+# Uses a fine-grained personal access token (secret RELEASE_PLEASE_TOKEN;
+# this repo only; Contents, Pull requests and Issues: read and write) rather
+# than GITHUB_TOKEN: pull requests opened with GITHUB_TOKEN don't trigger
+# workflows, so the release PR would never get the CI checks the protect-main
+# ruleset requires. The token expires — renew it before then, or release PRs
+# stop getting checks.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release Please
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
