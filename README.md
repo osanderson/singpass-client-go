@@ -399,3 +399,14 @@ in three places:
 - **Pushes to `main`** — the `commit-lint` job in
   [`deploy.yml`](.github/workflows/deploy.yml) re-checks the pushed commits (and
   `deploy.yml` re-runs `ci.yml`) before deploying.
+
+### Releases
+
+Releases are automated by [release-please](https://github.com/googleapis/release-please)
+([`release-please.yml`](.github/workflows/release-please.yml)). From the
+Conventional Commits on `main` it keeps a release PR open that bumps the
+version and updates `CHANGELOG.md`; merging it tags `vX.Y.Z` (the Go module
+version) and publishes a GitHub release. Before 1.0, `feat` bumps the minor
+version, `fix` the patch, and breaking changes (`!` / `BREAKING CHANGE:`) the
+minor. Changes only under `examples/` don't trigger a library release. To force
+a version, add a `Release-As: X.Y.Z` footer to a commit.
