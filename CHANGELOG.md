@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/osanderson/singpass-client-go/compare/v0.4.0...v0.5.0) (2026-09-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* NewMyinfoBusiness no longer accepts a /userinfo sub equal to the client_id. If a Corppass environment still sends it (the error is "UserInfo response sub does not match the ID token's sub"), set MyinfoBusinessOptions.TolerateUserInfoSubjectClientID.
+
+### Features
+
+* check the Corppass /userinfo sub strictly now Corppass has fixed it ([aaeaaec](https://github.com/osanderson/singpass-client-go/commit/aaeaaec36f98e3588ffb37ca0fb71a32641dddb0))
+
 ## [0.4.0](https://github.com/osanderson/singpass-client-go/compare/v0.3.0...v0.4.0) (2026-09-26)
 
 
