@@ -26,7 +26,9 @@ needed, and no real accounts or personal data are involved.
 You need a Singpass (and/or Corppass) **staging** client for each product you
 want to try: a `client_id`, the public JWKS printed by `keygen` registered with
 it, and the redirect URI `http://localhost:8088/<app>/callback` (apps: `login`,
-`mi` for Myinfo, `mib` for Myinfo Business). From this directory:
+`mi` for Myinfo, `mib` for Myinfo Business). To log in, use the published staging
+test personas — see [Test accounts](../../README.md#test-accounts). From this
+directory:
 
 ```sh
 cp .env.example .env      # set SINGPASS_LOGIN_CLIENT_ID / MYINFO_CLIENT_ID / MYINFO_BIZ_CLIENT_ID
