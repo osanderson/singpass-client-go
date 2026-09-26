@@ -97,11 +97,6 @@ type Server struct {
 
 	mu      sync.Mutex
 	current int // index into personas for non-interactive approval
-
-	// loopback records redirect URIs registered as http://localhost… and
-	// held by FAPIgo in their https form; see loopbackToHTTPS.
-	loopbackMu sync.Mutex
-	loopback   map[string]bool
 }
 
 const (
@@ -121,7 +116,7 @@ func NewServer(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("singpasstest: listen: %w", err)
 	}
-	s := &Server{cfg: cfg, clients: newRegistry(), ln: ln, loopback: make(map[string]bool)}
+	s := &Server{cfg: cfg, clients: newRegistry(), ln: ln}
 	s.base = "http://" + ln.Addr().String()
 	s.issuer = s.base
 	if cfg.Issuer == Singpass {
@@ -209,6 +204,7 @@ func (s *Server) build() error {
 			JARMResponseLifetime:       time.Minute,
 			AccessTokenLifetime:        30 * time.Minute,
 			IDTokenLifetime:            10 * time.Minute,
+			MaxIDTokenClaimsBytes:      4096,
 			RefreshTokenLifetime:       time.Hour,
 			MaxDPoPProofAge:            2 * time.Minute,
 			MaxClockSkew:               30 * time.Second,
@@ -284,12 +280,6 @@ func (s *Server) RegisterClient(c Client) error {
 	}
 	redirects := make([]fapi.RegisteredRedirectURI, 0, len(c.RedirectURIs))
 	for _, u := range c.RedirectURIs {
-		if secure, ok := loopbackToHTTPS(u); ok {
-			s.loopbackMu.Lock()
-			s.loopback[secure] = true
-			s.loopbackMu.Unlock()
-			u = secure
-		}
 		redirects = append(redirects, fapi.RegisteredRedirectURI(u))
 	}
 	scopes := append([]string{"openid"}, c.Scopes...)
@@ -391,7 +381,6 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.secureRedirectParam(form)
 	result, err := s.srv.PushAuthorizationRequest(r.Context(), server.PushAuthorizationRequest{HTTP: form})
 	if err != nil {
 		writeServerError(w, err)
@@ -474,7 +463,12 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request, handle server.
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		result = server.Authorize(subject, auth, server.GrantedAuthorization{Scope: scope})
+		claims, err := p.idTokenClaims(s.cfg.Issuer, scope)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		result = server.Authorize(subject, auth, server.GrantedAuthorization{Scope: scope, IDTokenClaims: claims})
 	}
 	res, err := s.srv.CompleteAuthorization(r.Context(), server.CompleteAuthorizationRequest{Handle: handle, Result: result})
 	if err != nil {
@@ -483,7 +477,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request, handle server.
 	}
 	switch v := res.(type) {
 	case server.AuthorizationRedirect:
-		http.Redirect(w, r, s.restoreLoopback(v.Destination().String()), http.StatusFound)
+		http.Redirect(w, r, v.Destination().String(), http.StatusFound)
 	case server.AuthorizationLocalError:
 		writeServerError(w, v.Error)
 	default:
@@ -501,7 +495,6 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusBadRequest, "unsupported_grant_type", "only authorization_code is supported")
 		return
 	}
-	s.secureRedirectParam(form)
 	result, err := s.srv.ExchangeAuthorizationCode(r.Context(), server.AuthorizationCodeExchangeRequest{HTTP: form, DPoPProofs: r.Header.Values("DPoP")})
 	if err != nil {
 		writeServerError(w, err)
@@ -649,52 +642,6 @@ func (s *Server) Authorize(ctx context.Context, redirectURL string) (string, err
 		return "", err
 	}
 	return loc.RawQuery, nil
-}
-
-// FAPIgo's server only redirects to https URLs, but Singpass staging (and a
-// local app) happily uses redirect URIs like http://localhost:8088/callback.
-// The fake bridges the gap: a loopback http redirect URI is registered with
-// FAPIgo in its https form, the redirect_uri parameter is rewritten the same
-// way on the PAR and token requests, and the final redirect is turned back into
-// http. The client sees exactly the http URI it registered.
-func loopbackToHTTPS(raw string) (string, bool) {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "http" {
-		return "", false
-	}
-	switch h := u.Hostname(); {
-	case h == "localhost", net.ParseIP(h) != nil && net.ParseIP(h).IsLoopback():
-		u.Scheme = "https"
-		return u.String(), true
-	}
-	return "", false
-}
-
-func (s *Server) secureRedirectParam(form server.FormRequest) {
-	for i, p := range form.Parameters {
-		if p.Name == "redirect_uri" {
-			if secure, ok := loopbackToHTTPS(p.Value); ok {
-				form.Parameters[i].Value = secure
-			}
-		}
-	}
-}
-
-func (s *Server) restoreLoopback(destination string) string {
-	u, err := url.Parse(destination)
-	if err != nil {
-		return destination
-	}
-	base := *u
-	base.RawQuery = ""
-	s.loopbackMu.Lock()
-	translated := s.loopback[base.String()]
-	s.loopbackMu.Unlock()
-	if translated {
-		u.Scheme = "http"
-		return u.String()
-	}
-	return destination
 }
 
 func writeAuthorizationAction(w http.ResponseWriter, action server.AuthorizationAction) {

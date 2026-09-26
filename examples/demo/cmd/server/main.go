@@ -305,6 +305,9 @@ func idTokenHighlights(id *singpass.Identity) []demoapp.Highlight {
 	// acting party, distinct from the entity subject.
 	if act := id.ActingParty(); act != nil {
 		add("Acting user", act.Subject, strings.TrimSpace(act.SubjectType))
+		for _, k := range sortedKeys(act.Attributes) {
+			add("Acting user › "+prettyLabel(k), claimString(act.Attributes, k), "act.sub_attributes")
+		}
 	}
 	if !id.IDTokenIssuedAt.IsZero() {
 		add("Issued at", id.IDTokenIssuedAt.Format(time.RFC3339), "")

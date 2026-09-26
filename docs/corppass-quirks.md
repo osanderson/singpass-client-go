@@ -128,9 +128,14 @@
   objects inside a block are double-encoded the same way. The library unwraps any
   stringified JSON object or array, recursively (`unwrapDeep` in `myinfo/myinfo.go`),
   so `myinfo.Response` and `Raw()` expose real nested JSON.
-- **`sub` is the `client_id`, not the person.** Contrary to OIDC Core §5.3.2, the
+- **`sub` is the `client_id`, not the subject.** Contrary to OIDC Core §5.3.2, the
   `/userinfo` `sub` equals the `client_id` (the response is entity data authorized to
-  the client), while the `id_token` `sub` is the person's Corppass id. FAPIgo accepts
+  the client). In the `id_token`, `sub` is the **entity** — its registration number
+  (e.g. a UEN), with `sub_type: "entity"` and `sub_attributes` describing it
+  (`entity_type`, `entity_reg_number`, `entity_coi`, `entity_name`,
+  `entity_uen_status`) — and the person who logged in is the `act` claim (`sub` = their
+  Singpass UUID, `sub_type: "user"`, `sub_attributes` with `account_type`,
+  `identity_number`, `identity_coi`, `name`; `Identity.ActingParty()`). FAPIgo accepts
   `sub == client_id` via the opt-in `Config.TolerateUserInfoSubjectEqualsClientID`
   — `singpass.NewMyinfoBusiness` turns it on
   (`Options.TolerateUserInfoSubjectClientID`), while `NewLogin` / `NewMyinfo` leave

@@ -17,6 +17,11 @@
 //     cover.
 //   - Corppass /userinfo sets "sub" to the client_id and sends each block as
 //     double-encoded JSON.
+//   - id_tokens carry "sub_type" and "sub_attributes" — on Singpass released
+//     per scope (user.identity, name, email, mobileno); on Corppass the entity
+//     is the subject and the acting person is the "act" claim.
+//   - Redirect URIs may be http://localhost for local apps, as Singpass
+//     staging allows.
 //
 // Test users are Personas: fictitious people and a company, with Myinfo data
 // in the real envelope shape (see DefaultPersonas). Logins are approved
@@ -27,6 +32,6 @@
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production
 // assurance.
 //
-// Not reproduced: sub_attributes / act / sub_type id_token claims, acr_values,
-// refresh tokens, and Singpass's full error vocabulary.
+// Not reproduced: acr_values, refresh tokens, and Singpass's full error
+// vocabulary.
 package singpasstest
