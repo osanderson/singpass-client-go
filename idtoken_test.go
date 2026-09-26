@@ -18,7 +18,7 @@ func TestIDTokenAccessors(t *testing.T) {
 		"sub_type": "entity",
 		"acr":      "https://www.singpass.gov.sg/assurance/loa:2",
 		"amr":      []any{"pwd", "otp"},
-		"act":      map[string]any{"sub": "s=S1234567D,u=user", "sub_type": "user"},
+		"act":      map[string]any{"sub": "s=S1234567D,u=user", "sub_type": "user", "sub_attributes": map[string]any{"name": "JOHN TAN"}},
 		"sub_attributes": map[string]any{
 			"entity_name":       "ACME PTE LTD",
 			"entity_reg_number": "200012345A",
@@ -44,7 +44,7 @@ func TestIDTokenAccessors(t *testing.T) {
 		t.Errorf("AuthMethods() = %v, want [pwd otp]", got)
 	}
 	act := corppass.ActingParty()
-	if act == nil || act.Subject != "s=S1234567D,u=user" || act.SubjectType != "user" {
+	if act == nil || act.Subject != "s=S1234567D,u=user" || act.SubjectType != "user" || act.Attributes["name"] != "JOHN TAN" {
 		t.Errorf("ActingParty() = %+v", act)
 	}
 	sa := corppass.SubjectAttributes()

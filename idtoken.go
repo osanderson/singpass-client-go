@@ -73,11 +73,14 @@ func (id *Identity) AssuranceLevel() string {
 	return ""
 }
 
-// ActingParty is the "act" (actor) claim: for Corppass Myinfo Business, the person
-// who authenticated on behalf of the entity, distinct from the entity Subject.
+// ActingParty is the "act" (actor) claim: for Corppass, the person who
+// authenticated on behalf of the entity, distinct from the entity Subject.
 type ActingParty struct {
-	Subject     string // act.sub — the acting person's identifier
+	Subject     string // act.sub — the acting person's Singpass identifier
 	SubjectType string // act.sub_type — typically "user"
+	// Attributes is act.sub_attributes, describing the person: Corppass sends
+	// account_type, identity_number, identity_coi and name. Nil when absent.
+	Attributes map[string]any
 }
 
 // ActingParty returns the "act" actor claim, or nil when the token carries none
@@ -90,16 +93,21 @@ func (id *Identity) ActingParty() *ActingParty {
 	if !ok {
 		return nil
 	}
+	attrs, _ := act["sub_attributes"].(map[string]any)
 	return &ActingParty{
 		Subject:     asString(act["sub"]),
 		SubjectType: asString(act["sub_type"]),
+		Attributes:  attrs,
 	}
 }
 
 // SubjectAttributes returns the "sub_attributes" descriptor claims about the
-// subject — for Corppass Myinfo Business the entity's name / registration number /
-// type / status etc. Its members are flow-specific, so it is returned as the raw
-// object for the caller to read; nil when the claim is absent.
+// subject. For a Singpass person they are released per scope — user.identity
+// gives account_type, identity_number and identity_coi; name, email and
+// mobileno give the same-named item. For a Corppass entity they are the
+// entity's type, registration number, country, name and UEN status. Its members
+// are flow-specific, so it is returned as the raw object for the caller to
+// read; nil when the claim is absent.
 func (id *Identity) SubjectAttributes() map[string]any {
 	if id == nil {
 		return nil

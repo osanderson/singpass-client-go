@@ -103,6 +103,24 @@ func TestLoginEndToEnd(t *testing.T) {
 	if id.Scope != "openid user.identity" {
 		t.Errorf("Scope = %q (Singpass omits scope; the client falls back to the requested one)", id.Scope)
 	}
+
+	// sub_type and the user.identity sub_attributes, but not name/email/mobileno,
+	// whose scopes weren't granted.
+	if id.SubjectType() != "user" {
+		t.Errorf("SubjectType = %q, want user", id.SubjectType())
+	}
+	attrs := id.SubjectAttributes()
+	if attrs["identity_number"] != "S9812381D" || attrs["identity_coi"] != "SG" || attrs["account_type"] != "standard" {
+		t.Errorf("sub_attributes = %v, want the user.identity items", attrs)
+	}
+	for _, k := range []string{"name", "email", "mobileno"} {
+		if _, ok := attrs[k]; ok {
+			t.Errorf("sub_attributes has %q without its scope", k)
+		}
+	}
+	if id.ActingParty() != nil {
+		t.Error("personal login has an act claim")
+	}
 }
 
 func TestMyinfoEndToEnd(t *testing.T) {
@@ -173,6 +191,18 @@ func TestMyinfoBusinessEndToEnd(t *testing.T) {
 	}
 	if id.Scope != "openid entity.basic_profile.name authinfo" {
 		t.Errorf("Scope = %q (Corppass echoes it)", id.Scope)
+	}
+
+	// The Corppass subject is the entity; the person is in act.
+	if id.Subject != "201912345K" || id.SubjectType() != "entity" {
+		t.Errorf("Subject = %q (%q), want the entity 201912345K", id.Subject, id.SubjectType())
+	}
+	if name := id.SubjectAttributes()["entity_name"]; name != "HARBOURFRONT TRADING PTE. LTD." {
+		t.Errorf("entity_name = %v", name)
+	}
+	act := id.ActingParty()
+	if act == nil || act.SubjectType != "user" || act.Attributes["name"] != "LIM WEI MING" || act.Attributes["identity_number"] != "S7812345J" {
+		t.Errorf("ActingParty = %+v", act)
 	}
 }
 
