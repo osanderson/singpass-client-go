@@ -111,12 +111,23 @@ type TableRow struct {
 	Cells []string
 }
 
+// RepoURL is the library this app demonstrates; every page links to it.
+const RepoURL = "https://github.com/osanderson/singpass-client-go"
+
+// footerHTML is shared by every page: what the demo is built with, where to
+// find it, and the protocol features it exercises.
+const footerHTML = `<footer>
+<p>Built with <a href="` + RepoURL + `">singpass-client-go</a>, an open-source Go library for Singpass and Corppass ·
+<a href="` + RepoURL + `">View on GitHub</a></p>
+<p>FAPI 2.0 · PAR · DPoP · private_key_jwt · encrypted id_token. Unofficial — not affiliated with GovTech, Singpass or Corppass.</p>
+</footer>`
+
 var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Singpass RP demo</title>
+<title>singpass-client-go demo</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; color: #1a1a1a; }
   h1 { font-size: 1.5rem; }
@@ -125,17 +136,23 @@ var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
   li { margin: .5rem 0; }
   a.btn { display: inline-block; padding: .6rem 1.1rem; background: #d1350f; color: #fff; text-decoration: none; border-radius: .4rem; }
   a.btn:hover { background: #b02c0c; }
+  .intro { color: #444; }
+  a { color: #d1350f; }
   footer { margin-top: 3rem; color: #666; font-size: .85rem; }
+  footer p { margin: .3rem 0; }
 </style>
 </head>
 <body>
-<h1>Singpass RP demo</h1>
+<h1>singpass-client-go demo</h1>
+<p class="intro">A demo of <a href="` + RepoURL + `"><strong>singpass-client-go</strong></a>, an open-source Go library for
+integrating Singpass Login, Myinfo and Myinfo Business. Log in below to see what the library returns:
+the validated id_token claims and, for Myinfo, the person or entity data.</p>
 {{if .Message}}<div class="msg">{{.Message}}</div>{{end}}
 <p>Choose a relying party to authenticate with (Singpass / Corppass staging):</p>
 <ul>
 {{range .Apps}}<li><a class="btn" href="/{{.Name}}/login">Sign in with {{.Title}}</a></li>{{end}}
 </ul>
-<footer>FAPI 2.0 · PAR · DPoP · private_key_jwt · encrypted id_token. Staging only.</footer>
+` + footerHTML + `
 </body>
 </html>`))
 
@@ -144,7 +161,7 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} — signed in</title>
+<title>{{.Title}} — singpass-client-go demo</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 3rem auto; padding: 0 1rem; color: #1a1a1a; }
   h1 { font-size: 1.4rem; }
@@ -188,10 +205,11 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
   .toc a:hover { text-decoration: underline; }
   h3[id] { scroll-margin-top: 1rem; }
   footer { margin-top: 3rem; color: #666; font-size: .85rem; }
+  footer p { margin: .3rem 0; }
 </style>
 </head>
 <body>
-<p class="brand">Singpass RP demo</p>
+<p class="brand"><a href="` + RepoURL + `">singpass-client-go</a> demo</p>
 <h1>Signed in via {{.Title}}</h1>
 <dl>
   <dt>App</dt><dd>{{.App}}</dd>
@@ -233,7 +251,7 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 </section>{{end}}
 
 <form method="post" action="/{{.App}}/logout"><button class="btn" type="submit">Log out</button></form>
-<footer>FAPI 2.0 · PAR · DPoP · private_key_jwt · encrypted id_token. Staging only.</footer>
+` + footerHTML + `
 </body>
 </html>`))
 
