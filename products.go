@@ -8,16 +8,58 @@ import (
 	"github.com/idfoundry/fapigo/keys"
 )
 
-// Staging issuer identifiers. Production integrations pass their own issuer via
-// the product options' Issuer field.
+// Issuer identifiers. The product options pick one from Environment; set
+// Issuer only for a non-standard deployment.
 const (
-	// StagingSingpassIssuer is the Singpass FAPI 2.0 issuer (Login + Myinfo).
+	// StagingSingpassIssuer is the Singpass FAPI 2.0 staging issuer (Login + Myinfo).
 	StagingSingpassIssuer = "https://stg-id.singpass.gov.sg/fapi"
-	// StagingCorppassIssuer is the Corppass FAPI 2.0 issuer (Myinfo Business).
-	// Note it has no "/fapi" path suffix, unlike Singpass, and it is a separate
-	// authorization server with its own discovery document.
+	// StagingCorppassIssuer is the Corppass FAPI 2.0 staging issuer (Myinfo
+	// Business). Note it has no "/fapi" path suffix, unlike Singpass, and it is
+	// a separate authorization server with its own discovery document.
 	StagingCorppassIssuer = "https://stg-id.corppass.gov.sg"
+	// ProductionSingpassIssuer is the Singpass FAPI 2.0 production issuer.
+	ProductionSingpassIssuer = "https://id.singpass.gov.sg/fapi"
+	// ProductionCorppassIssuer is the Corppass FAPI 2.0 production issuer.
+	ProductionCorppassIssuer = "https://id.corppass.gov.sg"
 )
+
+// Environment selects Singpass/Corppass staging or production for the product
+// constructors (NewLogin, NewMyinfo, NewMyinfoBusiness).
+type Environment int
+
+const (
+	// Staging is the default: the staging issuers, and development assurance
+	// unless Dependencies.Assurance says otherwise.
+	Staging Environment = iota
+	// Production selects the production issuers and, when
+	// Dependencies.Assurance is unset, AssuranceProduction — so the in-memory
+	// session store is refused and a durable one must be supplied.
+	Production
+)
+
+// String returns "staging" or "production".
+func (e Environment) String() string {
+	if e == Production {
+		return "production"
+	}
+	return "staging"
+}
+
+// issuers returns the Singpass and Corppass issuers for e.
+func (e Environment) issuers() (singpass, corppass string) {
+	if e == Production {
+		return ProductionSingpassIssuer, ProductionCorppassIssuer
+	}
+	return StagingSingpassIssuer, StagingCorppassIssuer
+}
+
+// forEnvironment applies e's assurance default to deps.
+func (e Environment) forEnvironment(deps Dependencies) Dependencies {
+	if e == Production && deps.Assurance == 0 {
+		deps.Assurance = AssuranceProduction
+	}
+	return deps
+}
 
 // DefaultAuthContextType is the standard Singpass/Corppass Login
 // authentication_context_type — the flow a plain login authenticates for.
@@ -27,11 +69,12 @@ const DefaultAuthContextType = "APP_AUTHENTICATION_DEFAULT"
 // authentication only, no /userinfo call. authentication_context_type is
 // mandatory for Login and defaults to DefaultAuthContextType.
 type LoginOptions struct {
-	Name        string   // app slug for logging/Identity; defaults to "login"
-	Issuer      string   // FAPI issuer; defaults to StagingSingpassIssuer
-	ClientID    string   // client_id issued by the authorization server
-	RedirectURI string   // must match what is registered with the server
-	Scopes      []string // must include "openid"
+	Name        string      // app slug for logging/Identity; defaults to "login"
+	Environment Environment // Staging (default) or Production: picks the issuer and assurance
+	Issuer      string      // FAPI issuer; empty means Environment's Singpass issuer
+	ClientID    string      // client_id issued by the authorization server
+	RedirectURI string      // must match what is registered with the server
+	Scopes      []string    // must include "openid"
 
 	// AuthContextType is the Login authentication_context_type; defaults to
 	// DefaultAuthContextType.
@@ -60,12 +103,13 @@ type LoginOptions struct {
 // person data retrieved from the DPoP-protected /userinfo endpoint.
 // authentication_context_type is not sent (Singpass rejects it on Myinfo).
 type MyinfoOptions struct {
-	Name        string   // app slug for logging/Identity; defaults to "myinfo"
-	Issuer      string   // FAPI issuer; defaults to StagingSingpassIssuer
-	ClientID    string   // client_id issued by the authorization server
-	RedirectURI string   // must match what is registered with the server
-	Scopes      []string // person-data scopes; must include "openid"
-	AcrValues   string   // optional requested level of assurance; "" to omit
+	Name        string      // app slug for logging/Identity; defaults to "myinfo"
+	Environment Environment // Staging (default) or Production: picks the issuer and assurance
+	Issuer      string      // FAPI issuer; empty means Environment's Singpass issuer
+	ClientID    string      // client_id issued by the authorization server
+	RedirectURI string      // must match what is registered with the server
+	Scopes      []string    // person-data scopes; must include "openid"
+	AcrValues   string      // optional requested level of assurance; "" to omit
 
 	SigningKey    crypto.Signer     // ES256 / P-256 client-assertion + DPoP signer
 	SigningKID    string            // kid of the registered signing key
@@ -85,12 +129,13 @@ type MyinfoOptions struct {
 // authorization server. Same protocol as Myinfo, with the Corppass issuer
 // default and the /userinfo sub == client_id tolerance enabled.
 type MyinfoBusinessOptions struct {
-	Name        string   // app slug for logging/Identity; defaults to "myinfobiz"
-	Issuer      string   // FAPI issuer; defaults to StagingCorppassIssuer
-	ClientID    string   // client_id issued by Corppass
-	RedirectURI string   // must match what is registered with the server
-	Scopes      []string // entity.* / user.* / corppass.* scopes; must include "openid"
-	AcrValues   string   // optional requested level of assurance; "" to omit
+	Name        string      // app slug for logging/Identity; defaults to "myinfobiz"
+	Environment Environment // Staging (default) or Production: picks the issuer and assurance
+	Issuer      string      // FAPI issuer; empty means Environment's Corppass issuer
+	ClientID    string      // client_id issued by Corppass
+	RedirectURI string      // must match what is registered with the server
+	Scopes      []string    // entity.* / user.* / corppass.* scopes; must include "openid"
+	AcrValues   string      // optional requested level of assurance; "" to omit
 
 	SigningKey    crypto.Signer     // ES256 / P-256 client-assertion + DPoP signer
 	SigningKID    string            // kid of the registered signing key
@@ -114,8 +159,9 @@ func NewLogin(ctx context.Context, o LoginOptions, deps Dependencies) (*Client, 
 		o.Name = "login"
 	}
 	if o.Issuer == "" {
-		o.Issuer = StagingSingpassIssuer
+		o.Issuer, _ = o.Environment.issuers()
 	}
+	deps = o.Environment.forEnvironment(deps)
 	if o.AuthContextType == "" {
 		o.AuthContextType = DefaultAuthContextType
 	}
@@ -141,8 +187,9 @@ func NewMyinfo(ctx context.Context, o MyinfoOptions, deps Dependencies) (*Client
 		o.Name = "myinfo"
 	}
 	if o.Issuer == "" {
-		o.Issuer = StagingSingpassIssuer
+		o.Issuer, _ = o.Environment.issuers()
 	}
+	deps = o.Environment.forEnvironment(deps)
 	deps, err := ensureKeyDeps(deps, o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionAgreer, o.EncryptionKID)
 	if err != nil {
 		return nil, err
@@ -166,8 +213,9 @@ func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Depend
 		o.Name = "myinfobiz"
 	}
 	if o.Issuer == "" {
-		o.Issuer = StagingCorppassIssuer
+		_, o.Issuer = o.Environment.issuers()
 	}
+	deps = o.Environment.forEnvironment(deps)
 	deps, err := ensureKeyDeps(deps, o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionAgreer, o.EncryptionKID)
 	if err != nil {
 		return nil, err
