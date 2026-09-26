@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0](https://github.com/osanderson/singpass-client-go/compare/v0.2.0...v0.3.0) (2026-09-26)
+
+
+### Features
+
+* add Environment option with production issuers and a go-live checklist ([#16](https://github.com/osanderson/singpass-client-go/issues/16)) ([95b35bc](https://github.com/osanderson/singpass-client-go/commit/95b35bca9a33e74c58497190f0ffa3320e1415b3))
+* add singpasstest fake server and demo mock mode ([#10](https://github.com/osanderson/singpass-client-go/issues/10)) ([83f5134](https://github.com/osanderson/singpass-client-go/commit/83f5134cf0b308bc02dcc6bc94eb86e7b82ab2b9))
+* add sqlstore, a durable SQL session store for production ([#17](https://github.com/osanderson/singpass-client-go/issues/17)) ([6a0820d](https://github.com/osanderson/singpass-client-go/commit/6a0820d33f6d335df727c35bc66446cdf6d70b1b))
+
 ## [0.2.0](https://github.com/osanderson/singpass-client-go/compare/v0.1.1...v0.2.0) (2026-09-25)
 
 
