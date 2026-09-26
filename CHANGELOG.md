@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/osanderson/singpass-client-go/compare/v0.3.0...v0.4.0) (2026-09-26)
+
+
+### Features
+
+* upgrade FAPIgo to v0.33.0; singpasstest issues Singpass/Corppass id_token claims ([#18](https://github.com/osanderson/singpass-client-go/issues/18)) ([87aaacc](https://github.com/osanderson/singpass-client-go/commit/87aaacc6cd23f96c51f78b4f28ad803ed9d3ba41))
+
 ## [0.3.0](https://github.com/osanderson/singpass-client-go/compare/v0.2.0...v0.3.0) (2026-09-26)
 
 
