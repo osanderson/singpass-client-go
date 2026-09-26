@@ -37,7 +37,8 @@ fast rather than silently shipping a non-durable store.
   `AssuranceProduction`, which requires a durable `Sessions` store (see above).
   An explicit `Issuer` overrides the environment's. The full go-live list is in
   [production.md](production.md).
-- **A durable `Sessions` store** implements the two-method
+- **A durable `Sessions` store**: use `sqlstore` (Postgres, MySQL, SQLite), or
+  implement the two-method
   `singpass.SessionStore` (`Create` / atomic `Consume`) and declares
   `singpass.StoreAssurance`. `Consume` should return (or wrap)
   `singpass.ErrLoginExpired` for an unknown, used or expired state, so callers

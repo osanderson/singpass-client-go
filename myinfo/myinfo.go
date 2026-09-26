@@ -64,6 +64,27 @@ func (m *Response) Raw() map[string]any {
 	return m.raw
 }
 
+// MarshalJSON encodes the response as its full decoded /userinfo claims (the
+// same data as Raw), so a Response — or a singpass.Identity carrying one — can
+// be stored, e.g. in a server-side session, and restored with UnmarshalJSON.
+func (m *Response) MarshalJSON() ([]byte, error) {
+	if m == nil {
+		return []byte("null"), nil
+	}
+	return json.Marshal(m.raw)
+}
+
+// UnmarshalJSON restores a Response encoded by MarshalJSON, rebuilding the
+// blocks exactly as Parse does.
+func (m *Response) UnmarshalJSON(data []byte) error {
+	var all map[string]any
+	if err := json.Unmarshal(data, &all); err != nil {
+		return err
+	}
+	*m = *Parse(all)
+	return nil
+}
+
 // Blocks lists the recognised data blocks present in this response, in a stable
 // order (a subset of userInfoBlocks).
 func (m *Response) Blocks() []string {

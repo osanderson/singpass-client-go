@@ -47,6 +47,19 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
 
 ## 3. Durable session stores
 
+The [`sqlstore`](../sqlstore) package provides both stores below on Postgres,
+MySQL or SQLite, using `database/sql` with your driver:
+
+```go
+store := sqlstore.New(db, sqlstore.Config{Dialect: sqlstore.Postgres})
+if err := store.CreateTables(ctx); err != nil { /* … */ }
+deps := singpass.Dependencies{Sessions: store.Sessions()}
+h := web.New(web.Config{LoginSessions: store.LoginSessions() /* … */})
+// Periodically: store.DeleteExpired(ctx)
+```
+
+To use Redis or another backend, implement the interfaces below.
+
 Under `AssuranceProduction` the in-memory session store is refused at
 construction:
 

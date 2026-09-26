@@ -1,6 +1,10 @@
 package myinfo
 
-import "testing"
+import (
+	"encoding/json"
+	"reflect"
+	"testing"
+)
 
 // personInfoResponse is a representative personal-Myinfo /userinfo claim map:
 // a scalar field, two coded fields, an unavailable field, and two nested objects
@@ -245,5 +249,33 @@ func TestMyinfoNilSafe(t *testing.T) {
 	var d Data
 	if d.Present() || d.Has("x") || d.Keys() != nil || d.Field("x").Present() || d.Object("x").Present() || d.List("x") != nil {
 		t.Error("zero Data accessors should be safe and empty")
+	}
+}
+
+// TestResponseJSONRoundTrip checks a Response survives JSON encoding — how a
+// stored session keeps the person data — with every block and accessor intact.
+func TestResponseJSONRoundTrip(t *testing.T) {
+	orig := Parse(personInfoResponse())
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Response
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if got := back.Person.Field("name").String(); got != "TAN XIAO HUI" {
+		t.Errorf("name after round trip = %q", got)
+	}
+	if got := back.Person.Object("regadd").Field("postal").String(); got != "460123" {
+		t.Errorf("postal after round trip = %q", got)
+	}
+	if !reflect.DeepEqual(orig.Blocks(), back.Blocks()) {
+		t.Errorf("blocks = %v, want %v", back.Blocks(), orig.Blocks())
+	}
+
+	var nilResp *Response
+	if b, _ := json.Marshal(nilResp); string(b) != "null" {
+		t.Errorf("nil Response marshals to %s, want null", b)
 	}
 }
