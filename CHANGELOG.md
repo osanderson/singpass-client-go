@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/osanderson/singpass-client-go/compare/v0.5.0...v0.5.1) (2026-09-26)
+
+
+### Documentation
+
+* point to the published Myinfo and Myinfo Business test personas ([#22](https://github.com/osanderson/singpass-client-go/issues/22)) ([42653d3](https://github.com/osanderson/singpass-client-go/commit/42653d3104f3221e1b45a62ebe932431a25dbd59))
+
 ## [0.5.0](https://github.com/osanderson/singpass-client-go/compare/v0.4.0...v0.5.0) (2026-09-26)
 
 
