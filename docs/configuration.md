@@ -30,10 +30,13 @@ fast rather than silently shipping a non-durable store.
 
 ## Staging and production
 
-- **Staging by default.** `StagingSingpassIssuer` / `StagingCorppassIssuer` and the
-  `Dependencies` zero values target Singpass/Corppass staging. For production,
-  pass the production `Issuer` and set `Assurance: singpass.AssuranceProduction`
-  plus a durable `Sessions` store (see above).
+- **Staging by default.** The product options' `Environment` defaults to
+  `singpass.Staging`: the staging issuers and development assurance.
+  `Environment: singpass.Production` selects `ProductionSingpassIssuer` /
+  `ProductionCorppassIssuer` and, unless `Dependencies.Assurance` is set,
+  `AssuranceProduction`, which requires a durable `Sessions` store (see above).
+  An explicit `Issuer` overrides the environment's. The full go-live list is in
+  [production.md](production.md).
 - **A durable `Sessions` store** implements the two-method
   `singpass.SessionStore` (`Create` / atomic `Consume`) and declares
   `singpass.StoreAssurance`. `Consume` should return (or wrap)

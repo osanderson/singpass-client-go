@@ -140,15 +140,17 @@ login in a test — see the
 
 ## Going to production
 
-The defaults target **staging**. For production, pass the production `Issuer`
-and set `Dependencies.Assurance` to production with a durable `Sessions`
-store — the in-memory default is refused under production assurance. See
-[Configuration](docs/configuration.md).
+The defaults target **staging**. For production, set
+`Environment: singpass.Production` in the product options: it selects the
+production issuer and production assurance, under which the in-memory session
+store is refused, so supply a durable `Dependencies.Sessions`. Work through the
+[go-live checklist](docs/production.md).
 
 ## Documentation
 
 - [API reference and examples](https://pkg.go.dev/github.com/osanderson/singpass-client-go) on pkg.go.dev
 - [Configuration](docs/configuration.md) — options, dependencies, keys, staging vs production
+- [Going to production](docs/production.md) — the go-live checklist
 - [How it works](docs/architecture.md) — what Singpass needs and where each piece is handled
 - [Singpass quirks](docs/singpass-quirks.md) and [Corppass quirks](docs/corppass-quirks.md) — non-obvious server behaviour
 - [Examples](examples) — [`minimal`](examples/minimal) (one product, ~70 lines) and [`demo`](examples/demo) (all three, [live on staging](https://rp-demo-1090410730433.asia-southeast1.run.app))
