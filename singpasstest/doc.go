@@ -27,6 +27,7 @@
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production
 // assurance.
 //
-// Not reproduced: sub_attributes / act / sub_type id_token claims, acr_values,
-// refresh tokens, and Singpass's full error vocabulary.
+// Not reproduced: the sub_attributes / act / sub_type id_token claims (tracked
+// in github.com/osanderson/singpass-client-go/issues/13), acr_values, refresh
+// tokens, and Singpass's full error vocabulary.
 package singpasstest

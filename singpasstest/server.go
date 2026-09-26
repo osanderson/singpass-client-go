@@ -656,7 +656,8 @@ func (s *Server) Authorize(ctx context.Context, redirectURL string) (string, err
 // The fake bridges the gap: a loopback http redirect URI is registered with
 // FAPIgo in its https form, the redirect_uri parameter is rewritten the same
 // way on the PAR and token requests, and the final redirect is turned back into
-// http. The client sees exactly the http URI it registered.
+// http. The client sees exactly the http URI it registered. Remove once FAPIgo
+// supports loopback redirect URIs: github.com/osanderson/singpass-client-go/issues/12
 func loopbackToHTTPS(raw string) (string, bool) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "http" {
