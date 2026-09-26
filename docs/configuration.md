@@ -47,6 +47,9 @@ fast rather than silently shipping a non-durable store.
   `Delete`, each taking the request context). The in-memory default is lost on
   restart and isn't shared between instances; back it with Redis or a database
   to run more than one instance.
+- **`AllowLoopbackHTTP`** permits `http://localhost` issuers for a local fake
+  server such as `singpasstest`'s. It is development-only: `New` refuses it
+  together with `AssuranceProduction`.
 - **`Debug` dumps secrets.** `Dependencies.Debug` logs outbound PAR/token/userinfo
   requests including the `client_assertion` — enable it only against staging.
 

@@ -1,0 +1,148 @@
+package singpasstest
+
+// Persona is a test user the fake authorization server can sign in. The data is
+// fictitious but shaped like real Singpass / Corppass responses.
+type Persona struct {
+	// Name is shown on the sign-in page.
+	Name string
+	// Subject is the id_token "sub".
+	Subject string
+	// ACR and AMR are the id_token's "acr" and "amr". Empty ACR means
+	// "urn:singpass:authentication:loa:2"; nil AMR means ["pwd", "otp-sms"].
+	ACR string
+	AMR []string
+	// UserInfo holds the /userinfo data blocks for Myinfo clients: for
+	// Singpass a "person_info" object; for Corppass any of "entity_info",
+	// "person_info", "corppass_info", "auth_info" and "tp_auth_info". "sub",
+	// "iss" and "aud" are set by the server.
+	UserInfo map[string]any
+}
+
+func (p Persona) acr() string {
+	if p.ACR == "" {
+		return "urn:singpass:authentication:loa:2"
+	}
+	return p.ACR
+}
+
+func (p Persona) amr() []string {
+	if p.AMR == nil {
+		return []string{"pwd", "otp-sms"}
+	}
+	return p.AMR
+}
+
+// field builds a Myinfo leaf envelope with government-verified provenance.
+func field(value any) map[string]any {
+	return map[string]any{"value": value, "source": "1", "classification": "C", "lastupdated": "2026-01-15"}
+}
+
+// coded builds a Myinfo coded envelope (code + human description).
+func coded(code, desc string) map[string]any {
+	return map[string]any{"code": code, "desc": desc, "source": "1", "classification": "C", "lastupdated": "2026-01-15"}
+}
+
+// DefaultPersonas returns the built-in test users for issuer: two Singpass
+// citizens (one with a vehicle, one whose email Myinfo can't provide), or one
+// Corppass user acting for a company.
+func DefaultPersonas(issuer Issuer) []Persona {
+	if issuer == Corppass {
+		return []Persona{{
+			Name:    "Lim Wei Ming for Harbourfront Trading Pte. Ltd.",
+			Subject: "1d8e6a9c-3b44-4f0e-9d2a-5c7b1e8f2a60",
+			UserInfo: map[string]any{
+				"entity_info": map[string]any{
+					"basic_profile": map[string]any{
+						"name":                field("HARBOURFRONT TRADING PTE. LTD."),
+						"registration_number": field("201912345K"),
+						"uen_status":          coded("R", "REGISTERED"),
+						"company_type":        coded("P", "PRIVATE COMPANY LIMITED BY SHARES"),
+					},
+					"address": map[string]any{
+						"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+						"block": field("10"), "street": field("HARBOURFRONT AVENUE"),
+						"floor": field("08"), "unit": field("01"), "postal": field("098632"),
+						"country": coded("SG", "SINGAPORE"),
+					},
+					"appointments": []any{map[string]any{
+						"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+						"position":               coded("D", "DIRECTOR"),
+						"appointment_date":       field("2019-06-01"),
+						"individual_appointment": map[string]any{"name": field("LIM WEI MING")},
+					}},
+				},
+				"auth_info": map[string]any{
+					"Result_Set": map[string]any{
+						"ESrvc_Row_Count": 1,
+						"ESrvc_Result": []any{map[string]any{
+							"CPESrvcID": "SINGPASSTEST-ESERVICE",
+							"Auth_Result_Set": map[string]any{
+								"Row_Count": 1,
+								"Row": []any{map[string]any{
+									"CPEntID_SUB": "", "CPRole": "Approver",
+									"StartDate": "2024-01-01", "EndDate": "9999-12-31",
+									"Parameter": []any{},
+								}},
+							},
+						}},
+					},
+				},
+			},
+		}}
+	}
+	return []Persona{
+		{
+			Name:    "Tan Xiao Hui",
+			Subject: "a9865837-7bd7-46ac-bef4-42a76a946424",
+			UserInfo: map[string]any{"person_info": map[string]any{
+				"uinfin":            field("S9812381D"),
+				"name":              field("TAN XIAO HUI"),
+				"sex":               coded("F", "FEMALE"),
+				"race":              coded("CN", "CHINESE"),
+				"nationality":       coded("SG", "SINGAPORE CITIZEN"),
+				"residentialstatus": coded("C", "CITIZEN"),
+				"dob":               field("1998-06-06"),
+				"email":             map[string]any{"value": "tan.xiaohui@example.com", "source": "2", "classification": "C", "lastupdated": "2026-01-15"},
+				"mobileno": map[string]any{
+					"source": "2", "classification": "C", "lastupdated": "2026-01-15",
+					"prefix": map[string]any{"value": "+"}, "areacode": map[string]any{"value": "65"},
+					"nbr": map[string]any{"value": "97399245"},
+				},
+				"regadd": map[string]any{
+					"type": "SG", "source": "1", "classification": "C", "lastupdated": "2026-01-15",
+					"block": map[string]any{"value": "102"}, "street": map[string]any{"value": "BEDOK NORTH AVENUE 4"},
+					"floor": map[string]any{"value": "09"}, "unit": map[string]any{"value": "128"},
+					"postal":  map[string]any{"value": "460102"},
+					"country": map[string]any{"code": "SG", "desc": "SINGAPORE"},
+				},
+				"vehicles": []any{map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+					"vehicleno": map[string]any{"value": "SBA1234A"},
+					"make":      map[string]any{"value": "TOYOTA"},
+					"model":     map[string]any{"value": "COROLLA ALTIS"},
+				}},
+			}},
+		},
+		{
+			Name:    "Muhammad Hafiz",
+			Subject: "5f2c7e10-8a3d-4b9e-a1c6-0d4e2f9b7c35",
+			UserInfo: map[string]any{"person_info": map[string]any{
+				"uinfin":            field("S8012345F"),
+				"name":              field("MUHAMMAD HAFIZ BIN ISMAIL"),
+				"sex":               coded("M", "MALE"),
+				"race":              coded("MY", "MALAY"),
+				"nationality":       coded("SG", "SINGAPORE CITIZEN"),
+				"residentialstatus": coded("C", "CITIZEN"),
+				"dob":               field("1980-11-23"),
+				"email":             map[string]any{"unavailable": true, "source": "2", "classification": "C", "lastupdated": "2026-01-15"},
+				"regadd": map[string]any{
+					"type": "SG", "source": "1", "classification": "C", "lastupdated": "2026-01-15",
+					"block": map[string]any{"value": "55"}, "street": map[string]any{"value": "JURONG WEST STREET 42"},
+					"floor": map[string]any{"value": "12"}, "unit": map[string]any{"value": "305"},
+					"postal":  map[string]any{"value": "640055"},
+					"country": map[string]any{"code": "SG", "desc": "SINGAPORE"},
+				},
+			}},
+		},
+	}
+}

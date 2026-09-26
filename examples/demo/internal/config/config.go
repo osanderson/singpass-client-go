@@ -8,6 +8,7 @@
 package config
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"os"
 	"strings"
@@ -27,6 +28,12 @@ type Config struct {
 	// else ":$PORT" (the port Cloud Run and similar platforms inject), else
 	// ":8088".
 	Addr string
+
+	// Mock runs the demo against in-process fake Singpass and Corppass servers
+	// (singpasstest) with throwaway keys, from DEMO_MOCK=1: every app is
+	// enabled and no client IDs, keys or onboarding are needed. Issuers and
+	// key material are filled in at startup.
+	Mock bool
 
 	// LogJSON switches logging to JSON lines in the shape Cloud Logging parses
 	// ("severity" / "message"), from LOG_FORMAT=json.
@@ -96,6 +103,11 @@ type AppConfig struct {
 	EncKeyPath string
 	EncKID     string
 
+	// SigKey / EncKey, when set, are used instead of loading SigKeyPath /
+	// EncKeyPath (mock mode generates them in memory).
+	SigKey *ecdsa.PrivateKey
+	EncKey *ecdsa.PrivateKey
+
 	// FetchUserInfo makes the app call the FAPI /userinfo endpoint after
 	// token exchange to retrieve Myinfo person data. True for "mi" and
 	// "mib" (shown in startup logging; the singpass product constructor sets
@@ -122,6 +134,7 @@ func Load() (Config, error) {
 		HTTPTimeout: 15 * time.Second,
 		Debug:       os.Getenv("SP_DEBUG_HTTP") != "",
 		LogJSON:     os.Getenv("LOG_FORMAT") == "json",
+		Mock:        os.Getenv("DEMO_MOCK") != "",
 	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 
@@ -179,6 +192,15 @@ func Load() (Config, error) {
 		FetchUserInfo: true,
 	}
 
+	if cfg.Mock {
+		// Mock scopes cover the fake servers' persona data; *_SCOPES still
+		// override them.
+		login.ClientID, myinfo.ClientID, myinfobiz.ClientID = "mock-login", "mock-myinfo", "mock-myinfobiz"
+		login.Scopes = splitScopes(env("SINGPASS_LOGIN_SCOPES", "openid user.identity"))
+		myinfo.Scopes = splitScopes(env("MYINFO_SCOPES", mockMyinfoScopes))
+		myinfobiz.Scopes = splitScopes(env("MYINFO_BIZ_SCOPES", mockMyinfoBizScopes))
+	}
+
 	for _, app := range []AppConfig{login, myinfo, myinfobiz} {
 		if app.ClientID == "" {
 			continue // not onboarded / not enabled
@@ -191,10 +213,15 @@ func Load() (Config, error) {
 	}
 
 	if len(cfg.Apps) == 0 {
-		return Config{}, fmt.Errorf("config: set SINGPASS_LOGIN_CLIENT_ID, MYINFO_CLIENT_ID and/or MYINFO_BIZ_CLIENT_ID to enable at least one relying party")
+		return Config{}, fmt.Errorf("config: set SINGPASS_LOGIN_CLIENT_ID, MYINFO_CLIENT_ID and/or MYINFO_BIZ_CLIENT_ID to enable at least one relying party, or DEMO_MOCK=1 to try it against built-in fake servers")
 	}
 	return cfg, nil
 }
+
+const (
+	mockMyinfoScopes    = "openid uinfin name sex race nationality residentialstatus dob email mobileno regadd vehicles.vehicleno vehicles.make vehicles.model"
+	mockMyinfoBizScopes = "openid entity.basic_profile.name entity.basic_profile.registration_number entity.basic_profile.uen_status entity.basic_profile.company_type entity.address entity.appointments authinfo"
+)
 
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {

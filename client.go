@@ -110,6 +110,12 @@ type Dependencies struct {
 	// declare the /userinfo algorithms yourself.
 	Algorithms *Algorithms
 
+	// AllowLoopbackHTTP permits http:// issuer and endpoint URLs on a loopback
+	// host (localhost, 127.0.0.0/8, ::1) — for a local fake authorization
+	// server such as singpasstest's. Development only: New refuses it together
+	// with AssuranceProduction.
+	AllowLoopbackHTTP bool
+
 	// Debug, when true, logs outbound PAR/token/userinfo requests and responses
 	// (method, URL, form body, sizes) via Logger. The request dump includes the
 	// client_assertion — enable it only against staging.
@@ -189,7 +195,15 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		logger = slog.Default()
 	}
 
-	issuer, err := fapi.ParseIssuerURL(opts.Issuer)
+	var urlOpts []fapi.URLOption
+	if deps.AllowLoopbackHTTP {
+		if deps.Assurance == AssuranceProduction {
+			return nil, fmt.Errorf("singpass: Dependencies.AllowLoopbackHTTP is refused under AssuranceProduction")
+		}
+		urlOpts = append(urlOpts, fapi.AllowLoopbackHTTP())
+	}
+
+	issuer, err := fapi.ParseIssuerURL(opts.Issuer, urlOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("singpass: parse issuer: %w", err)
 	}
@@ -203,15 +217,16 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 
 	// A hardened fetcher for the GET-only discovery and JWKS documents.
 	fetcher, err := fapihttp.New(base, fapihttp.Config{
-		MaxResponseBytes: 1 << 20,
-		RequestTimeout:   httpTimeout,
-		MaxRedirects:     5,
+		MaxResponseBytes:  1 << 20,
+		RequestTimeout:    httpTimeout,
+		MaxRedirects:      5,
+		AllowLoopbackHTTP: deps.AllowLoopbackHTTP,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("singpass: build fetcher: %w", err)
 	}
 
-	discovered, err := client.Discover(ctx, fetcher, issuer)
+	discovered, err := client.Discover(ctx, fetcher, issuer, urlOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("singpass: discover metadata: %w", err)
 	}
