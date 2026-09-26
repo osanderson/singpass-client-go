@@ -52,8 +52,9 @@ type Options struct {
 	AcrValues       string   // optional requested level of assurance; "" to omit
 	FetchUserInfo   bool     // call the FAPI /userinfo endpoint after token exchange (Myinfo)
 	// TolerateUserInfoSubjectClientID accepts a /userinfo "sub" equal to the
-	// client_id (as well as the id_token sub) — a Corppass Myinfo Business
-	// deviation from OIDC Core §5.3.2. Set only for the Myinfo Business client.
+	// client_id (as well as the id_token sub) — a deviation from OIDC Core
+	// §5.3.2 that Corppass Myinfo Business used to have and has since fixed.
+	// Off by default; see MyinfoBusinessOptions.TolerateUserInfoSubjectClientID.
 	TolerateUserInfoSubjectClientID bool
 }
 
@@ -291,9 +292,8 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		SenderConstrain:              storage.SenderConstrainDPoP,
 		ClientAuthMethod:             storage.ClientAuthMethodPrivateKeyJWT,
 		BackchannelTokenDeliveryMode: storage.BackchannelTokenDeliveryModePoll,
-		// Corppass Myinfo Business sets its /userinfo "sub" to the client_id
-		// rather than the authenticated person (an OIDC Core §5.3.2 deviation);
-		// this opt-in accepts sub == client_id as well as the id_token's sub.
+		// Opt-in: also accept a /userinfo "sub" equal to the client_id, as
+		// Corppass Myinfo Business used to send (an OIDC Core §5.3.2 deviation).
 		TolerateUserInfoSubjectEqualsClientID: opts.TolerateUserInfoSubjectClientID,
 		Algorithms:                            resolveAlgorithms(deps.Algorithms, opts.FetchUserInfo),
 		Limits:                                resolveLimits(deps.Limits, httpTimeout),

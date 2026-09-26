@@ -4,8 +4,8 @@
 > separate from Singpass. Protocol-wise it is the same profile FAPIgo already
 > drives for Singpass (PAR + DPoP + `private_key_jwt` + PKCE + encrypted
 > `id_token` + DPoP-protected `/userinfo`), so the demo adds it as a third client
-> (`/mib/*`) with no new protocol code. What differs is all configuration,
-> plus one caller opt-in for a `/userinfo` `sub` deviation (see below). FAPIgo
+> (`/mib/*`) with no new protocol code. What differs is all configuration.
+> (A former `/userinfo` `sub` deviation is now fixed; see below.) FAPIgo
 > handles Corppass's spec-permitted (and issuer-specific) JWE-header and JWKS
 > variations natively. Companion to `singpass-quirks.md`. Verified **end-to-end
 > against Corppass staging** (`https://stg-id.corppass.gov.sg`): full browser
@@ -128,19 +128,22 @@
   objects inside a block are double-encoded the same way. The library unwraps any
   stringified JSON object or array, recursively (`unwrapDeep` in `myinfo/myinfo.go`),
   so `myinfo.Response` and `Raw()` expose real nested JSON.
-- **`sub` is the `client_id`, not the subject.** Contrary to OIDC Core §5.3.2, the
-  `/userinfo` `sub` equals the `client_id` (the response is entity data authorized to
-  the client). In the `id_token`, `sub` is the **entity** — its registration number
+- **The subject is the entity.** In the `id_token`, `sub` is the **entity** — its registration number
   (e.g. a UEN), with `sub_type: "entity"` and `sub_attributes` describing it
   (`entity_type`, `entity_reg_number`, `entity_coi`, `entity_name`,
   `entity_uen_status`) — and the person who logged in is the `act` claim (`sub` = their
   Singpass UUID, `sub_type: "user"`, `sub_attributes` with `account_type`,
-  `identity_number`, `identity_coi`, `name`; `Identity.ActingParty()`). FAPIgo accepts
-  `sub == client_id` via the opt-in `Config.TolerateUserInfoSubjectEqualsClientID`
-  — `singpass.NewMyinfoBusiness` turns it on
-  (`Options.TolerateUserInfoSubjectClientID`), while `NewLogin` / `NewMyinfo` leave
-  it off, so Login/Myinfo stay strict. `iss` / `aud` and the inner JWS are validated
-  by FAPIgo as usual; the returned `Subject` is still the id_token's verified `sub`.
+  `identity_number`, `identity_coi`, `name`; `Identity.ActingParty()`).
+- **`/userinfo` `sub` — fixed (was the `client_id`).** Corppass used to set the
+  `/userinfo` `sub` to the `client_id` instead of the id_token's `sub`, contrary to
+  OIDC Core §5.3.2, and the library tolerated it by default. A login against
+  **Corppass staging on 2026-09-26** passed FAPIgo's strict check, so it now sends
+  the correct `sub` and the tolerance is **off by default** (since the release
+  after v0.4.0). Production couldn't be tested here: if a Corppass environment
+  still fails with `UserInfo response sub does not match the ID token's sub`, set
+  `MyinfoBusinessOptions.TolerateUserInfoSubjectClientID` (FAPIgo's
+  `Config.TolerateUserInfoSubjectEqualsClientID`). `singpasstest` reproduces the
+  old behaviour with `Config.CorppassUserInfoSubClientID`.
 - **DPoP-bound**, with the same `ath` proof and `DPoP-Nonce` retry as Singpass
   Myinfo — handled by FAPIgo's native `FetchUserInfo`.
 

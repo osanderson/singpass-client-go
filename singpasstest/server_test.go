@@ -178,8 +178,7 @@ func TestMyinfoBusinessEndToEnd(t *testing.T) {
 		t.Fatalf("NewMyinfoBusiness: %v", err)
 	}
 
-	// Corppass sends /userinfo sub = client_id and double-encoded blocks; the
-	// client must tolerate the first and unwrap the second.
+	// Corppass sends double-encoded blocks; the client must unwrap them.
 	id := login(t, srv, c)
 	name := id.Myinfo.Entity.Object("basic_profile").Field("name").String()
 	if name != "HARBOURFRONT TRADING PTE. LTD." {
@@ -320,5 +319,49 @@ func TestLoopbackHTTPRedirectURI(t *testing.T) {
 	u, _ := url.Parse(loc)
 	if _, err := c.Complete(context.Background(), u.RawQuery); err != nil {
 		t.Fatalf("Complete: %v", err)
+	}
+}
+
+// TestCorppassFormerSubjectDeviation covers Corppass's former /userinfo "sub" =
+// client_id: a default Myinfo Business client refuses it (the subject check is
+// strict now Corppass is fixed), and TolerateUserInfoSubjectClientID accepts it.
+func TestCorppassFormerSubjectDeviation(t *testing.T) {
+	srv := startServer(t, singpasstest.Config{Issuer: singpasstest.Corppass, CorppassUserInfoSubClientID: true})
+	k := newKeys(t)
+	register(t, srv, "biz-client", singpasstest.Myinfo, []string{"entity.basic_profile.name"}, k)
+
+	newClient := func(tolerate bool) *singpass.Client {
+		c, err := singpass.NewMyinfoBusiness(context.Background(), singpass.MyinfoBusinessOptions{
+			Issuer: srv.Issuer(), ClientID: "biz-client", RedirectURI: redirectURI,
+			Scopes:     []string{"openid", "entity.basic_profile.name"},
+			SigningKey: k.sig, SigningKID: "sig-1", EncryptionKey: k.enc, EncryptionKID: "enc-1",
+			TolerateUserInfoSubjectClientID: tolerate,
+		}, devDeps)
+		if err != nil {
+			t.Fatalf("NewMyinfoBusiness: %v", err)
+		}
+		return c
+	}
+	complete := func(c *singpass.Client) error {
+		ctx := context.Background()
+		redirectURL, _, err := c.BeginLogin(ctx)
+		if err != nil {
+			t.Fatalf("BeginLogin: %v", err)
+		}
+		query, err := srv.Authorize(ctx, redirectURL)
+		if err != nil {
+			t.Fatalf("Authorize: %v", err)
+		}
+		_, err = c.Complete(ctx, query)
+		return err
+	}
+
+	if err := complete(newClient(false)); err == nil {
+		t.Error("default client accepted a /userinfo sub equal to the client_id")
+	} else {
+		t.Logf("default client refused it: %v", err)
+	}
+	if err := complete(newClient(true)); err != nil {
+		t.Errorf("tolerant client: %v", err)
 	}
 }

@@ -32,8 +32,8 @@ const (
 	// person data under "person_info", and no "scope" in the token response.
 	Singpass Issuer = iota
 	// Corppass imitates Corppass (Myinfo Business): no "/fapi" path, several
-	// /userinfo blocks sent as double-encoded JSON, a /userinfo "sub" equal to
-	// the client_id, and "scope" echoed in the token response.
+	// /userinfo blocks sent as double-encoded JSON, and "scope" echoed in the
+	// token response.
 	Corppass
 )
 
@@ -58,6 +58,11 @@ type Config struct {
 	Addr string
 	// Personas are the test users. Nil means DefaultPersonas(Issuer).
 	Personas []Persona
+	// CorppassUserInfoSubClientID reproduces Corppass's former /userinfo
+	// deviation: "sub" set to the client_id instead of the id_token's subject.
+	// Off by default, matching Corppass today. Use it to test a client that
+	// must tolerate it (MyinfoBusinessOptions.TolerateUserInfoSubjectClientID).
+	CorppassUserInfoSubClientID bool
 	// Interactive serves a sign-in page listing the personas, with a cancel
 	// button, for a browser to use. Otherwise every authorization is approved
 	// straight away as the current persona (see SetPersona) — what automated
@@ -570,8 +575,8 @@ func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 func (s *Server) userInfoClaims(p Persona, authz resource.AuthorizationContext) (map[string]json.RawMessage, error) {
 	out := make(map[string]json.RawMessage)
 	sub := authz.Subject
-	if s.cfg.Issuer == Corppass {
-		sub = authz.ClientID // Corppass sets the /userinfo sub to the client_id
+	if s.cfg.Issuer == Corppass && s.cfg.CorppassUserInfoSubClientID {
+		sub = authz.ClientID // Corppass's former deviation
 	}
 	var err error
 	if out["sub"], err = json.Marshal(sub); err != nil {
