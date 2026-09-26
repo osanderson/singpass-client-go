@@ -96,6 +96,16 @@ produce them and the public JWKS
 ([example](https://pkg.go.dev/github.com/osanderson/singpass-client-go#example-OfflineClientJWKS)),
 or run the demo's `go run ./cmd/keygen`.
 
+## Test accounts
+
+Singpass and Corppass publish staging test personas with Myinfo data:
+[Myinfo test personas](https://docs.developer.singpass.gov.sg/docs/testing/myinfo-test-personas)
+and [Myinfo Business test personas](https://docs.corppass.gov.sg/testing/myinfo-business-test-personas).
+Log in with the persona's UINFIN and the password given on those pages. The
+Myinfo personas also sign in to staging Singpass Login apps, but Singpass
+doesn't support that use. Persona data changes without notice, so don't
+hard-code it. No staging client yet? Try the demo with `DEMO_MOCK=1`.
+
 ## Myinfo person data
 
 `NewMyinfo` and `NewMyinfoBusiness` take the same options; `Complete` then also
