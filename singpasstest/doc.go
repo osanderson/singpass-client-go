@@ -15,8 +15,9 @@
 //   - Singpass omits "scope" from the token response; Corppass echoes it.
 //   - Singpass /userinfo returns only the person_info items the granted scopes
 //     cover.
-//   - Corppass /userinfo sets "sub" to the client_id and sends each block as
-//     double-encoded JSON.
+//   - Corppass /userinfo sends each block as double-encoded JSON (and, with
+//     Config.CorppassUserInfoSubClientID, Corppass's former "sub" = client_id
+//     deviation).
 //   - id_tokens carry "sub_type" and "sub_attributes" — on Singpass released
 //     per scope (user.identity, name, email, mobileno); on Corppass the entity
 //     is the subject and the acting person is the "act" claim.

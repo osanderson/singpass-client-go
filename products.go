@@ -127,7 +127,7 @@ type MyinfoOptions struct {
 // MyinfoBusinessOptions configures a Corppass Myinfo Business relying party: the
 // corporate counterpart of Myinfo, on the separate Corppass FAPI 2.0
 // authorization server. Same protocol as Myinfo, with the Corppass issuer
-// default and the /userinfo sub == client_id tolerance enabled.
+// default.
 type MyinfoBusinessOptions struct {
 	Name        string      // app slug for logging/Identity; defaults to "myinfobiz"
 	Environment Environment // Staging (default) or Production: picks the issuer and assurance
@@ -148,6 +148,13 @@ type MyinfoBusinessOptions struct {
 	// not used. Ignored when Dependencies.Decryption is supplied. See
 	// NewAgreerDecrypter.
 	EncryptionAgreer ECDHAgreer
+
+	// TolerateUserInfoSubjectClientID also accepts a /userinfo "sub" equal to
+	// the client_id. Corppass used to send that instead of the id_token's sub
+	// (contrary to OIDC Core §5.3.2); it now sends the correct sub — confirmed
+	// on staging — so this is off by default. Set it only if a Corppass
+	// environment still fails with a /userinfo subject mismatch.
+	TolerateUserInfoSubjectClientID bool
 }
 
 // NewLogin constructs a Login relying party. It fills in the Login-specific
@@ -206,8 +213,7 @@ func NewMyinfo(ctx context.Context, o MyinfoOptions, deps Dependencies) (*Client
 }
 
 // NewMyinfoBusiness constructs a Myinfo Business (Corppass) relying party. It
-// presets FetchUserInfo, enables the Corppass /userinfo sub == client_id
-// tolerance, and defaults to the Corppass issuer.
+// presets FetchUserInfo and defaults to the Corppass issuer.
 func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Dependencies) (*Client, error) {
 	if o.Name == "" {
 		o.Name = "myinfobiz"
@@ -228,7 +234,7 @@ func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Depend
 		Scopes:                          o.Scopes,
 		AcrValues:                       o.AcrValues,
 		FetchUserInfo:                   true,
-		TolerateUserInfoSubjectClientID: true,
+		TolerateUserInfoSubjectClientID: o.TolerateUserInfoSubjectClientID,
 	}, deps)
 }
 

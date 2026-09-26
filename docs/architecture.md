@@ -85,9 +85,10 @@ configuration, encoded in `NewMyinfoBusiness`:
   `Person`. Corppass also double-encodes some blocks (and nested objects) as
   stringified JSON; these are unwrapped recursively, so every block reads as real
   nested JSON.
-- **`sub == client_id` tolerance** — Corppass sets the `/userinfo` `sub` to the
-  `client_id` (an OIDC Core §5.3.2 deviation); `NewMyinfoBusiness` opts into
-  accepting it.
+- **`/userinfo` `sub`** — Corppass used to set it to the `client_id` (an OIDC
+  Core §5.3.2 deviation) and has since fixed it, so `NewMyinfoBusiness` checks it
+  strictly; `MyinfoBusinessOptions.TolerateUserInfoSubjectClientID` restores the
+  old tolerance if an environment still needs it.
 
 ## Keys and limits
 
