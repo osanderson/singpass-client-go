@@ -127,6 +127,7 @@ claims have typed accessors too: `id.Issuer()`, `id.AuthMethods()`,
 | [`…/web`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/web) | Optional `net/http` handlers and login sessions |
 | [`…/keyfile`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/keyfile) | Generate and load EC P-256 PEM keys |
 | [`…/singpasstest`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest) | Fake Singpass / Corppass server for tests and demos |
+| [`…/sqlstore`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/sqlstore) | Durable session stores on Postgres, MySQL or SQLite (`database/sql`, no dependencies) |
 
 ## Testing your integration
 
@@ -143,8 +144,9 @@ login in a test — see the
 The defaults target **staging**. For production, set
 `Environment: singpass.Production` in the product options: it selects the
 production issuer and production assurance, under which the in-memory session
-store is refused, so supply a durable `Dependencies.Sessions`. Work through the
-[go-live checklist](docs/production.md).
+store is refused, so supply a durable `Dependencies.Sessions` — `sqlstore`
+provides one (and the `web` helper's login sessions) on Postgres, MySQL or
+SQLite. Work through the [go-live checklist](docs/production.md).
 
 ## Documentation
 
