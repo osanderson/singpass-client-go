@@ -80,6 +80,10 @@ func main() {
 			"acr_values", ac.AcrValues)
 	}
 
+	renderHome := func(w http.ResponseWriter, message string) {
+		demoapp.RenderHome(w, demoapp.Home{Apps: homeApps(apps), Message: message, Mock: cfg.Mock})
+	}
+
 	handlers := web.New(web.Config{
 		Apps:   apps,
 		Logger: logger,
@@ -92,7 +96,7 @@ func main() {
 			http.Redirect(w, r, "/", http.StatusFound)
 		},
 		OnDenied: func(w http.ResponseWriter, _ *http.Request, app *web.App, denied *singpass.DeniedError) {
-			demoapp.RenderHome(w, homeApps(apps), "Login with "+app.Title+" was declined: "+denied.Code)
+			renderHome(w, "Login with "+app.Title+" was declined: "+denied.Code)
 		},
 		OnError: func(w http.ResponseWriter, _ *http.Request, app *web.App, err error) {
 			// A stale login (expired, reloaded callback, other browser) isn't a
@@ -100,12 +104,12 @@ func main() {
 			if errors.Is(err, singpass.ErrLoginExpired) {
 				logger.Warn("login expired", "app", app.Name, "err", err)
 				w.WriteHeader(http.StatusBadRequest)
-				demoapp.RenderHome(w, homeApps(apps), "Your "+app.Title+" login expired. Please try again.")
+				renderHome(w, "Your "+app.Title+" login expired. Please try again.")
 				return
 			}
 			logger.Error("login error", "app", app.Name, "err", err)
 			w.WriteHeader(http.StatusInternalServerError)
-			demoapp.RenderHome(w, homeApps(apps), "Login with "+app.Title+" failed. See server logs.")
+			renderHome(w, "Login with "+app.Title+" failed. See server logs.")
 		},
 	})
 
@@ -122,6 +126,7 @@ func main() {
 				title = app.Title
 			}
 			pd := demoapp.ProfileData{
+				Mock:            cfg.Mock,
 				App:             id.App,
 				Title:           title,
 				Subject:         id.Subject,
@@ -138,7 +143,7 @@ func main() {
 			demoapp.RenderProfile(w, pd)
 			return
 		}
-		demoapp.RenderHome(w, homeApps(apps), "")
+		renderHome(w, "")
 	})
 
 	logger.Info("listening", "addr", cfg.Addr, "base_url", cfg.BaseURL, "apps", len(apps))

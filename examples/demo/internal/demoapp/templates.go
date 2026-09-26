@@ -19,6 +19,15 @@ type HomeApp struct {
 	Title string
 }
 
+// Home is the landing page: the enabled relying parties, an optional banner
+// message (e.g. after a denied login or an error; "" for none), and whether the
+// demo is running against the built-in fake servers.
+type Home struct {
+	Apps    []HomeApp
+	Message string
+	Mock    bool
+}
+
 // ProfileData is the signed-in view: which app authenticated the user, the
 // validated subject and granted scope, the pretty-printed id_token claims, and
 // (for Myinfo / Myinfo Business) accessor-driven person-data sections plus the
@@ -34,6 +43,7 @@ type ProfileData struct {
 	Blocks          string    // recognised /userinfo blocks present (e.g. "person_info")
 	Sections        []Section // person data grouped by block, read via the myinfo.Response accessor
 	PersonInfoPre   string    // raw /userinfo response, pretty-printed
+	Mock            bool      // signed in against the built-in fake servers
 }
 
 // Highlight is one accessor-read field shown on the profile, demonstrating the
@@ -137,6 +147,7 @@ var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
   a.btn { display: inline-block; padding: .6rem 1.1rem; background: #d1350f; color: #fff; text-decoration: none; border-radius: .4rem; }
   a.btn:hover { background: #b02c0c; }
   .intro { color: #444; }
+  .mock { background: #eef4ff; border: 1px solid #b9cdf5; padding: .75rem 1rem; border-radius: .5rem; margin: 1rem 0; }
   a { color: #d1350f; }
   footer { margin-top: 3rem; color: #666; font-size: .85rem; }
   footer p { margin: .3rem 0; }
@@ -148,7 +159,10 @@ var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
 integrating Singpass Login, Myinfo and Myinfo Business. Log in below to see what the library returns:
 the validated id_token claims and, for Myinfo, the person or entity data.</p>
 {{if .Message}}<div class="msg">{{.Message}}</div>{{end}}
-<p>Choose a relying party to authenticate with (Singpass / Corppass staging):</p>
+{{if .Mock}}<div class="mock"><strong>Mock mode.</strong> Logins go to built-in fake Singpass and Corppass
+servers (<code>singpasstest</code>) with test personas — no real accounts or personal data.</div>
+<p>Choose a relying party to authenticate with:</p>
+{{else}}<p>Choose a relying party to authenticate with (Singpass / Corppass staging):</p>{{end}}
 <ul>
 {{range .Apps}}<li><a class="btn" href="/{{.Name}}/login">Sign in with {{.Title}}</a></li>{{end}}
 </ul>
@@ -209,7 +223,7 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 </style>
 </head>
 <body>
-<p class="brand"><a href="` + RepoURL + `">singpass-client-go</a> demo</p>
+<p class="brand"><a href="` + RepoURL + `">singpass-client-go</a> demo{{if .Mock}} · mock mode (test persona){{end}}</p>
 <h1>Signed in via {{.Title}}</h1>
 <dl>
   <dt>App</dt><dd>{{.App}}</dd>
@@ -255,14 +269,10 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 </body>
 </html>`))
 
-// RenderHome writes the landing page listing the enabled relying parties. message
-// is an optional banner (e.g. after a denied login or an error); pass "" for none.
-func RenderHome(w http.ResponseWriter, apps []HomeApp, message string) {
+// RenderHome writes the landing page.
+func RenderHome(w http.ResponseWriter, data Home) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = homeTmpl.Execute(w, struct {
-		Apps    []HomeApp
-		Message string
-	}{Apps: apps, Message: message})
+	_ = homeTmpl.Execute(w, data)
 }
 
 // RenderProfile writes the signed-in view for data.
