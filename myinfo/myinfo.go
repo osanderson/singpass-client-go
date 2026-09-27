@@ -499,6 +499,12 @@ func asString(v any) string {
 		return t
 	case float64:
 		return strconv.FormatFloat(t, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case json.Number:
+		return t.String()
 	case bool:
 		return strconv.FormatBool(t)
 	default:
