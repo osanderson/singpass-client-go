@@ -77,32 +77,3 @@ func (r *registry) ResolveEncryptionKeys(_ context.Context, req keys.ClientEncry
 		{KeyID: c.cfg.EncryptionKID, Algorithm: req.Algorithm, PublicKey: c.encKey},
 	}}, nil
 }
-
-// issuerKeys implements keys.IssuerKeySource over the server's own key
-// manager, so the /userinfo handler can verify the access tokens it issued.
-type issuerKeys struct {
-	issuer  string
-	manager keys.KeyManager
-}
-
-func (s issuerKeys) ResolveIssuerKeys(ctx context.Context, req keys.IssuerKeyRequest) (keys.IssuerKeySet, error) {
-	if req.Issuer != s.issuer {
-		return keys.IssuerKeySet{}, fmt.Errorf("singpasstest: unknown issuer %q", req.Issuer)
-	}
-	var purpose keys.SigningPurpose
-	switch req.Purpose {
-	case keys.AccessTokenVerification:
-		purpose = keys.AccessTokenSigning
-	case keys.IDTokenVerification:
-		purpose = keys.IDTokenSigning
-	default:
-		return keys.IssuerKeySet{}, fmt.Errorf("singpasstest: unsupported issuer key purpose %v", req.Purpose)
-	}
-	info, err := s.manager.PublicKey(ctx, purpose, req.Algorithm)
-	if err != nil {
-		return keys.IssuerKeySet{}, err
-	}
-	return keys.IssuerKeySet{Keys: []keys.IssuerKey{
-		{KeyID: info.KeyID, Algorithm: req.Algorithm, PublicKey: info.PublicKey},
-	}}, nil
-}
