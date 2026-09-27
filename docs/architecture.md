@@ -37,7 +37,7 @@ few places, all handled inside FAPIgo with small hooks this library supplies:
      (`APP_AUTHENTICATION_DEFAULT` for a standard login) and **rejected** on Myinfo
      / Myinfo Business requests. `NewLogin` sets it; `NewMyinfo` /
      `NewMyinfoBusiness` omit it. It rides as a plain-string FAPIgo *extension*
-     ([`extensions.go`](../extensions.go)), emitted as a top-level PAR parameter on the FAPI 2.0
+     ([`client.go`](../client.go)), emitted as a top-level PAR parameter on the FAPI 2.0
      baseline profile.
    - `acr_values` — via `Options.AcrValues`, only if set (Singpass rejects it
      unless your client is whitelisted for it).
@@ -45,7 +45,7 @@ few places, all handled inside FAPIgo with small hooks this library supplies:
 2. **Encrypted `id_token` (inbound) — driven by FAPIgo.** Singpass returns a JWE
    wrapping a JWS (`ECDH-ES+A256KW` + `A256CBC-HS512`). This library declares those
    algorithms and provides a `keys.Decrypter` built from FAPIgo's
-   `keys.NewSingleKeyDecrypter` / `keys.NewInMemoryECDH` ([`decrypter.go`](../decrypter.go)).
+   `keys.NewSingleKeyDecrypter` / `keys.NewInMemoryECDH` ([`keys.go`](../keys.go)).
    FAPIgo parses the compact JWE, delegates only the ECDH primitive to that
    decrypter to recover the content-encryption key, decrypts the payload, checks
    `cty=JWT`, and verifies the inner JWS itself. Declaring the algorithms also
