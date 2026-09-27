@@ -429,7 +429,7 @@ func (c Classification) String() string {
 // Parse builds the envelope-aware view of an already-decoded /userinfo claim map.
 // It takes a plain map (not a FAPIgo client.UserInfo), so it has no FAPIgo
 // dependency and is usable on its own — e.g. in tests or over stored responses.
-// The singpass package calls it with FAPIgo's validated result (userinfo.go).
+// The singpass package calls it with FAPIgo's validated result (client.go).
 func Parse(all map[string]any) *Response {
 	unwrapped, _ := unwrapDeep(all).(map[string]any)
 	if unwrapped == nil {

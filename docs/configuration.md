@@ -72,7 +72,7 @@ the public JWKS to register during onboarding from the keys' public halves only
 (so HSM/KMS-held keys work too) — before any `client_id` or
 discovery document exists — using the same FAPIgo library code the live client's
 `Client.PublicJWKS` resolves through, so the offline and online sets are
-identical ([`jwks.go`](../jwks.go)). The DPoP key is deliberately not published.
+identical ([`keys.go`](../keys.go)). The DPoP key is deliberately not published.
 
 ```go
 // Reuses keys/login/{sig,enc}.pem, or creates them (owner-only, never overwriting).

@@ -496,3 +496,24 @@ func (e *DeniedError) Error() string {
 	}
 	return fmt.Sprintf("singpass: login denied: %s", e.Code)
 }
+
+// authContextTypeExt is the Singpass/Corppass-proprietary
+// "authentication_context_type" PAR parameter (mandatory for Login apps). It is
+// a single bare string, so FAPIgo emits it as a plain top-level PAR parameter on
+// the FAPI 2.0 baseline profile — no signed request object required. The value
+// itself is the caller's responsibility (see Options.AuthContextType).
+var authContextTypeExt = extension.Definition[string]{
+	Name:           "authentication_context_type",
+	Cardinality:    extension.Single,
+	AllowedSources: extension.SourcePlainParameter,
+	MaxBytes:       128,
+}
+
+// parseMyinfo adapts FAPIgo's validated UserInfo response into the envelope-aware
+// myinfo.Response view. info.AsMap presents the already-decrypted,
+// inner-JWS-verified and sub-matched claims as a decoded map (it cannot fail —
+// every value round-tripped through json.Unmarshal when the response was first
+// parsed); myinfo.Parse then unwraps any double-encoded blocks and groups the data.
+func parseMyinfo(info client.UserInfo) *myinfo.Response {
+	return myinfo.Parse(info.AsMap())
+}
