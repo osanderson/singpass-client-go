@@ -96,6 +96,9 @@ one (expired, reloaded or replayed callback) matches
 `errors.Is(err, singpass.ErrLoginExpired)` — show a "please try again" page for
 it rather than an error.
 
+New to Singpass? The [onboarding guide](docs/onboarding.md) walks through the
+developer portal and maps each setting to these options.
+
 Need keys to register? The `singpass-keygen` command creates both keys (or
 reuses existing ones — it never overwrites) and prints the public JWKS:
 
@@ -209,6 +212,8 @@ covers [rotating keys](docs/production.md#7-rotating-keys) without downtime.
 ## Documentation
 
 - [API reference and examples](https://pkg.go.dev/github.com/osanderson/singpass-client-go) on pkg.go.dev
+- [Onboarding](docs/onboarding.md) — from portal setup to a working staging login, step by step
+- [Troubleshooting](docs/troubleshooting.md) — error codes and symptoms, with their causes and fixes
 - [Configuration](docs/configuration.md) — options, dependencies, keys, staging vs production
 - [Going to production](docs/production.md) — the go-live checklist
 - [How it works](docs/architecture.md) — what Singpass needs and where each piece is handled

@@ -12,9 +12,10 @@ choices, and the library refuses the unsafe ones.
 - [ ] **New keys for production.** Generate separate signing and encryption keys
       for each production client, rather than reusing staging keys. Prefer
       HSM/KMS-held keys: pass a `crypto.Signer` as `SigningKey`, and an
-      `ECDHAgreer` as `EncryptionAgreer`. Register the public JWKS:
+      `ECDHAgreer` as `EncryptionAgreer`. Register the public JWKS, as a JWKS
+      endpoint or a pasted JWKS object ([onboarding.md](onboarding.md#3-create-a-staging-app)):
       `OfflineClientJWKS` needs only the public keys.
-- [ ] **The JWKS URL serves those keys.** Once deployed, check the URL
+- [ ] **The JWKS URL serves those keys** (with a JWKS endpoint). Once deployed, check the URL
       registered in the portal with `client.CheckPublishedJWKS(ctx, url)`
       (e.g. as a readiness check) or
       `singpass-keygen -dir … -sig-kid … -enc-kid … -check <url>`. A JWKS URL
@@ -181,7 +182,11 @@ header, and the client decrypts with the key it names.
 2. Wait at least an hour: tokens may arrive encrypted to either key meanwhile.
 3. Deploy without E1.
 
-Every key needs a new `kid`. With HSM/KMS keys, use `PublishedKey` with the
+With a JWKS object rather than an endpoint, make each JWKS change by editing
+the app in the portal, pasting the set `singpass.OfflineJWKS` builds for that
+step.
+
+Every key needs a new `kid`, never one used before. With HSM/KMS keys, use `PublishedKey` with the
 key's public half, and `DecryptionKey.Agreer` in place of `Key`; if you inject
 `Dependencies.Keys` or `Dependencies.Decryption` yourself, build them with
 `singpass.NewRotatingKeyManager` and `singpass.NewRotatingDecrypter`. For a JWKS
