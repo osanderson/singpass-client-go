@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.0](https://github.com/osanderson/singpass-client-go/compare/v0.8.0...v0.9.0) (2026-09-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* Client.Complete and web.Authenticator.Complete take the login's state (from BeginLogin, kept with the browser) as a third argument; and under AssuranceProduction, set Dependencies.KeyCustody to KeyCustody{Durable: true} and leave Dependencies.Random unset (crypto/rand.Reader).
+
+### Features
+
+* expose Singpass error codes, bind callbacks to the browser, declare key custody ([f4eb576](https://github.com/osanderson/singpass-client-go/commit/f4eb57614dca52a80872abde0729bfb7acb38aa7))
+
+
+### Bug Fixes
+
+* **deps:** update FAPIgo to v0.38.0 ([#49](https://github.com/osanderson/singpass-client-go/issues/49)) ([3e830ca](https://github.com/osanderson/singpass-client-go/commit/3e830cab7d2debdcae3d7b00fbb52d67011275b2))
+* **myinfo:** zero-pad a one-digit floor in formatted addresses ([#51](https://github.com/osanderson/singpass-client-go/issues/51)) ([02cfe40](https://github.com/osanderson/singpass-client-go/commit/02cfe40b67104231987a25cf1872b154cc1db9a7))
+
 ## [0.8.0](https://github.com/osanderson/singpass-client-go/compare/v0.7.0...v0.8.0) (2026-09-27)
 
 
