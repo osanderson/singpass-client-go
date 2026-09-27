@@ -113,6 +113,13 @@ singpass: construct client: client: dependencies: sessions must implement storag
       cross-site navigation from Singpass, which `Strict` would break.
 - [ ] **Render logout as a same-origin `<form method="post">`.** `web` rejects
       GET and cross-origin logout requests.
+- [ ] **Keep personal data out of the login session.** By default the `web`
+      helper's login session holds the whole identity, Myinfo data included —
+      with `sqlstore`, in your database for the session's lifetime. Set
+      `SessionIdentity: web.MinimalIdentity` (just the subject and the claims
+      describing the login) or `web.WithoutMyinfo` (drops the Myinfo data),
+      and save what the app needs from the full identity passed to
+      `OnAuthenticated`.
 
 ## 5. Error handling
 
