@@ -120,6 +120,10 @@ p.Field("name").SourceCode()             // myinfo.SourceGovernmentVerified
 p.Object("regadd").Field("postal").String()
 p.List("vehicles")                       // repeated records
 id.Myinfo.Auth.Authorisations()          // Corppass auth_info, flattened
+id.Myinfo.Entity.Appointments()          // Corppass appointments / .Shareholders(), person or entity party
+p.Leaves()                               // every item with its key path, e.g. for a table or a DB row
+p.Object("regadd").EffectiveSource()     // provenance, incl. source declared on the container
+myinfo.Label("hdbownership")             // "HDB ownership" — display labels for keys
 id.Myinfo.Raw()                          // the full decoded response
 ```
 

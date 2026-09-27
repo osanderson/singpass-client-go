@@ -345,7 +345,7 @@ func attributeRows(add func(label, value, note string), prefix, note string, a s
 	}
 	for _, k := range sortedKeys(a.Raw) {
 		if !modelledAttributes[k] {
-			add(prefix+prettyLabel(k), claimString(a.Raw, k), note)
+			add(prefix+myinfo.Label(k), claimString(a.Raw, k), note)
 		}
 	}
 }
@@ -372,88 +372,6 @@ func sortedKeys(m map[string]any) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// prettyLabel turns a snake_case claim key ("entity_reg_number") into a display
-// label ("Entity reg number").
-func prettyLabel(k string) string {
-	s := strings.ReplaceAll(k, "_", " ")
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
-// personLabelOverrides gives friendlier labels for common personal-Myinfo fields
-// whose keys are single lowercase tokens that prettyLabel cannot word-split.
-var personLabelOverrides = map[string]string{
-	"birthcountry":         "Birth country",
-	"residentialstatus":    "Residential status",
-	"housingtype":          "Housing type",
-	"aliasname":            "Alias name",
-	"marriedname":          "Married name",
-	"hanyupinyinname":      "Hanyu Pinyin name",
-	"hanyupinyinaliasname": "Hanyu Pinyin alias name",
-	"ownerprivate":         "Owns private property",
-	"secondaryrace":        "Secondary race",
-	"marital":              "Marital status",
-	"countryofmarriage":    "Country of marriage",
-	"marriagecertno":       "Marriage cert no.",
-	"marriagedate":         "Marriage date",
-	"divorcedate":          "Divorce date",
-	"employmentsector":     "Employment sector",
-	"passtype":             "Pass type",
-	"passstatus":           "Pass status",
-	"passexpirydate":       "Pass expiry date",
-	"passportnumber":       "Passport number",
-	"passportexpirydate":   "Passport expiry date",
-	// Nested / grouped blocks (containers the recursive flatten descends into).
-	"cpfbalances":              "CPF balances",
-	"cpfcontributions":         "CPF contributions",
-	"cpfemployers":             "CPF employers",
-	"cpfinvestmentscheme":      "CPF Investment Scheme",
-	"cpfhousingwithdrawal":     "CPF housing withdrawal",
-	"drivinglicence":           "Driving licence",
-	"ltavocationallicences":    "LTA vocational licences",
-	"hdbownership":             "HDB ownership",
-	"hdbtype":                  "HDB type",
-	"academicqualifications":   "Academic qualifications",
-	"childrenbirthrecords":     "Children birth records",
-	"sponsoredchildrenrecords": "Sponsored children records",
-	"noa":                      "NOA (Notice of Assessment)",
-	"noa-basic":                "NOA basic (Notice of Assessment)",
-	"noahistory":               "NOA history",
-	"noahistory-basic":         "NOA history basic",
-	"noas":                     "NOAs",
-	"yearofassessment":         "Year of assessment",
-	"taxclearance":             "Tax clearance",
-	"merdekagen":               "Merdeka Generation",
-	"pioneergen":               "Pioneer Generation",
-	// Driving licence / demerit points.
-	"totaldemeritpoints": "Total demerit points",
-	"suspension":         "Suspension",
-	"disqualification":   "Disqualification",
-	"startdate":          "Start date",
-	"enddate":            "End date",
-	// CPF Investment Scheme.
-	"agentbankcode":          "Agent bank code",
-	"invbankacctno":          "Investment bank account no.",
-	"saqparticipationstatus": "SAQ participation status",
-	"sdsnetshareholdingqty":  "SDS net shareholding qty",
-	// Short CPF account keys.
-	"oa": "OA (Ordinary)",
-	"sa": "SA (Special)",
-	"ma": "MA (MediSave)",
-	"ra": "RA (Retirement)",
-}
-
-// personLabel resolves a person_info field key to a display label, preferring a
-// curated override and otherwise prettifying the raw key.
-func personLabel(k string) string {
-	if l, ok := personLabelOverrides[k]; ok {
-		return l
-	}
-	return prettyLabel(k)
 }
 
 // myinfoSections turns the /userinfo person data into grouped sections — one per
@@ -534,7 +452,7 @@ func personSection(p myinfo.Data) demoapp.Section {
 		}
 	}
 	fillBlock(&sec, p, shown)
-	if s := uniformSource(p); s != myinfo.SourceUnknown {
+	if s := p.EffectiveSource(); s != myinfo.SourceUnknown {
 		sec.Badge = s.String()
 		sec.BadgeKind = sourceKind(s)
 	}
@@ -549,7 +467,7 @@ func personSection(p myinfo.Data) demoapp.Section {
 func genericSection(title string, d myinfo.Data) demoapp.Section {
 	sec := demoapp.Section{Title: title}
 	fillBlock(&sec, d, nil)
-	if s := uniformSource(d); s != myinfo.SourceUnknown {
+	if s := d.EffectiveSource(); s != myinfo.SourceUnknown {
 		sec.Badge = s.String()
 		sec.BadgeKind = sourceKind(s)
 	}
@@ -613,20 +531,31 @@ func fillBlock(sec *demoapp.Section, d myinfo.Data, skip map[string]bool) {
 		}
 		switch d.Kind(k) {
 		case myinfo.KindList:
-			if t, ok := buildTable(k, personLabel(k), d.List(k)); ok {
-				sec.Tables = append(sec.Tables, t)
+			switch k {
+			case "appointments":
+				if t, ok := appointmentsTable(d); ok {
+					sec.Tables = append(sec.Tables, t)
+				}
+			case "shareholders":
+				if t, ok := shareholdersTable(d); ok {
+					sec.Tables = append(sec.Tables, t)
+				}
+			default:
+				if t, ok := buildTable(k, myinfo.Label(k), d.List(k)); ok {
+					sec.Tables = append(sec.Tables, t)
+				}
 			}
 		case myinfo.KindLeaf:
 			if f := d.Field(k); f.Available() {
-				label := personLabel(k)
+				label := myinfo.Label(k)
 				sec.Rows = append(sec.Rows, demoapp.Highlight{Label: label, Value: formatAmount(label, f.String()), Note: sourceNote(f), NoteKind: sourceKind(f.SourceCode()), Updated: f.LastUpdated(), Confidential: f.ClassificationCode().Confidential()})
 			}
 		case myinfo.KindObject:
 			obj := d.Object(k)
-			g := demoapp.Group{Title: personLabel(k)}
+			g := demoapp.Group{Title: myinfo.Label(k)}
 			fillGroup(&g, obj)
 			if len(g.Rows) > 0 || len(g.Tables) > 0 {
-				if s := groupSource(obj); s != myinfo.SourceUnknown {
+				if s := obj.EffectiveSource(); s != myinfo.SourceUnknown {
 					g.Badge = s.String()
 					g.BadgeKind = sourceKind(s)
 				}
@@ -649,7 +578,7 @@ func fillBlock(sec *demoapp.Section, d myinfo.Data, skip map[string]bool) {
 // Scheme's "account" shows "Account › Agent bank code" without a further heading.
 func fillGroup(g *demoapp.Group, obj myinfo.Data) {
 	for _, k := range obj.Keys() {
-		label := personLabel(k)
+		label := myinfo.Label(k)
 		switch obj.Kind(k) {
 		case myinfo.KindList:
 			if t, ok := buildTable(k, label, obj.List(k)); ok {
@@ -679,48 +608,39 @@ type leaf struct {
 	confidential                          bool
 }
 
-// transparentContainers are Corppass nested objects that wrap an appointee /
-// shareholder / financial detail as one of two mutually-exclusive shapes (a
-// person or an entity). Their name adds no information a sibling "Category" column
-// doesn't already carry, so collectLeaves recurses through them WITHOUT extending
-// the path — the inner fields (Name, Id number, Registration number, …) surface
-// directly, and the individual/entity variants collapse onto shared columns.
+// transparentContainers are Corppass nested objects whose name adds nothing to a
+// table column ("Company financial › Revenue" reads better as "Revenue"), so
+// collectLeaves passes through them without extending the label. Appointments and
+// shareholders, whose person/entity variants need the same treatment, are read
+// through the library's typed Appointments / Shareholders instead.
 var transparentContainers = map[string]bool{
-	"individual_appointment": true,
-	"entity_appointment":     true,
-	"individual_shareholder": true,
-	"entity_shareholder":     true,
-	"company_financial":      true,
+	"company_financial": true,
 }
 
-// collectLeaves walks a Myinfo object depth-first, returning one leaf per data-
-// bearing item with a "parent › child" path label (relative to prefix). Nested
-// objects recurse; a transparent container recurses without extending the label;
-// arrays recurse with a "#n" record suffix. Only available leaves are returned —
-// bare envelope meta and unavailable items are skipped. Money-ish values are
-// formatted with thousands separators.
+// collectLeaves flattens a Myinfo object via the library's Data.Leaves into
+// display rows with a "parent › child" path label (relative to prefix): list
+// elements add a "#n" record suffix and transparent containers add nothing.
+// Unavailable items are skipped; money-ish values get thousands separators.
 func collectLeaves(d myinfo.Data, prefix string) []leaf {
 	var out []leaf
-	for _, k := range d.Keys() {
-		label := joinLabel(prefix, personLabel(k))
-		switch d.Kind(k) {
-		case myinfo.KindLeaf:
-			if f := d.Field(k); f.Available() {
-				out = append(out, leaf{label, formatAmount(label, f.String()), sourceNote(f), sourceKind(f.SourceCode()), f.LastUpdated(), f.ClassificationCode().Confidential()})
-			}
-		case myinfo.KindObject:
-			if transparentContainers[k] {
-				out = append(out, collectLeaves(d.Object(k), prefix)...)
-			} else {
-				out = append(out, collectLeaves(d.Object(k), label)...)
-			}
-		case myinfo.KindList:
-			for i, el := range d.List(k) {
-				if el.Present() {
-					out = append(out, collectLeaves(el, fmt.Sprintf("%s #%d", label, i+1))...)
-				}
-			}
+	for _, lf := range d.Leaves() {
+		f := lf.Field
+		if !f.Available() {
+			continue
 		}
+		var parts []string
+		for _, k := range lf.Path {
+			if n, err := strconv.Atoi(k); err == nil && len(parts) > 0 {
+				parts[len(parts)-1] += fmt.Sprintf(" #%d", n+1) // Myinfo keys are never numeric
+				continue
+			}
+			if transparentContainers[k] {
+				continue
+			}
+			parts = append(parts, myinfo.Label(k))
+		}
+		label := joinLabel(prefix, strings.Join(parts, " › "))
+		out = append(out, leaf{label, formatAmount(label, f.String()), sourceNote(f), sourceKind(f.SourceCode()), f.LastUpdated(), f.ClassificationCode().Confidential()})
 	}
 	return out
 }
@@ -796,11 +716,9 @@ func formatAmount(label, value string) string {
 // first-seen position after them, so the tables stay readable without dropping
 // anything. Labels are the post-transparent-container short forms.
 var tableColumnOrder = map[string][]string{
-	"appointments": {"Position", "Name", "Category", "Id type", "Id number", "Nationality", "Registration number", "Type", "Appointment date"},
-	"shareholders": {"Name", "Category", "Allocation", "Share type", "Currency", "Id type", "Id number", "Nationality", "Registration number", "Type"},
-	"capitals":     {"Share type", "Issued amount", "Paid up amount", "Share allotted number", "Currency"},
-	"financials":   {"Current period start date", "Current period end date", "Revenue", "Profit loss before tax", "Profit loss after tax", "Is audited", "Currency"},
-	"licences":     {"Licence name", "Issuance agency", "Issue date", "Expiry date"},
+	"capitals":   {"Share type", "Issued amount", "Paid up amount", "Share allotted number", "Currency"},
+	"financials": {"Current period start date", "Current period end date", "Revenue", "Profit loss before tax", "Profit loss after tax", "Is audited", "Currency"},
+	"licences":   {"Licence name", "Issuance agency", "Issue date", "Expiry date"},
 	// Personal-Myinfo nested collections. "history" is shared by cpfcontributions
 	// (month/date/employer/amount) and cpfemployers; the union of both floats these
 	// front, with any employer-history-only column trailing in first-seen order.
@@ -843,7 +761,7 @@ func buildTable(key, title string, list []myinfo.Data) (demoapp.Table, bool) {
 	}
 	cols = orderColumns(key, cols)
 	t := demoapp.Table{Title: title, Columns: cols}
-	if s := tableSource(list); s != myinfo.SourceUnknown {
+	if s := myinfo.CommonSource(list...); s != myinfo.SourceUnknown {
 		t.Badge = s.String()
 		t.BadgeKind = sourceKind(s)
 	}
@@ -855,6 +773,91 @@ func buildTable(key, title string, list []myinfo.Data) (demoapp.Table, bool) {
 		t.Rows = append(t.Rows, demoapp.TableRow{Cells: row})
 	}
 	return t, true
+}
+
+// appointmentsTable renders entity_info appointments from the library's typed
+// records, which flatten the person / entity appointee variants.
+func appointmentsTable(entity myinfo.Data) (demoapp.Table, bool) {
+	recs := entity.Appointments()
+	if len(recs) == 0 {
+		return demoapp.Table{}, false
+	}
+	t := demoapp.Table{Title: "Appointments", Columns: []string{"Position", "Name", "Appointee", "ID / registration no.", "Nationality", "Category", "Appointment date"}}
+	datas := make([]myinfo.Data, 0, len(recs))
+	for _, a := range recs {
+		t.Rows = append(t.Rows, demoapp.TableRow{Cells: []string{a.Position, a.Appointee.Name, partyKind(a.Appointee), partyID(a.Appointee), a.Appointee.Nationality, a.Category, a.AppointmentDate}})
+		datas = append(datas, a.Data)
+	}
+	badge(&t, datas)
+	dropEmptyColumns(&t)
+	return t, true
+}
+
+// shareholdersTable renders entity_info shareholders from the library's typed
+// records.
+func shareholdersTable(entity myinfo.Data) (demoapp.Table, bool) {
+	recs := entity.Shareholders()
+	if len(recs) == 0 {
+		return demoapp.Table{}, false
+	}
+	t := demoapp.Table{Title: "Shareholders", Columns: []string{"Name", "Holder", "ID / registration no.", "Allocation", "Share type", "Currency", "Category"}}
+	datas := make([]myinfo.Data, 0, len(recs))
+	for _, sh := range recs {
+		t.Rows = append(t.Rows, demoapp.TableRow{Cells: []string{sh.Holder.Name, partyKind(sh.Holder), partyID(sh.Holder), formatAmount("allocation", sh.Allocation), sh.ShareType, sh.Currency, sh.Category}})
+		datas = append(datas, sh.Data)
+	}
+	badge(&t, datas)
+	dropEmptyColumns(&t)
+	return t, true
+}
+
+func partyKind(p myinfo.Party) string {
+	if p.Individual {
+		return "Individual"
+	}
+	return "Entity"
+}
+
+func partyID(p myinfo.Party) string {
+	if p.Individual {
+		return strings.TrimSpace(p.IDNumber + " " + p.IDType)
+	}
+	return p.RegistrationNumber
+}
+
+// dropEmptyColumns removes columns no row fills, so sparse records don't show
+// a column of dashes.
+func dropEmptyColumns(t *demoapp.Table) {
+	keep := make([]bool, len(t.Columns))
+	for _, r := range t.Rows {
+		for i, c := range r.Cells {
+			keep[i] = keep[i] || c != ""
+		}
+	}
+	var cols []string
+	for i, c := range t.Columns {
+		if keep[i] {
+			cols = append(cols, c)
+		}
+	}
+	for ri, r := range t.Rows {
+		var cells []string
+		for i, c := range r.Cells {
+			if keep[i] {
+				cells = append(cells, c)
+			}
+		}
+		t.Rows[ri].Cells = cells
+	}
+	t.Columns = cols
+}
+
+// badge sets a table's provenance badge from its records' common source.
+func badge(t *demoapp.Table, records []myinfo.Data) {
+	if s := myinfo.CommonSource(records...); s != myinfo.SourceUnknown {
+		t.Badge = s.String()
+		t.BadgeKind = sourceKind(s)
+	}
 }
 
 // orderColumns reorders cols by the preference list for key: listed columns first
@@ -883,85 +886,6 @@ func orderColumns(key string, cols []string) []string {
 		return false // both unranked: preserve first-seen order
 	})
 	return ordered
-}
-
-// uniformSource returns the single Myinfo source shared by every data-bearing leaf
-// under d (e.g. all government-verified), or myinfo.SourceUnknown when the leaves carry
-// mixed sources or none. Leaves that declare no source of their own don't count
-// against a uniform verdict — they inherit it from their container.
-func uniformSource(d myinfo.Data) myinfo.Source {
-	seen := map[myinfo.Source]bool{}
-	var walk func(myinfo.Data)
-	walk = func(dd myinfo.Data) {
-		for _, k := range dd.Keys() {
-			switch dd.Kind(k) {
-			case myinfo.KindLeaf:
-				if f := dd.Field(k); f.Available() {
-					if s := f.SourceCode(); s != myinfo.SourceUnknown {
-						seen[s] = true
-					}
-				}
-			case myinfo.KindObject:
-				walk(dd.Object(k))
-			case myinfo.KindList:
-				for _, el := range dd.List(k) {
-					if el.Present() {
-						walk(el)
-					}
-				}
-			}
-		}
-	}
-	walk(d)
-	if len(seen) == 1 {
-		for s := range seen {
-			return s
-		}
-	}
-	return myinfo.SourceUnknown
-}
-
-// tableSource returns the single Myinfo source shared by every record in a
-// repeated-record collection, for a table-level provenance badge, or
-// myinfo.SourceUnknown when the records carry mixed sources or none. Each record in a
-// Myinfo array is itself an envelope object declaring its own source (a licence is
-// government-verified as a whole, not per field), so the record-level source (the
-// library's Data.SourceCode) is read first; a record that declares none falls back
-// to a uniform source across its leaves. This is why table collections — unlike
-// leaf rows and nested groups — otherwise showed no provenance at all.
-func tableSource(list []myinfo.Data) myinfo.Source {
-	seen := map[myinfo.Source]bool{}
-	for _, el := range list {
-		if !el.Present() {
-			continue
-		}
-		s := el.SourceCode()
-		if s == myinfo.SourceUnknown {
-			s = uniformSource(el)
-		}
-		if s != myinfo.SourceUnknown {
-			seen[s] = true
-		}
-	}
-	if len(seen) == 1 {
-		for s := range seen {
-			return s
-		}
-	}
-	return myinfo.SourceUnknown
-}
-
-// groupSource resolves the provenance of a nested block for its sub-heading badge.
-// Myinfo attaches source/classification/lastupdated to the container object of a
-// grouped dataset (drivinglicence, cpfinvestmentscheme, regadd, …) while the value
-// leaves inside carry only {value}; so the container's own declared source (via the
-// library's Data.SourceCode) is read first, falling back to a uniform source across
-// the leaves when the container declares none.
-func groupSource(obj myinfo.Data) myinfo.Source {
-	if s := obj.SourceCode(); s != myinfo.SourceUnknown {
-		return s
-	}
-	return uniformSource(obj)
 }
 
 // dropRedundantNotes blanks any row Note that just restates label (the group- or
