@@ -210,7 +210,7 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
   .lock { font-size: .75rem; cursor: help; }
   .chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
   .chip { background: #f1f1f1; border-radius: 1rem; padding: .15rem .6rem; font-size: .75rem; font-family: ui-monospace, monospace; }
-  .badge { font-size: .7rem; font-weight: 500; background: #f1f1f1; color: #5f5f5f; border: 1px solid #e0e0e0; border-radius: 1rem; padding: .1rem .55rem; vertical-align: middle; }
+  .badge { white-space: nowrap; font-size: .7rem; font-weight: 500; background: #f1f1f1; color: #5f5f5f; border: 1px solid #e0e0e0; border-radius: 1rem; padding: .1rem .55rem; vertical-align: middle; }
   .badge.gov { background: #eef7ee; color: #2f7d32; border-color: #cfe6cf; }
   .badge.userv { background: #e9f2fb; color: #1565a7; border-color: #c5dcf2; }
   .badge.user { background: #fdf4e3; color: #8a5608; border-color: #f0dcb0; }

@@ -57,9 +57,10 @@ func (a Address) Present() bool { return a.Data.Present() }
 
 // Lines formats the address for a mailing label, in the usual Singapore
 // order: "102 BEDOK NORTH AVENUE 4", "#09-128 BUILDING NAME",
-// "SINGAPORE 460102". An unformatted address gives its lines as sent,
-// followed by the country when there is one. Empty parts are skipped, and the
-// text keeps Myinfo's case.
+// "SINGAPORE 460102". A one-digit floor is zero-padded, as Singapore
+// addresses write it ("#02-123"); Floor keeps the value as sent. An
+// unformatted address gives its lines as sent, followed by the country when
+// there is one. Empty parts are skipped, and the text keeps Myinfo's case.
 func (a Address) Lines() []string {
 	var lines []string
 	add := func(parts ...string) {
@@ -76,7 +77,7 @@ func (a Address) Lines() []string {
 	}
 	add(a.Block.String(), a.Street.String())
 	unit := ""
-	if f, u := a.Floor.String(), a.Unit.String(); f != "" && u != "" {
+	if f, u := padFloor(a.Floor.String()), a.Unit.String(); f != "" && u != "" {
 		unit = "#" + f + "-" + u
 	} else if u != "" {
 		unit = "#" + u
@@ -145,4 +146,13 @@ func joinNonEmpty(sep string, parts ...string) string {
 		}
 	}
 	return strings.Join(out, sep)
+}
+
+// padFloor zero-pads a one-digit numeric floor ("2" → "02"), leaving any
+// other value ("12", "B1") as sent.
+func padFloor(f string) string {
+	if len(f) == 1 && f[0] >= '0' && f[0] <= '9' {
+		return "0" + f
+	}
+	return f
 }
