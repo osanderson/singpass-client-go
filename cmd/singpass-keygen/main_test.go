@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,5 +56,40 @@ func TestRunRejectsStrayArgs(t *testing.T) {
 	var out, log bytes.Buffer
 	if err := run([]string{"extra"}, &out, &log); err == nil {
 		t.Error("stray argument accepted")
+	}
+}
+
+func TestRunCheck(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "keys")
+	args := []string{"-dir", dir, "-sig-kid", "s1", "-enc-kid", "e1"}
+
+	// -check never creates keys.
+	if err := run(append(args, "-check", "https://app.example/jwks.json"), io.Discard, io.Discard); err == nil {
+		t.Fatal("check with no keys succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sig.pem")); !os.IsNotExist(err) {
+		t.Fatal("check created a key")
+	}
+
+	var jwks bytes.Buffer
+	if err := run(args, &jwks, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	published := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(jwks.Bytes())
+	}))
+	defer published.Close()
+	var log bytes.Buffer
+	if err := run(append(args, "-check", published.URL), io.Discard, &log); err != nil {
+		t.Fatalf("check of the published JWKS: %v", err)
+	}
+	if !strings.Contains(log.String(), "ok: ") {
+		t.Errorf("log = %q", log.String())
+	}
+
+	// Different kids than the published ones fail.
+	if err := run([]string{"-dir", dir, "-sig-kid", "s2", "-enc-kid", "e1", "-check", published.URL}, io.Discard, io.Discard); err == nil ||
+		!strings.Contains(err.Error(), `missing the signing key "s2"`) {
+		t.Errorf("check with wrong kid: %v", err)
 	}
 }

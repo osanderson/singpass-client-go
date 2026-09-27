@@ -61,9 +61,9 @@ func Example() {
 		log.Fatal(err)
 	}
 
-	p := id.Myinfo.Person
-	fmt.Println(p.Field("name").String())
-	fmt.Println(p.Object("regadd").Field("postal").String())
+	p := id.Myinfo.PersonProfile()
+	fmt.Println(p.Name.String())
+	fmt.Println(p.RegAdd.Postal.String())
 	// Output:
 	// TAN XIAO HUI
 	// 460102
