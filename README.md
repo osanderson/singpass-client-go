@@ -91,10 +91,16 @@ one (expired, reloaded or replayed callback) matches
 `errors.Is(err, singpass.ErrLoginExpired)` — show a "please try again" page for
 it rather than an error.
 
-Need keys to register? `keyfile.GenerateECKey` and `singpass.OfflineClientJWKS`
-produce them and the public JWKS
-([example](https://pkg.go.dev/github.com/osanderson/singpass-client-go#example-OfflineClientJWKS)),
-or run the demo's `go run ./cmd/keygen`.
+Need keys to register? The `singpass-keygen` command creates both keys (or
+reuses existing ones — it never overwrites) and prints the public JWKS:
+
+```sh
+go install github.com/osanderson/singpass-client-go/cmd/singpass-keygen@latest
+singpass-keygen -dir keys/login -sig-kid login-sig-1 -enc-kid login-enc-1 > login.jwks.json
+```
+
+In code, `keyfile.LoadOrGenerate` and `singpass.OfflineClientJWKS` do the same
+([example](https://pkg.go.dev/github.com/osanderson/singpass-client-go#example-OfflineClientJWKS)).
 
 ## Test accounts
 

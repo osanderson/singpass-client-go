@@ -11,8 +11,11 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 )
 
 // GenerateECKey generates a fresh EC P-256 (ES256 / ECDH-ES) private key.
@@ -51,4 +54,54 @@ func LoadECPrivateKey(path string) (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("%s: key must be EC P-256", path)
 	}
 	return key, nil
+}
+
+// WriteECPrivateKey saves key as PKCS#8 PEM at path, readable only by its
+// owner (0600), creating missing parent directories as 0700. It never replaces
+// an existing file — an error wrapping fs.ErrExist says so — because silently
+// overwriting a key registered with Singpass breaks every login; remove the
+// file first to rotate deliberately.
+func WriteECPrivateKey(path string, key *ecdsa.PrivateKey) error {
+	pemBytes, err := MarshalECPrivateKeyPEM(key)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create key directory: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return fmt.Errorf("write key %s: %w", path, err)
+	}
+	if _, err := f.Write(pemBytes); err != nil {
+		f.Close()
+		os.Remove(path)
+		return fmt.Errorf("write key %s: %w", path, err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(path)
+		return fmt.Errorf("write key %s: %w", path, err)
+	}
+	return nil
+}
+
+// LoadOrGenerate returns the key at path, or — when there is no file — a new
+// EC P-256 key saved there with WriteECPrivateKey. created reports which. Any
+// other problem reading an existing file is an error, never a silent
+// replacement.
+func LoadOrGenerate(path string) (key *ecdsa.PrivateKey, created bool, err error) {
+	if _, err := os.Stat(path); err == nil {
+		key, err := LoadECPrivateKey(path)
+		return key, false, err
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, false, fmt.Errorf("stat key %s: %w", path, err)
+	}
+	key, err = GenerateECKey()
+	if err != nil {
+		return nil, false, err
+	}
+	if err := WriteECPrivateKey(path, key); err != nil {
+		return nil, false, err
+	}
+	return key, true, nil
 }
