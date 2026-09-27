@@ -24,11 +24,11 @@
   | `Algorithms` | Singpass/Corppass suite | override for a non-standard product |
   | `Debug` / `Logger` | off / `slog.Default()` | leave `Debug` off in production |
 
-Under `AssuranceProduction`, FAPIgo's client-side session-store gate rejects the
-in-memory default — so a real deployment must set **both** `Assurance:
-singpass.AssuranceProduction` **and** a `Sessions` store declaring
-`singpass.StoreAssurance` (`Durable` + `AtomicConsume`), or construction fails
-fast rather than silently shipping a non-durable store.
+Under `AssuranceProduction` (which `Environment: singpass.Production` selects),
+construction fails fast rather than silently shipping something unsafe: the
+`Sessions` store must declare `singpass.StoreAssurance` (`Durable` +
+`AtomicConsume`), so the in-memory default is refused; `KeyCustody` must be
+`Durable`; and `Random` must be `crypto/rand.Reader`.
 
 ## Validation
 

@@ -12,7 +12,8 @@
 //
 // Wrap the whole app in SecureHeaders (browser security headers) and every page
 // that shows the identity in NoStore; behind HTTPS set
-// Config.Cookies to DefaultCookieConfig(true).
+// Config.Cookies to DefaultCookieConfig(true). Set Config.SessionIdentity (e.g.
+// MinimalIdentity) to keep personal data out of the login session.
 package web
 
 import (

@@ -52,6 +52,18 @@ version, `fix` the patch, and breaking changes (`!` / `BREAKING CHANGE:`) the
 minor. Changes only under `examples/` don't trigger a library release. To force
 a version, add a `Release-As: X.Y.Z` footer to a commit.
 
+Squash merges can drop the commit body, so for a breaking PR end the PR
+description with a release-please override, putting every migration note in a
+single `BREAKING CHANGE:` footer (release-please keeps only one):
+
+```
+BEGIN_COMMIT_OVERRIDE
+feat!: <PR title>
+
+BREAKING CHANGE: <what changed and how to migrate>
+END_COMMIT_OVERRIDE
+```
+
 ## Dependencies
 
 [Dependabot](.github/dependabot.yml) opens weekly update PRs (plus security

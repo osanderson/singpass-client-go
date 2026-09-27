@@ -123,6 +123,10 @@ singpass: construct client: client: dependencies: sessions must implement storag
       own login, callback and logout responses are already no-store.
 - [ ] **Keep `SameSite=Lax`** (the default). The callback is a top-level
       cross-site navigation from Singpass, which `Strict` would break.
+- [ ] **Not using the `web` helper? Keep the login's state with the browser.**
+      Store the state `BeginLogin` returns in an `HttpOnly`, `Secure`,
+      `SameSite=Lax` cookie and pass it to `Complete`, which binds the
+      callback to that browser.
 - [ ] **Render logout as a same-origin `<form method="post">`.** `web` rejects
       GET and cross-origin logout requests.
 - [ ] **Keep personal data out of the login session.** By default the `web`
@@ -138,9 +142,10 @@ singpass: construct client: client: dependencies: sessions must implement storag
 | Error | Meaning | Suggested response |
 |---|---|---|
 | `*singpass.DeniedError` | User cancelled, or Singpass denied the request | Friendly "login cancelled" page |
-| `singpass.ErrLoginExpired` (incl. `web.ErrStateMismatch`) | Stale, reloaded or replayed callback, or a restart mid-login | "Please try again" with a login link |
+| `singpass.ErrLoginExpired` (incl. `web.ErrStateMismatch`) | Stale, reloaded or replayed callback, a callback without this browser's login state, or a restart mid-login | "Please try again" with a login link |
+| `singpass.IsTemporary(err)` | `server_error`, `temporarily_unavailable`, `upstream_dependency_error`, a 5xx or a timeout | Retry `BeginLogin` (`Dependencies.BeginLoginRetries`), or restart the login after a failed `Complete`; then "try again later" |
 | `singpass.ErrTooManyPendingLogins` | In-memory store at its cap (development only) | 503 |
-| anything else | Protocol, network or configuration failure | Log it; generic error page |
+| anything else | Protocol, network or configuration failure | Log it with `singpass.ErrorCode(err)`; generic error page ([troubleshooting.md](troubleshooting.md)) |
 
 ## 6. Personal data and operations
 

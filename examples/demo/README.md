@@ -58,7 +58,9 @@ Federation, which only accepts this repo on `main`.
 - **Keys** — each private key is a Secret Manager secret
   (`singpass-demo-<app>-<sig|enc>`) mounted at `/secrets/<app>-<sig|enc>/key.pem`.
   Only the `singpass-demo-runtime` service account can read them; the deployer
-  cannot. To rotate, add a new secret version and redeploy.
+  cannot. The demo loads one key per app, so replacing a key breaks logins
+  until Singpass re-fetches the JWKS (up to an hour); an app that must stay up
+  rotates as in [production.md](../../docs/production.md#7-rotating-keys).
 - **Single instance** — pending logins and app sessions are in memory, so the
   service runs with `--max-instances=1`; a scale-to-zero or redeploy logs
   everyone out. A production app would use a durable store such as `sqlstore`
