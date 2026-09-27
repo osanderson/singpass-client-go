@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0](https://github.com/osanderson/singpass-client-go/compare/v0.5.2...v0.6.0) (2026-09-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* Identity.SubjectAttributes() returns SubjectAttributes instead of map[string]any (use .Raw for the map, .Present() instead of a nil check), and ActingParty.Attributes is a SubjectAttributes (use .Raw for the map).
+
+### Features
+
+* add singpass-keygen command and keyfile write helpers ([#30](https://github.com/osanderson/singpass-client-go/issues/30)) ([0485e7a](https://github.com/osanderson/singpass-client-go/commit/0485e7a0270c6ac7960816da8601127796965c32))
+* **myinfo:** add Leaves, EffectiveSource, Label and typed Corppass records ([#29](https://github.com/osanderson/singpass-client-go/issues/29)) ([56ecbd4](https://github.com/osanderson/singpass-client-go/commit/56ecbd4dcb343851df06e7914b09b9609322683d))
+* typed SubjectAttributes for sub_attributes and act.sub_attributes ([c071a51](https://github.com/osanderson/singpass-client-go/commit/c071a51d35b18d939f4aa36e4e38f7caf065a2ac))
+* **web:** add SecureHeaders and NoStore; __Host- cookie names by default ([#26](https://github.com/osanderson/singpass-client-go/issues/26)) ([c2ec830](https://github.com/osanderson/singpass-client-go/commit/c2ec830adc31676214de9bb67dd7cd39116655aa))
+
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.35.0 ([#32](https://github.com/osanderson/singpass-client-go/issues/32)) ([b34b1aa](https://github.com/osanderson/singpass-client-go/commit/b34b1aa9fde113de804d32e0612eac9dfc6363af))
+
 ## [0.5.2](https://github.com/osanderson/singpass-client-go/compare/v0.5.1...v0.5.2) (2026-09-27)
 
 
