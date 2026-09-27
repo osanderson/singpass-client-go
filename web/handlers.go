@@ -9,6 +9,10 @@
 // / OnError callbacks and the CurrentIdentity accessor. Use RegisterRoutes to
 // mount the routes on your own mux, or Mux for a ready-made one you can add a
 // "/" handler to.
+//
+// Wrap the whole app in SecureHeaders (browser security headers) and every page
+// that shows the identity in NoStore; behind HTTPS set
+// Config.Cookies to DefaultCookieConfig(true).
 package web
 
 import (

@@ -44,6 +44,11 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
       `AssuranceProduction` anyway.
 - [ ] **`HTTPClient` / `HTTPTimeout`** suit your egress: proxy, timeouts, and
       access to `id.singpass.gov.sg` / `id.corppass.gov.sg`.
+- [ ] **Myinfo Business: the `/userinfo` `sub` check.** Corppass has fixed its
+      former `sub` = `client_id` deviation — confirmed on staging only. If a
+      production login fails with `UserInfo response sub does not match the ID
+      token's sub`, set `MyinfoBusinessOptions.TolerateUserInfoSubjectClientID`
+      (see [corppass-quirks.md](corppass-quirks.md)).
 
 ## 3. Durable session stores
 
@@ -85,8 +90,17 @@ singpass: construct client: client: dependencies: sessions must implement storag
 
 ## 4. Web and cookies
 
-- [ ] **Serve over HTTPS** and set `web.DefaultCookieConfig(true)`, or
-      `Cookies.Secure = true`.
+- [ ] **Serve over HTTPS** and set `Cookies: web.DefaultCookieConfig(true)` (or
+      `Cookies.Secure = true`). Secure cookies get `__Host-` names, which
+      browsers only accept with `Secure`, `Path=/` and no `Domain`.
+- [ ] **Wrap the app in `web.SecureHeaders`** — a strict Content-Security-Policy
+      for script-free pages, anti-framing, `nosniff`, `Referrer-Policy:
+      no-referrer` (callback URLs carry the code and state) and HSTS over HTTPS.
+      Use `web.SecureHeadersWithPolicy` if your pages need scripts or other
+      origins.
+- [ ] **Wrap every page that shows the identity in `web.NoStore`**, so personal
+      data can't be reopened from the browser cache after logout. The helper's
+      own login, callback and logout responses are already no-store.
 - [ ] **Keep `SameSite=Lax`** (the default). The callback is a top-level
       cross-site navigation from Singpass, which `Strict` would break.
 - [ ] **Render logout as a same-origin `<form method="post">`.** `web` rejects
@@ -109,6 +123,9 @@ singpass: construct client: client: dependencies: sessions must implement storag
       PDPA) and your Singpass/Corppass terms.
 - [ ] **Keep personal data out of logs.** Don't log `Identity.Claims`,
       `Identity.Myinfo.Raw()` or tokens.
+- [ ] **Show only what the user needs.** The demo renders every field and the
+      raw `/userinfo` JSON to illustrate the library — don't copy that into a
+      production app.
 - [ ] **Keep clocks in sync (NTP).** Token and DPoP validation compare
       timestamps, allowing only small skew.
 - [ ] **Monitor login outcomes:** denied, expired and failed rates, and errors

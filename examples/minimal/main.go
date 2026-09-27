@@ -51,6 +51,7 @@ func main() {
 
 	h := web.New(web.Config{
 		Apps: []*web.App{{Name: "login", Title: "Singpass", Auth: client, JWKS: jwks}},
+		// Behind HTTPS, also set Cookies: web.DefaultCookieConfig(true) (Secure, __Host- names).
 	})
 	mux := h.Mux() // /login/login, /login/callback, /login/logout, /login/jwks.json
 	mux.Handle("/", web.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

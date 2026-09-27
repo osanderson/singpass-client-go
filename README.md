@@ -29,6 +29,9 @@ Singpass pieces.
 - **Test without onboarding** — `singpasstest` runs a fake Singpass/Corppass
   server in-process for integration tests, and the demo runs against it with
   one environment variable.
+- **Production pieces included** — `Environment: singpass.Production`, durable
+  session stores (`sqlstore`), browser security headers (`web.SecureHeaders`)
+  and a key generator (`singpass-keygen`).
 
 **Try it now**, no Singpass account or onboarding needed:
 
@@ -70,6 +73,7 @@ jwks, _ := client.PublicJWKS(ctx)
 
 h := web.New(web.Config{
     Apps: []*web.App{{Name: "login", Title: "Singpass", Auth: client, JWKS: jwks}},
+    // Behind HTTPS, also set Cookies: web.DefaultCookieConfig(true) (Secure, __Host- names).
 })
 mux := h.Mux() // /login/login, /login/callback, /login/logout, /login/jwks.json
 mux.Handle("/", web.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -114,8 +118,8 @@ hard-code it. No staging client yet? Try the demo with `DEMO_MOCK=1`.
 
 ## Myinfo person data
 
-`NewMyinfo` and `NewMyinfoBusiness` take the same options; `Complete` then also
-calls `/userinfo` and fills `Identity.Myinfo`:
+`NewMyinfo` and `NewMyinfoBusiness` take options shaped like `NewLogin`'s;
+`Complete` then also calls `/userinfo` and fills `Identity.Myinfo`:
 
 ```go
 p := id.Myinfo.Person                    // .Entity, .Corppass, .Auth, .TPAuth for Business
@@ -151,6 +155,7 @@ named fields (`IdentityNumber`, `AccountType`, `Name`, … for a person;
 | [`…/keyfile`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/keyfile) | Generate and load EC P-256 PEM keys |
 | [`…/singpasstest`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest) | Fake Singpass / Corppass server for tests and demos |
 | [`…/sqlstore`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/sqlstore) | Durable session stores on Postgres, MySQL or SQLite (`database/sql`, no dependencies) |
+| [`…/cmd/singpass-keygen`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-keygen) | Command: create a client's keys and print the JWKS to register |
 
 ## Testing your integration
 

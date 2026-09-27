@@ -59,13 +59,16 @@ Federation, which only accepts this repo on `main`.
   cannot. To rotate, add a new secret version and redeploy.
 - **Single instance** — pending logins and app sessions are in memory, so the
   service runs with `--max-instances=1`; a scale-to-zero or redeploy logs
-  everyone out.
+  everyone out. A production app would use a durable store such as `sqlstore`
+  and could then run more instances.
 - **Redirect URIs** — `<APP_BASE_URL>/<app>/callback` must be registered with
   each Singpass / Corppass client alongside the localhost ones. Singpass and
-  Corppass reject redirect URIs containing "singpass", "corppass" or "myinfo"
-  anywhere (host included), which is why the service is `rp-demo` and the demo's
-  app slugs are `login`, `mi` (Myinfo) and `mib` (Myinfo Business).
+  Corppass reject redirect URIs whose domain contains "singpass", "corppass" or
+  "myinfo" (whether the path is checked is unclear), which is why the service is
+  `rp-demo` and the demo's app slugs are `login`, `mi` (Myinfo) and `mib`
+  (Myinfo Business).
 
-The container reads Cloud Run's `PORT` (`APP_ADDR` still wins if set), logs
-JSON for Cloud Logging when `LOG_FORMAT=json` (set in the image), and shuts down
-gracefully on `SIGTERM`.
+The container reads Cloud Run's `PORT` (`APP_ADDR` still wins if set), sends
+browser security headers (`web.SecureHeaders`) and marks identity pages
+`no-store`, logs JSON for Cloud Logging when `LOG_FORMAT=json` (set in the
+image), and shuts down gracefully on `SIGTERM`.

@@ -62,6 +62,13 @@
 
 - **The id_token is encrypted (JWE wrapping a JWS), not a plain JWT.**
   Signed-then-encrypted; a plain id_token is refused.
+- **`sub_attributes` depends on the granted scopes.** Besides `sub` (a UUID) and
+  `sub_type: "user"`, the id_token carries `sub_attributes` whose items are
+  released per scope: `user.identity` gives `account_type` (`standard` /
+  `foreign`), `identity_number` and `identity_coi`; `name`, `email` and
+  `mobileno` give the same-named item (`mobileno` is absent for foreign account
+  holders). Read them with `Identity.SubjectAttributes()`
+  ([Singpass spec](https://docs.developer.singpass.gov.sg/docs/technical-specifications/integration-guide/4.-parsing-the-id-token)).
 - **id_token and `/userinfo` use *different* content-encryption algorithms.** Both
   use `ECDH-ES+A256KW` key wrap and an `ES256` inner signature, but:
   - id_token content encryption: **`A256CBC-HS512`**
@@ -111,7 +118,8 @@
   not a field — the library exposes this as `myinfo.Data.Source()` / `SourceCode()` /
   `Classification()` / `ClassificationCode()` / `LastUpdated()` (mirroring the `Field`
   methods), so a caller need not reach into `Raw()` and re-parse the `1`..`4` code
-  table. To dispatch a **generic walk** over a block without inspecting the raw map,
+  table; `myinfo.Data.EffectiveSource()` resolves a whole subtree's provenance,
+  container first. To dispatch a **generic walk** over a block without inspecting the raw map,
   `myinfo.Data.Kind(key)` reports the envelope shape (`KindLeaf` / `KindObject` /
   `KindList` / `KindScalar` for bare envelope-metadata scalars / `KindAbsent`).
 
