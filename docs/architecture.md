@@ -75,7 +75,8 @@ Protocol-wise identical to Myinfo — PAR, DPoP, `private_key_jwt`, PKCE, encryp
 configuration, encoded in `NewMyinfoBusiness`:
 
 - **Different issuer** — `id.corppass.gov.sg`, with **no `/fapi` path suffix**
-  (Singpass uses `id.singpass.gov.sg/fapi`). Defaults to `singpass.StagingCorppassIssuer`.
+  (Singpass uses `id.singpass.gov.sg/fapi`). `Environment` picks
+  `StagingCorppassIssuer` (the default) or `ProductionCorppassIssuer`.
 - **Scope namespaces** — `entity.*` (organisation), `user.*` (person),
   `corppass.*` (Corppass account); each must be whitelisted on the client.
 - **Multiple `/userinfo` blocks** — the response can carry `entity_info`,

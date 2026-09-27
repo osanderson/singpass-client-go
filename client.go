@@ -11,6 +11,12 @@
 // NewMyinfoBusiness (see products.go), which take just key material and a
 // client_id. New is the lower-level constructor for full control or a
 // non-standard product.
+//
+// The defaults target staging. Set Environment: Production in the product
+// options for the production issuers and AssuranceProduction, which requires a
+// durable Dependencies.Sessions store (see the sqlstore package). A stale or
+// replayed login is reported as ErrLoginExpired and a cancelled or denied one
+// as *DeniedError.
 package singpass
 
 import (

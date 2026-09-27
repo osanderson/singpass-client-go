@@ -11,8 +11,9 @@ import (
 //
 //   - MaxIDTokenLifetime — RecommendedLimits leaves this zero on purpose (it
 //     depends on the specific issuer), and client.New rejects zero. Singpass
-//     stays well under 10m but Corppass Myinfo Business issues a longer-lived
-//     id_token, so allow up to an hour.
+//     issues 10-minute id_tokens; Corppass Myinfo Business has issued longer
+//     ones (10 minutes on staging as of 2026-09-26), so allow up to an hour as
+//     headroom.
 //   - HTTPTimeout — the per-call bound to the authorization server.
 //   - MaxJOSECompactBytes — RecommendedLimits defaults this to 16 KiB, which a
 //     broad-scope Myinfo /userinfo response overshoots: requesting the full

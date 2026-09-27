@@ -39,7 +39,7 @@ fast rather than silently shipping a non-durable store.
   [production.md](production.md).
 - **A durable `Sessions` store**: use `sqlstore` (Postgres, MySQL, SQLite), or
   implement the two-method
-  `singpass.SessionStore` (`Create` / atomic `Consume`) and declares
+  `singpass.SessionStore` (`Create` / atomic `Consume`) and declare
   `singpass.StoreAssurance`. `Consume` should return (or wrap)
   `singpass.ErrLoginExpired` for an unknown, used or expired state, so callers
   can tell a stale login from a failure. Verify your implementation with
@@ -49,8 +49,8 @@ fast rather than silently shipping a non-durable store.
 - **The `web` helper's login sessions** (`web.Config.LoginSessions`) are a
   separate, simpler store — `web.LoginSessionStore` (`Create` / `Get` /
   `Delete`, each taking the request context). The in-memory default is lost on
-  restart and isn't shared between instances; back it with Redis or a database
-  to run more than one instance.
+  restart and isn't shared between instances; to run more than one instance use
+  `sqlstore`'s `LoginSessions()`, or implement the interface over Redis or similar.
 - **`AllowLoopbackHTTP`** permits `http://localhost` issuers for a local fake
   server such as `singpasstest`'s. It is development-only: `New` refuses it
   together with `AssuranceProduction`.

@@ -65,9 +65,11 @@
 - **JWKS is served as `application/jwk-set+json`** (RFC 7517 §8.5.1) and its single
   EC signing key carries `x5c` / `x5t` / `x5t#S256`. FAPIgo accepts that content
   type and ignores the certificate members.
-- **Longer-lived `id_token`.** Corppass's `id_token` exp–iat span exceeds Singpass's;
-  `singpass.RecommendedLimits` sets `Limits.MaxIDTokenLifetime` to one hour to allow for
-  it.
+- **`id_token` lifetime.** Corppass has issued longer-lived `id_token`s than
+  Singpass, which is why `singpass.RecommendedLimits` allows up to one hour
+  (`Limits.MaxIDTokenLifetime`). On 2026-09-26 Corppass staging issued a 10-minute
+  token, the same as Singpass; the hour is kept as headroom, since it only bounds
+  how long a token may claim to live.
 
 ## Token response
 
@@ -138,8 +140,7 @@
   `/userinfo` `sub` to the `client_id` instead of the id_token's `sub`, contrary to
   OIDC Core §5.3.2, and the library tolerated it by default. A login against
   **Corppass staging on 2026-09-26** passed FAPIgo's strict check, so it now sends
-  the correct `sub` and the tolerance is **off by default** (since the release
-  after v0.4.0). Production couldn't be tested here: if a Corppass environment
+  the correct `sub` and the tolerance is **off by default** (since v0.5.0). Production couldn't be tested here: if a Corppass environment
   still fails with `UserInfo response sub does not match the ID token's sub`, set
   `MyinfoBusinessOptions.TolerateUserInfoSubjectClientID` (FAPIgo's
   `Config.TolerateUserInfoSubjectEqualsClientID`). `singpasstest` reproduces the
