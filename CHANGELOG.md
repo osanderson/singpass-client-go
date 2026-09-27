@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0](https://github.com/osanderson/singpass-client-go/compare/v0.7.0...v0.8.0) (2026-09-27)
+
+
+### Features
+
+* support key rotation without downtime ([#42](https://github.com/osanderson/singpass-client-go/issues/42)) ([0293f31](https://github.com/osanderson/singpass-client-go/commit/0293f31f46f372f8d9e60756c8dbdb34a954973e))
+* validate options up front and check the published JWKS ([#40](https://github.com/osanderson/singpass-client-go/issues/40)) ([b9cbfd7](https://github.com/osanderson/singpass-client-go/commit/b9cbfd73ab3ccabc73e8033db713f19d2c0888c3))
+* **web:** keep personal data out of the login session ([#46](https://github.com/osanderson/singpass-client-go/issues/46)) ([e7ed2bf](https://github.com/osanderson/singpass-client-go/commit/e7ed2bfc6beb8bf6ee1151f5549e0b66f5bb014d))
+
+
+### Bug Fixes
+
+* reject redirect URIs that use an IP address ([#45](https://github.com/osanderson/singpass-client-go/issues/45)) ([ff9a1cd](https://github.com/osanderson/singpass-client-go/commit/ff9a1cdd13b16333644c3147d4091e6d805704af))
+* say Singpass and Corppass both reject a redirecting JWKS URL ([#43](https://github.com/osanderson/singpass-client-go/issues/43)) ([765c97b](https://github.com/osanderson/singpass-client-go/commit/765c97b58f152e0830bb4dd34393c1fd7966c250))
+
+
+### Documentation
+
+* add onboarding and troubleshooting guides ([#44](https://github.com/osanderson/singpass-client-go/issues/44)) ([2158fc8](https://github.com/osanderson/singpass-client-go/commit/2158fc80393618dfe23e8bab9a8841e1ea00e016))
+
 ## [0.7.0](https://github.com/osanderson/singpass-client-go/compare/v0.6.2...v0.7.0) (2026-09-27)
 
 
