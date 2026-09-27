@@ -26,7 +26,7 @@ const (
 // mismatch there is the usual cause of an "invalid_client" error at login, so
 // run it after deploying or rotating keys, e.g. as a startup or readiness
 // check. It also checks the endpoint answers within the 3 seconds Singpass
-// and Corppass allow, without a redirect. It returns nil when the published
+// and Corppass allow, without redirecting. It returns nil when the published
 // set is correct, or an error naming each problem. Extra published keys, such as an outgoing key during a
 // rotation, are allowed.
 func (c *Client) CheckPublishedJWKS(ctx context.Context, jwksURL string) error {
@@ -73,7 +73,8 @@ func fetchJWKS(ctx context.Context, hc *http.Client, jwksURL string) (jwkSet, er
 		return jwkSet{}, fmt.Errorf("singpass: fetch JWKS: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	// Report a redirect rather than follow it: Corppass doesn't follow them.
+	// Report a redirect rather than follow it: Singpass and Corppass fetch the
+	// registered URL itself.
 	noRedirects := *hc
 	noRedirects.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	start := time.Now()
@@ -83,7 +84,7 @@ func fetchJWKS(ctx context.Context, hc *http.Client, jwksURL string) (jwkSet, er
 	}
 	defer resp.Body.Close()
 	if loc := resp.Header.Get("Location"); resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		return jwkSet{}, fmt.Errorf("singpass: %s redirects (HTTP %d to %q): register the final URL, as Corppass doesn't follow redirects", jwksURL, resp.StatusCode, loc)
+		return jwkSet{}, fmt.Errorf("singpass: %s redirects (HTTP %d to %q): register the final URL, as Singpass and Corppass don't follow redirects", jwksURL, resp.StatusCode, loc)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return jwkSet{}, fmt.Errorf("singpass: fetch JWKS from %s: HTTP %d", jwksURL, resp.StatusCode)
