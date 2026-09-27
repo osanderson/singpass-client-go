@@ -71,8 +71,18 @@ type Config struct {
 	// lifetime line. Nil means slog.Default().
 	Logger *slog.Logger
 
+	// SessionIdentity chooses what the login session keeps of each identity,
+	// and so what CurrentIdentity returns. It is given the full identity and
+	// returns what to store: WithoutMyinfo drops the Myinfo data, and
+	// MinimalIdentity keeps only the subject and the claims that describe the
+	// login. Nil stores the full identity, Myinfo data included — in the
+	// database, with a durable store such as sqlstore's. OnAuthenticated
+	// always receives the full identity.
+	SessionIdentity func(*singpass.Identity) *singpass.Identity
+
 	// OnAuthenticated is called after a successful login, once the app session
-	// has been created and its cookie set. Nil redirects to "/".
+	// has been created and its cookie set, with the full identity: keep what
+	// the app needs of it there. Nil redirects to "/".
 	OnAuthenticated func(w http.ResponseWriter, r *http.Request, app *App, id *singpass.Identity)
 
 	// OnDenied is called when the user cancelled or the server denied the
@@ -91,6 +101,8 @@ type Handlers struct {
 	cookies  CookieConfig
 	log      *slog.Logger
 
+	sessionIdentity func(*singpass.Identity) *singpass.Identity
+
 	onAuthenticated func(http.ResponseWriter, *http.Request, *App, *singpass.Identity)
 	onDenied        func(http.ResponseWriter, *http.Request, *App, *singpass.DeniedError)
 	onError         func(http.ResponseWriter, *http.Request, *App, error)
@@ -108,6 +120,7 @@ func New(cfg Config) *Handlers {
 		sessions:        cfg.LoginSessions,
 		cookies:         cfg.Cookies.withDefaults(),
 		log:             cfg.Logger,
+		sessionIdentity: cfg.SessionIdentity,
 		onAuthenticated: cfg.OnAuthenticated,
 		onDenied:        cfg.OnDenied,
 		onError:         cfg.OnError,
@@ -230,7 +243,15 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 				h.log.Warn("drop previous session", "app", a.Name, "err", err)
 			}
 		}
-		sid, err := h.sessions.Create(r.Context(), id, h.cookies.SessionTTL)
+		stored := id
+		if h.sessionIdentity != nil {
+			if stored = h.sessionIdentity(id); stored == nil {
+				h.log.Error("create session", "app", a.Name, "err", "SessionIdentity returned nil")
+				h.onError(w, r, a, errors.New("web: Config.SessionIdentity returned nil"))
+				return
+			}
+		}
+		sid, err := h.sessions.Create(r.Context(), stored, h.cookies.SessionTTL)
 		if err != nil {
 			h.log.Error("create session", "app", a.Name, "err", err)
 			h.onError(w, r, a, fmt.Errorf("web: create session: %w", err))
