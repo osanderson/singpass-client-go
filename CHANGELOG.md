@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/osanderson/singpass-client-go/compare/v0.9.0...v0.9.1) (2026-09-27)
+
+
+### Documentation
+
+* bring docs up to date with v0.8–v0.9 changes ([#52](https://github.com/osanderson/singpass-client-go/issues/52)) ([d69b415](https://github.com/osanderson/singpass-client-go/commit/d69b4154f365baaca1cac144cb31d6a9fb594a2b))
+
 ## [0.9.0](https://github.com/osanderson/singpass-client-go/compare/v0.8.0...v0.9.0) (2026-09-27)
 
 
