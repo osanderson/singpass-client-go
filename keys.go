@@ -67,7 +67,7 @@ func NewKeyManager(sig crypto.Signer, sigKID string) (KeyManager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("singpass: build key manager: %w", err)
 	}
-	return km, nil
+	return &rotatingKeyManager{KeyManager: km}, nil
 }
 
 // NewECDHDecrypter builds the keys.Decrypter FAPIgo uses to unwrap the JWE
@@ -94,11 +94,7 @@ func NewECDHDecrypter(encKey *ecdsa.PrivateKey, encKID string) (Decrypter, error
 	if err != nil {
 		return nil, fmt.Errorf("singpass: build encryption key backend: %w", err)
 	}
-	decrypter, err := keys.NewSingleKeyDecrypter(agreer)
-	if err != nil {
-		return nil, fmt.Errorf("singpass: build decrypter: %w", err)
-	}
-	return decrypter, nil
+	return NewRotatingDecrypter(context.Background(), agreer)
 }
 
 // NewAgreerDecrypter builds the keys.Decrypter from a caller-supplied
@@ -116,11 +112,7 @@ func NewAgreerDecrypter(agreer ECDHAgreer) (Decrypter, error) {
 	if agreer == nil {
 		return nil, fmt.Errorf("singpass: encryption agreer is required")
 	}
-	decrypter, err := keys.NewSingleKeyDecrypter(agreer)
-	if err != nil {
-		return nil, fmt.Errorf("singpass: build decrypter: %w", err)
-	}
-	return decrypter, nil
+	return NewRotatingDecrypter(context.Background(), agreer)
 }
 
 // OfflineClientJWKS builds the public JWKS a relying party publishes during

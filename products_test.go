@@ -38,7 +38,7 @@ func TestEnvironmentAssuranceDefault(t *testing.T) {
 // Production with the default (in-memory) session store fails at construction
 // instead of running non-durably in production.
 func TestProductionRefusesInMemorySessions(t *testing.T) {
-	deps := Dependencies{HTTPClient: fakeIssuer(t, discoveryDoc())}
+	deps := Dependencies{HTTPClient: fakeIssuer(t, discoveryDoc()), KeyCustody: KeyCustody{Durable: true}}
 	_, err := NewLogin(context.Background(), LoginOptions{
 		Environment: Production,
 		Issuer:      testIssuer, // the fake; Production still sets the assurance
@@ -50,5 +50,16 @@ func TestProductionRefusesInMemorySessions(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "session") {
 		t.Errorf("err = %v, want a session-store assurance error", err)
+	}
+}
+
+func TestProductionRequiresKeyCustody(t *testing.T) {
+	_, err := NewLogin(context.Background(), LoginOptions{
+		Environment: Production, Issuer: testIssuer,
+		ClientID: "c", RedirectURI: "https://rp.example/cb", Scopes: []string{"openid"},
+		SigningKey: newECKey(t), SigningKID: "s", EncryptionKey: newECKey(t), EncryptionKID: "e",
+	}, Dependencies{HTTPClient: fakeIssuer(t, discoveryDoc())})
+	if err == nil || !strings.Contains(err.Error(), "KeyCustody") {
+		t.Fatalf("err = %v, want a KeyCustody error", err)
 	}
 }

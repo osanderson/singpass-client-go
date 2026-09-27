@@ -27,7 +27,7 @@ func (f *fakeAuth) BeginLogin(context.Context) (string, string, error) {
 	return f.redirectURL, f.state, f.beginErr
 }
 
-func (f *fakeAuth) Complete(context.Context, string) (*singpass.Identity, error) {
+func (f *fakeAuth) Complete(context.Context, string, string) (*singpass.Identity, error) {
 	f.completed = true
 	return f.id, f.completeErr
 }

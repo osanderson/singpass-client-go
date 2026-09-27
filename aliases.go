@@ -58,3 +58,7 @@ type Algorithms = client.Algorithms
 
 // Clock supplies the current time: Dependencies.Clock.
 type Clock = client.Clock
+
+// KeyCustody declares how the client's private keys are held; see
+// Dependencies.KeyCustody.
+type KeyCustody = keys.KeyCustody

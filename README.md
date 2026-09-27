@@ -88,14 +88,17 @@ mux.Handle("/", web.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http
 log.Fatal(http.ListenAndServe(":8080", web.SecureHeaders(mux))) // CSP, anti-framing, HSTS, …
 ```
 
-Not using the helper? `client.BeginLogin(ctx)` returns the redirect URL and a
-state handle, and `client.Complete(ctx, r.URL.RawQuery)` validates the callback
-and returns the `*singpass.Identity` — see the
+Not using the helper? `client.BeginLogin(ctx)` returns the redirect URL and the
+login's state — keep it in a cookie — and `client.Complete(ctx, r.URL.RawQuery, state)`
+validates the callback against that browser's state and returns the
+`*singpass.Identity` — see the
 [`Client.Complete` example](https://pkg.go.dev/github.com/osanderson/singpass-client-go#example-Client.Complete).
 A cancelled or denied login comes back as a `*singpass.DeniedError`, and a stale
 one (expired, reloaded or replayed callback) matches
 `errors.Is(err, singpass.ErrLoginExpired)` — show a "please try again" page for
-it rather than an error.
+it rather than an error. `singpass.ErrorCode(err)` gives the error code Singpass
+sent, and `singpass.IsTemporary(err)` says whether trying again may help
+(`Dependencies.BeginLoginRetries` retries `BeginLogin` for you).
 
 New to Singpass? The [onboarding guide](docs/onboarding.md) walks through the
 developer portal and maps each setting to these options.

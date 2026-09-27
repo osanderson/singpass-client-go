@@ -9,7 +9,9 @@ singpass: begin authorization: client: invalid_response: no matching client key:
 
 — here the pushed authorization request (PAR, sent by `BeginLogin`) failed
 with `invalid_client`. Errors from `Complete` come from the token or
-`/userinfo` call. The codes and meanings below follow Singpass's
+`/userinfo` call. In code, `singpass.ErrorCode(err)` returns the code,
+`singpass.ServerError(err)` the full response (code, description, HTTP
+status), and `singpass.IsTemporary(err)` whether trying again may help. The codes and meanings below follow Singpass's
 [error tables](https://docs.developer.singpass.gov.sg/docs/technical-specifications/integration-guide);
 Corppass uses the same codes.
 
@@ -31,14 +33,14 @@ Corppass uses the same codes.
 | `invalid_request` about `authentication_context_type` | Sent on a Myinfo app | Use `NewMyinfo` / `NewMyinfoBusiness`, which never send it. |
 | `invalid_request` about `acr_values` | The app isn't allowed to request it | Leave `AcrValues` empty. |
 | `invalid_dpop_proof` | The DPoP proof was rejected, usually because the server's clock and yours differ | Keep the host's clock synced (NTP). |
-| `upstream_dependency_error` | Singpass couldn't fetch your JWKS endpoint | Make it public `https` with a publicly trusted certificate, with no redirect, IP allow-list or mTLS, answering within 3 seconds; `CheckPublishedJWKS` tests most of this. Otherwise it's transient: retry up to 3 times with backoff. |
-| `server_error`, `temporarily_unavailable` | A problem at Singpass | Retry up to 3 times with backoff, then show a "try again later" page. |
+| `upstream_dependency_error` | Singpass couldn't fetch your JWKS endpoint | Make it public `https` with a publicly trusted certificate, with no redirect, IP allow-list or mTLS, answering within 3 seconds; `CheckPublishedJWKS` tests most of this. Otherwise it's transient: retry up to 3 times with backoff (`Dependencies.BeginLoginRetries`). |
+| `server_error`, `temporarily_unavailable` | A problem at Singpass | Set `Dependencies.BeginLoginRetries` (up to 3) to retry with backoff, then show a "try again later" page. |
 
 ## At the callback (`Complete`)
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `errors.Is(err, singpass.ErrLoginExpired)` | The login state is unknown, used or expired: the callback was reloaded or replayed, came after the login timed out, or (with the `web` helper) arrived without the login cookie, e.g. in another browser | Show "please try again" and restart the login. It isn't a fault. |
+| `errors.Is(err, singpass.ErrLoginExpired)` | The login state is unknown, used or expired: the callback was reloaded or replayed, came after the login timed out, or arrived without this browser's login state — the `state` passed to `Complete`, e.g. in another browser | Show "please try again" and restart the login. It isn't a fault. |
 | `*singpass.DeniedError` | The user cancelled, or Singpass returned an error to the redirect URI (`server_error`, `temporarily_unavailable`) | Show a friendly page. Don't display the error description verbatim ([Singpass advises against it](https://docs.developer.singpass.gov.sg/docs/technical-specifications/integration-guide/2.-handling-the-redirect)). |
 | `invalid_grant` | The code was exchanged more than 60 seconds after it was issued, or the redirect URI differs from the one sent at PAR | Complete the callback promptly; don't change `RedirectURI` between `BeginLogin` and `Complete`. |
 | `invalid_client` | As at PAR: the JWKS or client ID | As at PAR. |

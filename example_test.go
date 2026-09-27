@@ -60,14 +60,16 @@ func ExampleClient_Complete() {
 	})
 
 	http.HandleFunc("/login/callback", func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie("sp_state")
-		if err != nil || c.Value != r.URL.Query().Get("state") {
-			http.Error(w, "login expired, please try again", http.StatusBadRequest)
-			return
+		var state string // the state BeginLogin returned, from this browser's cookie
+		if c, err := r.Cookie("sp_state"); err == nil {
+			state = c.Value
 		}
-		id, err := client.Complete(r.Context(), r.URL.RawQuery)
+		id, err := client.Complete(r.Context(), r.URL.RawQuery, state)
 		var denied *singpass.DeniedError
 		switch {
+		case errors.Is(err, singpass.ErrLoginExpired):
+			http.Error(w, "login expired, please try again", http.StatusBadRequest)
+			return
 		case errors.As(err, &denied):
 			fmt.Fprintf(w, "login cancelled (%s)", denied.Code)
 			return

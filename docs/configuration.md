@@ -17,7 +17,9 @@
   | `Sessions SessionStore` | `singpass.NewMemorySessionStore(0)` (in-memory, non-durable; expires abandoned logins, caps pending ones) | a durable store (required under `AssuranceProduction`) |
   | `Assurance AssuranceLevel` | `AssuranceDevelopment` | `singpass.AssuranceProduction` |
   | `HTTPClient` / `HTTPTimeout` | `&http.Client{Timeout: 15s}` | your own client / timeout |
-  | `Clock` / `Random` | `SystemClock{}` / `crypto/rand.Reader` | — |
+  | `Clock` / `Random` | `SystemClock{}` / `crypto/rand.Reader` | leave `Random` unset: production requires `crypto/rand.Reader` |
+  | `KeyCustody` | none declared | `KeyCustody{Durable: true}` — required under `AssuranceProduction` |
+  | `BeginLoginRetries` | `0` (no retries) | up to `3`, with backoff, on temporary failures |
   | `Limits` | `RecommendedLimits(HTTPTimeout)` (1h id_token, 256 KiB JOSE) | override if needed |
   | `Algorithms` | Singpass/Corppass suite | override for a non-standard product |
   | `Debug` / `Logger` | off / `slog.Default()` | leave `Debug` off in production |

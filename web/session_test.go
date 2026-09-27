@@ -62,7 +62,7 @@ func TestMemoryStoreSweep(t *testing.T) {
 type stubAuth struct{ id *singpass.Identity }
 
 func (s stubAuth) BeginLogin(context.Context) (string, string, error) { return "", "", nil }
-func (s stubAuth) Complete(context.Context, string) (*singpass.Identity, error) {
+func (s stubAuth) Complete(context.Context, string, string) (*singpass.Identity, error) {
 	return s.id, nil
 }
 

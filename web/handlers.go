@@ -37,7 +37,7 @@ var ErrStateMismatch = fmt.Errorf("web: login state mismatch: %w", singpass.ErrL
 // *singpass.Client satisfies it; tests can substitute a stub.
 type Authenticator interface {
 	BeginLogin(ctx context.Context) (redirectURL, state string, err error)
-	Complete(ctx context.Context, rawQuery string) (*singpass.Identity, error)
+	Complete(ctx context.Context, rawQuery, state string) (*singpass.Identity, error)
 }
 
 // App is one relying party the helper exposes. Name is the URL/cookie slug
@@ -204,7 +204,8 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 		// Defense in depth: the callback's state must match the cookie we set at
 		// /{name}/login. FAPIgo independently validates state/nonce/iss against
 		// its own session store; this is a belt-and-braces check at the HTTP edge.
-		if c, err := r.Cookie(stateCookie); err != nil || c.Value == "" || c.Value != r.URL.Query().Get("state") {
+		c, err := r.Cookie(stateCookie)
+		if err != nil || c.Value == "" || c.Value != r.URL.Query().Get("state") {
 			h.log.Warn("callback state mismatch", "app", a.Name)
 			http.SetCookie(w, h.cookies.clear(stateCookie))
 			h.onError(w, r, a, ErrStateMismatch)
@@ -212,7 +213,8 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 		}
 		http.SetCookie(w, h.cookies.clear(stateCookie))
 
-		id, err := a.Auth.Complete(r.Context(), r.URL.RawQuery)
+		// The state cookie binds the callback to this browser (RFC 9700 §4.7).
+		id, err := a.Auth.Complete(r.Context(), r.URL.RawQuery, c.Value)
 		if err != nil {
 			var denied *singpass.DeniedError
 			if errors.As(err, &denied) {
