@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -10,11 +11,14 @@ import (
 // cookie (a defense-in-depth binding between an authorization request and its
 // callback). The zero value is not usable — call DefaultCookieConfig and adjust.
 type CookieConfig struct {
-	// SessionName is the app session cookie name (default "sid").
+	// SessionName is the app session cookie name. Default "__Host-sid" when
+	// Secure — the __Host- prefix makes browsers enforce Secure, Path=/ and no
+	// Domain, so a sibling subdomain can't plant or overwrite it — otherwise
+	// "sid". The prefix is dropped when Path isn't "/" or Secure is off.
 	SessionName string
 	// StatePrefix is prepended to the app name to form the per-app state cookie
-	// name (default "sp_state_"), so concurrent logins to different apps don't
-	// clobber each other.
+	// name, so concurrent logins to different apps don't clobber each other.
+	// Default "__Host-sp_state_" or "sp_state_", as for SessionName.
 	StatePrefix string
 	// SessionTTL is the app session cookie lifetime (default 30m).
 	SessionTTL time.Duration
@@ -28,12 +32,21 @@ type CookieConfig struct {
 	Secure bool
 }
 
+// hostPrefix is the cookie-name prefix that makes browsers require Secure,
+// Path=/ and no Domain (RFC 6265bis §4.1.3.2).
+const hostPrefix = "__Host-"
+
 // DefaultCookieConfig returns the standard cookie settings (Secure controls the
-// Secure attribute — set it true behind HTTPS).
+// Secure attribute — set it true behind HTTPS). With secure, the cookie names
+// carry the __Host- prefix.
 func DefaultCookieConfig(secure bool) CookieConfig {
+	session, state := "sid", "sp_state_"
+	if secure {
+		session, state = hostPrefix+session, hostPrefix+state
+	}
 	return CookieConfig{
-		SessionName: "sid",
-		StatePrefix: "sp_state_",
+		SessionName: session,
+		StatePrefix: state,
 		SessionTTL:  30 * time.Minute,
 		StateTTL:    10 * time.Minute,
 		Path:        "/",
@@ -43,6 +56,8 @@ func DefaultCookieConfig(secure bool) CookieConfig {
 }
 
 // withDefaults fills any zero field with its default, leaving Secure as set.
+// A __Host- name is only valid with Secure and Path "/" (the helper never sets
+// Domain), so the prefix is dropped from the names under a custom Path.
 func (c CookieConfig) withDefaults() CookieConfig {
 	d := DefaultCookieConfig(c.Secure)
 	if c.SessionName != "" {
@@ -62,6 +77,10 @@ func (c CookieConfig) withDefaults() CookieConfig {
 	}
 	if c.SameSite != 0 {
 		d.SameSite = c.SameSite
+	}
+	if d.Path != "/" || !d.Secure {
+		d.SessionName = strings.TrimPrefix(d.SessionName, hostPrefix)
+		d.StatePrefix = strings.TrimPrefix(d.StatePrefix, hostPrefix)
 	}
 	return d
 }

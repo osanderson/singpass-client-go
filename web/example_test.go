@@ -34,12 +34,14 @@ func ExampleNew() {
 	// Routes: /login/login, /login/callback (register this redirect URI),
 	// /login/logout (POST), /login/jwks.json.
 	mux := h.Mux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// Pages showing the identity must never be cached (NoStore).
+	mux.Handle("/", web.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if id, ok := h.CurrentIdentity(r); ok {
 			fmt.Fprintf(w, "signed in as %s", id.Subject)
 			return
 		}
 		fmt.Fprint(w, `<a href="/login/login">Log in with Singpass</a>`)
-	})
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	})))
+	// Security headers (CSP, anti-framing, nosniff, HSTS over HTTPS) on everything.
+	log.Fatal(http.ListenAndServe(":8080", web.SecureHeaders(mux)))
 }
