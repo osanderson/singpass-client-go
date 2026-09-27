@@ -75,11 +75,14 @@ discovery document exists — using the same FAPIgo library code the live client
 identical ([`jwks.go`](../jwks.go)). The DPoP key is deliberately not published.
 
 ```go
-sig, _ := keyfile.GenerateECKey()
-enc, _ := keyfile.GenerateECKey()
-pemBytes, _ := keyfile.MarshalECPrivateKeyPEM(sig) // write 0600
+// Reuses keys/login/{sig,enc}.pem, or creates them (owner-only, never overwriting).
+sig, _, _ := keyfile.LoadOrGenerate("keys/login/sig.pem")
+enc, _, _ := keyfile.LoadOrGenerate("keys/login/enc.pem")
 jwks, _ := singpass.OfflineClientJWKS(ctx, &sig.PublicKey, "login-sig-1", &enc.PublicKey, "login-enc-1")
 ```
 
-The [`examples/demo`](../examples/demo) module ships a ready-made `cmd/keygen`
-doing exactly this for all three products.
+Or, from a shell: `go install github.com/osanderson/singpass-client-go/cmd/singpass-keygen@latest`,
+then `singpass-keygen -dir keys/login -sig-kid login-sig-1 -enc-kid login-enc-1`.
+
+The [`examples/demo`](../examples/demo) module's `cmd/keygen` does this for all
+three products at once, reading the demo's configuration.

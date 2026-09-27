@@ -9,10 +9,11 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 
 	singpass "github.com/osanderson/singpass-client-go"
 	"github.com/osanderson/singpass-client-go/keyfile"
@@ -90,35 +91,17 @@ func generate(ctx context.Context, a keyapp, force bool) error {
 	return nil
 }
 
-// loadOrCreate returns the key at path, generating and writing a fresh one when
-// it is absent (or when force is set). The PKCS#8 PEM is written 0600 under a
-// 0700 directory since it is private key material.
+// loadOrCreate returns the key at path, generating and saving a fresh one
+// (owner-only, via keyfile) when it is absent. With force, an existing key is
+// deleted first so a new one replaces it — keyfile itself never overwrites.
 func loadOrCreate(path string, force bool) (*ecdsa.PrivateKey, error) {
-	if !force {
-		if _, statErr := os.Stat(path); statErr == nil {
-			k, loadErr := keyfile.LoadECPrivateKey(path)
-			if loadErr != nil {
-				return nil, loadErr
-			}
-			return k, nil
+	if force {
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
 		}
 	}
-
-	k, err := keyfile.GenerateECKey()
-	if err != nil {
-		return nil, err
-	}
-	pemBytes, err := keyfile.MarshalECPrivateKeyPEM(k)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(path, pemBytes, 0o600); err != nil {
-		return nil, err
-	}
-	return k, nil
+	k, _, err := keyfile.LoadOrGenerate(path)
+	return k, err
 }
 
 func env(key, def string) string {
