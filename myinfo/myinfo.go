@@ -1,7 +1,17 @@
-// Package myinfo is the envelope-aware data model for a Myinfo / Myinfo Business
-// /userinfo response: Response groups the data blocks, Data and Field read each
+// Package myinfo is the data model for a Myinfo / Myinfo Business /userinfo
+// response.
+//
+// Start with the typed profiles: Response.PersonProfile and
+// Response.EntityProfile name the common items (UINFIN, name, date of birth,
+// registered address, mobile number, CPF balances; an entity's name, status,
+// address, appointments and shareholders), with Address and Phone formatting
+// and Field.Date / Int / Float parsing values.
+//
+// Underneath, Response groups the data blocks, and Data and Field read each
 // item's Myinfo envelope (value or code+desc, source, classification,
-// lastupdated, unavailable), and Authorisation flattens Corppass auth_info.
+// lastupdated, unavailable) by key — for items the profiles don't model, or to
+// walk a whole block with Data.Leaves. Authorisation flattens Corppass
+// auth_info.
 //
 // It depends only on the standard library. The singpass package fills
 // Identity.Myinfo from FAPIgo's validated /userinfo result; Parse builds the
@@ -13,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // userInfoBlocks are the top-level claims the Myinfo family returns person and
@@ -332,6 +343,36 @@ func (f Field) LastUpdated() string { return asString(f.m["lastupdated"]) }
 
 // Raw returns the field's underlying envelope map (nil for the zero Field).
 func (f Field) Raw() map[string]any { return f.m }
+
+// Date parses the field's value as a Myinfo date — "2006-01-02", or the
+// partial "2006-01" and "2006" some records use — at midnight UTC. ok is false
+// when the field has no value or isn't a date.
+func (f Field) Date() (t time.Time, ok bool) {
+	v := f.Value()
+	for _, layout := range []string{time.DateOnly, "2006-01", "2006"} {
+		if len(v) == len(layout) {
+			if t, err := time.Parse(layout, v); err == nil {
+				return t, true
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
+// Int parses the field's value as an integer, e.g. a share allocation. ok is
+// false when the field has no value or it isn't a whole number.
+func (f Field) Int() (n int64, ok bool) {
+	n, err := strconv.ParseInt(f.Value(), 10, 64)
+	return n, err == nil
+}
+
+// Float parses the field's value as a number, e.g. a CPF balance or a
+// company's revenue. ok is false when the field has no value or it isn't a
+// number.
+func (f Field) Float() (x float64, ok bool) {
+	x, err := strconv.ParseFloat(f.Value(), 64)
+	return x, err == nil
+}
 
 // Source is the parsed Myinfo provenance of a data item — where the value came
 // from and how much it can be trusted. It is the typed form of Field.Source.

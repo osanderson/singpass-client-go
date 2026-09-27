@@ -19,8 +19,9 @@ Singpass pieces.
 
 - **One constructor per product** — `NewLogin`, `NewMyinfo`, `NewMyinfoBusiness`
   — with working staging defaults.
-- **Myinfo data without map-casting** — envelope-aware accessors for values,
-  codes, provenance and nested records; Corppass's double-encoded blocks and
+- **Typed Myinfo data** — `PersonProfile()` and `EntityProfile()` name the
+  common items, with dates, numbers, addresses and phone numbers parsed;
+  provenance kept on every item; Corppass's double-encoded blocks and
   `auth_info` handled for you.
 - **HSM/KMS-ready** — the signing key is any `crypto.Signer`; decryption can use
   an external ECDH agreer, so private keys needn't enter the process.
@@ -119,20 +120,34 @@ hard-code it. No staging client yet? Try the demo with `DEMO_MOCK=1`.
 ## Myinfo person data
 
 `NewMyinfo` and `NewMyinfoBusiness` take options shaped like `NewLogin`'s;
-`Complete` then also calls `/userinfo` and fills `Identity.Myinfo`:
+`Complete` then also calls `/userinfo` and fills `Identity.Myinfo`. The typed
+profiles name the common items, so there are no keys to look up:
 
 ```go
-p := id.Myinfo.Person                    // .Entity, .Corppass, .Auth, .TPAuth for Business
-p.Field("name").String()                 // "TAN XIAO HUI"
-p.Field("nationality").Code()            // "SG"  (.String() gives "SINGAPORE CITIZEN")
-p.Field("email").Available()             // false when Myinfo has no value
-p.Field("name").SourceCode()             // myinfo.SourceGovernmentVerified
-p.Object("regadd").Field("postal").String()
-p.List("vehicles")                       // repeated records
+p := id.Myinfo.PersonProfile()
+p.Name.String()                          // "TAN XIAO HUI"
+p.Nationality.Code()                     // "SG"  (.String() gives "SINGAPORE CITIZEN")
+dob, ok := p.DOB.Date()                  // time.Time
+p.RegAdd.Lines()                         // ["102 BEDOK NORTH AVENUE 4", "#09-128", "SINGAPORE 460102"]
+p.MobileNo.E164()                        // "+6597399245"
+p.CPFBalances.OA.Float()                 // 1581.48, true
+p.Email.Available()                      // false when Myinfo has no value
+p.Name.SourceCode()                      // myinfo.SourceGovernmentVerified
+
+e := id.Myinfo.EntityProfile()           // Myinfo Business
+e.Name.String(); e.UENStatus.Code(); e.Address.String()
+e.Appointments; e.Shareholders           // person or entity party, flattened
 id.Myinfo.Auth.Authorisations()          // Corppass auth_info, flattened
-id.Myinfo.Entity.Appointments()          // Corppass appointments / .Shareholders(), person or entity party
-p.Leaves()                               // every item with its key path, e.g. for a table or a DB row
-p.Object("regadd").EffectiveSource()     // provenance, incl. source declared on the container
+```
+
+Every item is a `myinfo.Field`, keeping its value, code, provenance and
+classification. For items the profiles don't model, read the blocks by key:
+
+```go
+id.Myinfo.Person.Object("drivinglicence") // .Entity, .Corppass, .Auth, .TPAuth for Business
+id.Myinfo.Person.List("vehicles")        // repeated records
+id.Myinfo.Person.Leaves()                // every item with its key path, e.g. for a table or a DB row
+p.RegAdd.Data.EffectiveSource()          // provenance, incl. source declared on the container
 myinfo.Label("hdbownership")             // "HDB ownership" — display labels for keys
 id.Myinfo.Raw()                          // the full decoded response
 ```
