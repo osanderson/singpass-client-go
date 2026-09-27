@@ -322,7 +322,7 @@ func TestEnsureKeyDepsPrecedence(t *testing.T) {
 
 	t.Run("injected deps win", func(t *testing.T) {
 		injected := testKeyDeps(t)
-		got, err := ensureKeyDeps(injected, sig, "opt-sig", enc, agreer, "opt-enc")
+		got, err := ensureKeyDeps(context.Background(), injected, keyMaterial{sig: sig, sigKID: "opt-sig", enc: enc, agreer: agreer, encKID: "opt-enc"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -332,7 +332,7 @@ func TestEnsureKeyDepsPrecedence(t *testing.T) {
 	})
 
 	t.Run("agreer beats in-memory key", func(t *testing.T) {
-		got, err := ensureKeyDeps(Dependencies{}, sig, "opt-sig", enc, agreer, "opt-enc")
+		got, err := ensureKeyDeps(context.Background(), Dependencies{}, keyMaterial{sig: sig, sigKID: "opt-sig", enc: enc, agreer: agreer, encKID: "opt-enc"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -345,7 +345,7 @@ func TestEnsureKeyDepsPrecedence(t *testing.T) {
 	})
 
 	t.Run("in-memory key when no agreer", func(t *testing.T) {
-		got, err := ensureKeyDeps(Dependencies{}, sig, "opt-sig", enc, nil, "opt-enc")
+		got, err := ensureKeyDeps(context.Background(), Dependencies{}, keyMaterial{sig: sig, sigKID: "opt-sig", enc: enc, agreer: nil, encKID: "opt-enc"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -355,10 +355,10 @@ func TestEnsureKeyDepsPrecedence(t *testing.T) {
 	})
 
 	t.Run("missing key material is an error", func(t *testing.T) {
-		if _, err := ensureKeyDeps(Dependencies{}, nil, "", enc, nil, "opt-enc"); err == nil {
+		if _, err := ensureKeyDeps(context.Background(), Dependencies{}, keyMaterial{sig: nil, sigKID: "", enc: enc, agreer: nil, encKID: "opt-enc"}); err == nil {
 			t.Error("no signing key: want error")
 		}
-		if _, err := ensureKeyDeps(Dependencies{}, sig, "opt-sig", nil, nil, ""); err == nil {
+		if _, err := ensureKeyDeps(context.Background(), Dependencies{}, keyMaterial{sig: sig, sigKID: "opt-sig", enc: nil, agreer: nil, encKID: ""}); err == nil {
 			t.Error("no encryption key or agreer: want error")
 		}
 	})

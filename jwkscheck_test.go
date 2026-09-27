@@ -72,6 +72,12 @@ func TestCheckPublishedJWKS(t *testing.T) {
 		})
 	}
 
+	redirect := httptest.NewServer(http.RedirectHandler("/elsewhere", http.StatusFound))
+	defer redirect.Close()
+	if err := CheckPublishedJWKS(ctx, nil, redirect.URL, want); err == nil || !strings.Contains(err.Error(), "redirects") {
+		t.Errorf("redirecting URL: %v", err)
+	}
+
 	if err := CheckPublishedJWKS(ctx, nil, "http://rp.example/jwks.json", want); err == nil || !strings.Contains(err.Error(), "must use https") {
 		t.Errorf("plain http URL: %v", err)
 	}

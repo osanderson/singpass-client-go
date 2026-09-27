@@ -34,6 +34,7 @@ import (
 	"github.com/idfoundry/fapigo/client"
 	"github.com/idfoundry/fapigo/extension"
 	"github.com/idfoundry/fapigo/fapihttp"
+	"github.com/idfoundry/fapigo/keys"
 	"github.com/idfoundry/fapigo/storage"
 
 	"github.com/osanderson/singpass-client-go/myinfo"
@@ -148,6 +149,11 @@ type Client struct {
 
 	// httpClient is the base HTTP client, for CheckPublishedJWKS.
 	httpClient *http.Client
+
+	// decryption and encAlg let PublicJWKS publish a NewRotatingDecrypter's
+	// additional encryption keys, which FAPIgo's own JWKS doesn't include.
+	decryption keys.Decrypter
+	encAlg     fapi.KeyManagementAlgorithm
 }
 
 // Identity is the authenticated result of a completed login.
@@ -370,6 +376,8 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		extensions:    extensions,
 		fetchUserInfo: opts.FetchUserInfo,
 		httpClient:    base,
+		decryption:    deps.Decryption,
+		encAlg:        cfg.Algorithms.IDTokenKeyManagement,
 	}, nil
 }
 
@@ -420,6 +428,11 @@ func (c *Client) PublicJWKS(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("singpass: publish client JWKS: %w", err)
 	}
+	extra, err := publishedEncryptionKeys(ctx, c.decryption, c.encAlg)
+	if err != nil {
+		return nil, fmt.Errorf("singpass: publish client JWKS: %w", err)
+	}
+	set.Keys = appendNewKIDs(set.Keys, extra)
 	return json.MarshalIndent(set, "", "  ")
 }
 

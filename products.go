@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"errors"
+	"fmt"
 
 	"github.com/idfoundry/fapigo/keys"
 )
@@ -97,6 +99,15 @@ type LoginOptions struct {
 	// used. Ignored when Dependencies.Decryption is supplied. See
 	// NewAgreerDecrypter.
 	EncryptionAgreer ECDHAgreer
+
+	// AdditionalSigningKeys and AdditionalEncryptionKeys are the extra keys of
+	// a key rotation (see docs/production.md): signing keys published in the
+	// JWKS but not used to sign, and encryption keys decrypted with and —
+	// unless DecryptOnly — published. They need the keys above: with
+	// Dependencies.Keys or Dependencies.Decryption supplied, use
+	// NewRotatingKeyManager / NewRotatingDecrypter there instead.
+	AdditionalSigningKeys    []PublishedKey
+	AdditionalEncryptionKeys []DecryptionKey
 }
 
 // MyinfoOptions configures a Singpass Myinfo relying party: authentication plus
@@ -122,6 +133,15 @@ type MyinfoOptions struct {
 	// not used. Ignored when Dependencies.Decryption is supplied. See
 	// NewAgreerDecrypter.
 	EncryptionAgreer ECDHAgreer
+
+	// AdditionalSigningKeys and AdditionalEncryptionKeys are the extra keys of
+	// a key rotation (see docs/production.md): signing keys published in the
+	// JWKS but not used to sign, and encryption keys decrypted with and —
+	// unless DecryptOnly — published. They need the keys above: with
+	// Dependencies.Keys or Dependencies.Decryption supplied, use
+	// NewRotatingKeyManager / NewRotatingDecrypter there instead.
+	AdditionalSigningKeys    []PublishedKey
+	AdditionalEncryptionKeys []DecryptionKey
 }
 
 // MyinfoBusinessOptions configures a Corppass Myinfo Business relying party: the
@@ -149,6 +169,15 @@ type MyinfoBusinessOptions struct {
 	// NewAgreerDecrypter.
 	EncryptionAgreer ECDHAgreer
 
+	// AdditionalSigningKeys and AdditionalEncryptionKeys are the extra keys of
+	// a key rotation (see docs/production.md): signing keys published in the
+	// JWKS but not used to sign, and encryption keys decrypted with and —
+	// unless DecryptOnly — published. They need the keys above: with
+	// Dependencies.Keys or Dependencies.Decryption supplied, use
+	// NewRotatingKeyManager / NewRotatingDecrypter there instead.
+	AdditionalSigningKeys    []PublishedKey
+	AdditionalEncryptionKeys []DecryptionKey
+
 	// TolerateUserInfoSubjectClientID also accepts a /userinfo "sub" equal to
 	// the client_id. Corppass used to send that instead of the id_token's sub
 	// (contrary to OIDC Core §5.3.2); it now sends the correct sub — confirmed
@@ -172,7 +201,7 @@ func NewLogin(ctx context.Context, o LoginOptions, deps Dependencies) (*Client, 
 	if o.AuthContextType == "" {
 		o.AuthContextType = DefaultAuthContextType
 	}
-	deps, err := ensureKeyDeps(deps, o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionAgreer, o.EncryptionKID)
+	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +226,7 @@ func NewMyinfo(ctx context.Context, o MyinfoOptions, deps Dependencies) (*Client
 		o.Issuer, _ = o.Environment.issuers()
 	}
 	deps = o.Environment.forEnvironment(deps)
-	deps, err := ensureKeyDeps(deps, o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionAgreer, o.EncryptionKID)
+	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +251,7 @@ func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Depend
 		_, o.Issuer = o.Environment.issuers()
 	}
 	deps = o.Environment.forEnvironment(deps)
-	deps, err := ensureKeyDeps(deps, o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionAgreer, o.EncryptionKID)
+	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
 	if err != nil {
 		return nil, err
 	}
@@ -238,32 +267,57 @@ func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Depend
 	}, deps)
 }
 
+// keyMaterial is the key fields common to the product options.
+type keyMaterial struct {
+	sig        crypto.Signer
+	sigKID     string
+	enc        *ecdsa.PrivateKey
+	encKID     string
+	agreer     keys.ECDHAgreer
+	addSigning []PublishedKey
+	addEnc     []DecryptionKey
+}
+
 // ensureKeyDeps builds deps.Keys and deps.Decryption from the supplied key
 // material only when the caller left them nil, so an HSM/KMS caller that injects
 // its own keys.KeyManager / keys.Decrypter is respected. For decryption a
 // caller-supplied agreer (HSM/KMS) is preferred over the in-memory enc key.
-func ensureKeyDeps(deps Dependencies, sig crypto.Signer, sigKID string, enc *ecdsa.PrivateKey, agreer keys.ECDHAgreer, encKID string) (Dependencies, error) {
+// Rotation keys need the built ones: they can't be added to an injected
+// KeyManager or Decrypter.
+func ensureKeyDeps(ctx context.Context, deps Dependencies, k keyMaterial) (Dependencies, error) {
 	if deps.Keys == nil {
-		km, err := NewKeyManager(sig, sigKID)
+		km, err := NewRotatingKeyManager(k.sig, k.sigKID, k.addSigning...)
 		if err != nil {
 			return deps, err
 		}
 		deps.Keys = km
+	} else if len(k.addSigning) > 0 {
+		return deps, errors.New("singpass: AdditionalSigningKeys can't be combined with Dependencies.Keys: build it with NewRotatingKeyManager")
 	}
 	if deps.Decryption == nil {
-		var (
-			dec keys.Decrypter
-			err error
-		)
-		if agreer != nil {
-			dec, err = NewAgreerDecrypter(agreer)
-		} else {
-			dec, err = NewECDHDecrypter(enc, encKID)
+		agreer := k.agreer
+		if agreer == nil {
+			if k.enc == nil {
+				return deps, errors.New("singpass: encryption key is required")
+			}
+			if k.encKID == "" {
+				return deps, errors.New("singpass: the encryption key's kid is required: it's how Singpass finds the key in your JWKS")
+			}
+			encECDH, err := k.enc.ECDH()
+			if err != nil {
+				return deps, fmt.Errorf("singpass: convert encryption key to ECDH form: %w", err)
+			}
+			if agreer, err = keys.NewInMemoryECDH(encECDH, k.encKID); err != nil {
+				return deps, fmt.Errorf("singpass: build encryption key backend: %w", err)
+			}
 		}
+		dec, err := NewRotatingDecrypter(ctx, agreer, k.addEnc...)
 		if err != nil {
 			return deps, err
 		}
 		deps.Decryption = dec
+	} else if len(k.addEnc) > 0 {
+		return deps, errors.New("singpass: AdditionalEncryptionKeys can't be combined with Dependencies.Decryption: build it with NewRotatingDecrypter")
 	}
 	return deps, nil
 }
