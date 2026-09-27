@@ -164,6 +164,7 @@ func (h *Handlers) Mux() *http.ServeMux {
 // the authorization server.
 func (h *Handlers) Login(a *App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		setNoStore(w)
 		redirectURL, state, err := a.Auth.BeginLogin(r.Context())
 		if err != nil {
 			h.log.Error("begin login", "app", a.Name, "err", err)
@@ -182,6 +183,7 @@ func (h *Handlers) Login(a *App) http.HandlerFunc {
 func (h *Handlers) Callback(a *App) http.HandlerFunc {
 	stateCookie := h.cookies.stateName(a.Name)
 	return func(w http.ResponseWriter, r *http.Request) {
+		setNoStore(w)
 		// Defense in depth: the callback's state must match the cookie we set at
 		// /{name}/login. FAPIgo independently validates state/nonce/iss against
 		// its own session store; this is a belt-and-braces check at the HTTP edge.
@@ -243,6 +245,7 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 func (h *Handlers) Logout() http.HandlerFunc {
 	var csrf http.CrossOriginProtection
 	return func(w http.ResponseWriter, r *http.Request) {
+		setNoStore(w)
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

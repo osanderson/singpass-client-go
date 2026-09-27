@@ -72,14 +72,14 @@ h := web.New(web.Config{
     Apps: []*web.App{{Name: "login", Title: "Singpass", Auth: client, JWKS: jwks}},
 })
 mux := h.Mux() // /login/login, /login/callback, /login/logout, /login/jwks.json
-mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-    if id, ok := h.CurrentIdentity(r); ok {
+mux.Handle("/", web.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    if id, ok := h.CurrentIdentity(r); ok { // never cache pages showing the identity
         fmt.Fprintf(w, "Signed in as %s", id.Subject)
         return
     }
     fmt.Fprint(w, `<a href="/login/login">Log in with Singpass</a>`)
-})
-log.Fatal(http.ListenAndServe(":8080", mux))
+})))
+log.Fatal(http.ListenAndServe(":8080", web.SecureHeaders(mux))) // CSP, anti-framing, HSTS, …
 ```
 
 Not using the helper? `client.BeginLogin(ctx)` returns the redirect URL and a

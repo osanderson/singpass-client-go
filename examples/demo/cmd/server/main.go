@@ -114,7 +114,9 @@ func main() {
 	})
 
 	mux := handlers.Mux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// "/" shows the signed-in identity and Myinfo data, so it must never be
+	// cached (NoStore): after logout, Back must not bring it back.
+	mux.Handle("/", web.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
@@ -144,7 +146,7 @@ func main() {
 			return
 		}
 		renderHome(w, "")
-	})
+	})))
 
 	logger.Info("listening", "addr", cfg.Addr, "base_url", cfg.BaseURL, "apps", len(apps))
 	// Bound how long a client may take to send headers/body or sit idle, so
@@ -153,7 +155,7 @@ func main() {
 	// already bounded by cfg.HTTPTimeout.
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           mux,
+		Handler:           web.SecureHeaders(mux), // CSP, anti-framing, nosniff, HSTS, …
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,

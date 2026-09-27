@@ -53,7 +53,7 @@ func main() {
 		Apps: []*web.App{{Name: "login", Title: "Singpass", Auth: client, JWKS: jwks}},
 	})
 	mux := h.Mux() // /login/login, /login/callback, /login/logout, /login/jwks.json
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/", web.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, ok := h.CurrentIdentity(r)
 		if !ok {
 			fmt.Fprint(w, `<a href="/login/login">Log in with Singpass</a>`)
@@ -62,12 +62,12 @@ func main() {
 		fmt.Fprintf(w, `<p>Signed in as %s</p>
 <form method="post" action="/login/logout"><button>Log out</button></form>`,
 			html.EscapeString(id.Subject))
-	})
+	})))
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	log.Println("listening on :" + port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	log.Fatal(http.ListenAndServe(":"+port, web.SecureHeaders(mux)))
 }
