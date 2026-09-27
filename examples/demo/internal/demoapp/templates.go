@@ -39,6 +39,7 @@ type ProfileData struct {
 	Scope           string
 	ScopeList       []string    // Scope split into individual scope strings (chips)
 	TokenHighlights []Highlight // selected id_token claims, interpreted
+	Summary         []Highlight // key facts read with the typed PersonProfile / EntityProfile
 	ClaimsPre       string
 	Blocks          string    // recognised /userinfo blocks present (e.g. "person_info")
 	Sections        []Section // person data grouped by block, read via the myinfo.Response accessor
@@ -63,6 +64,9 @@ type Highlight struct {
 	// Confidential marks a field the Myinfo envelope classifies as confidential
 	// ("C"), rendered with a small lock indicator.
 	Confidential bool
+	// Hint is the library call that produced Value, shown as a small code
+	// note in the Summary card. Empty elsewhere.
+	Hint string
 }
 
 // Section is one Myinfo block (person_info, entity_info, …) rendered as a group:
@@ -246,6 +250,13 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 {{end}}</dl>{{end}}
 <details><summary>Raw id_token claims (JSON)</summary><pre>{{.ClaimsPre}}</pre></details>
 </section>
+
+{{if .Summary}}<section class="card">
+<h2>Summary <span class="note">read with the typed <code>id.Myinfo.PersonProfile()</code> / <code>EntityProfile()</code></span></h2>
+<dl>
+{{range .Summary}}  <dt>{{.Label}}</dt><dd><code>{{.Value}}</code>{{if .Note}} <span class="badge {{.NoteKind}}">{{.Note}}</span>{{end}}{{if .Hint}}<br><span class="note"><code>{{.Hint}}</code></span>{{end}}</dd>
+{{end}}</dl>
+</section>{{end}}
 
 {{if or .Sections .PersonInfoPre}}<section class="card">
 <h2>Person data <span class="note">read via the myinfo.Response accessor{{if .Blocks}} · blocks: {{.Blocks}}{{end}}</span></h2>
