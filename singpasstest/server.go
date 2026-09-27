@@ -233,7 +233,13 @@ func (s *Server) build() error {
 		return fmt.Errorf("singpasstest: server: %w", err)
 	}
 
-	resourceTokens, err := resource.NewJWTAccessTokens(issuerKeys{issuer: s.issuer, manager: serverKeys}, issuer, s.issuer, signatureAlg, 30*time.Minute, 8)
+	// The /userinfo handler verifies access tokens with the server's own keys,
+	// in-process, as FAPIgo's LocalIssuerKeys provides.
+	localKeys, err := keys.NewLocalIssuerKeys(issuer, serverKeys)
+	if err != nil {
+		return err
+	}
+	resourceTokens, err := resource.NewJWTAccessTokens(localKeys, issuer, s.issuer, signatureAlg, 30*time.Minute, 8)
 	if err != nil {
 		return err
 	}
