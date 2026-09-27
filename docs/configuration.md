@@ -28,6 +28,24 @@ singpass.AssuranceProduction` **and** a `Sessions` store declaring
 `singpass.StoreAssurance` (`Durable` + `AtomicConsume`), or construction fails
 fast rather than silently shipping a non-durable store.
 
+## Validation
+
+The constructors check the options before contacting the issuer, and report
+every problem at once, each naming the option to fix:
+
+- `ClientID` and `RedirectURI` are required.
+- `RedirectURI` must be an absolute `https` URL without a fragment. Plain
+  `http` is accepted only for a loopback host (`localhost`, `127.0.0.1`,
+  `[::1]`), which Singpass staging allows for local development, and never
+  under `AssuranceProduction`.
+- `Scopes` must include `"openid"`, and list each scope once, as its own
+  entry (`[]string{"openid", "name"}`, not `[]string{"openid name"}`).
+- The signing and encryption key IDs (`SigningKID`, `EncryptionKID`) must be
+  set: Singpass finds your keys in the JWKS by them.
+
+Whether a scope is approved for your client is only known to Singpass, so
+unapproved scopes still fail at login.
+
 ## Staging and production
 
 - **Staging by default.** The product options' `Environment` defaults to
@@ -73,6 +91,13 @@ the public JWKS to register during onboarding from the keys' public halves only
 discovery document exists — using the same FAPIgo library code the live client's
 `Client.PublicJWKS` resolves through, so the offline and online sets are
 identical ([`keys.go`](../keys.go)). The DPoP key is deliberately not published.
+
+After publishing the JWKS at the URL registered in the portal, check it with
+`client.CheckPublishedJWKS(ctx, url)` — or, before there is a client,
+`singpass.CheckPublishedJWKS(ctx, nil, url, jwks)` or `singpass-keygen -check
+<url>`. It confirms every key is published under its kid with the same public
+key and use, and that no private key material is exposed. Extra keys, such as
+an outgoing key during a rotation, are allowed.
 
 ```go
 // Reuses keys/login/{sig,enc}.pem, or creates them (owner-only, never overwriting).

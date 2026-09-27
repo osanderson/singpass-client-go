@@ -40,6 +40,9 @@ func NewKeyManager(sig crypto.Signer, sigKID string) (KeyManager, error) {
 	if sig == nil {
 		return nil, fmt.Errorf("singpass: client authentication key is required")
 	}
+	if sigKID == "" {
+		return nil, fmt.Errorf("singpass: the signing key's kid is required: it's how Singpass finds the key in your JWKS")
+	}
 	// The ephemeral DPoP key. NewKeyManagerFromSigners validates its curve
 	// (and the client-auth key's) against ES256, so no explicit check here.
 	dpop, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -79,6 +82,9 @@ func NewKeyManager(sig crypto.Signer, sigKID string) (KeyManager, error) {
 func NewECDHDecrypter(encKey *ecdsa.PrivateKey, encKID string) (Decrypter, error) {
 	if encKey == nil {
 		return nil, fmt.Errorf("singpass: encryption key is required")
+	}
+	if encKID == "" {
+		return nil, fmt.Errorf("singpass: the encryption key's kid is required: it's how Singpass finds the key in your JWKS")
 	}
 	encECDH, err := encKey.ECDH()
 	if err != nil {

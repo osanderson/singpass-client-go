@@ -145,6 +145,9 @@ type Client struct {
 	// fetchUserInfo makes Complete call the engine's native FetchUserInfo
 	// after token exchange to retrieve Myinfo person data.
 	fetchUserInfo bool
+
+	// httpClient is the base HTTP client, for CheckPublishedJWKS.
+	httpClient *http.Client
 }
 
 // Identity is the authenticated result of a completed login.
@@ -191,6 +194,9 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	}
 	if deps.Decryption == nil {
 		return nil, fmt.Errorf("singpass: Dependencies.Decryption is required")
+	}
+	if err := validateOptions(opts, deps.Assurance == AssuranceProduction); err != nil {
+		return nil, err
 	}
 
 	httpTimeout := deps.HTTPTimeout
@@ -363,6 +369,7 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		acrValues:     acrValues,
 		extensions:    extensions,
 		fetchUserInfo: opts.FetchUserInfo,
+		httpClient:    base,
 	}, nil
 }
 

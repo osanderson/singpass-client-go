@@ -107,6 +107,20 @@ singpass-keygen -dir keys/login -sig-kid login-sig-1 -enc-kid login-enc-1 > logi
 In code, `keyfile.LoadOrGenerate` and `singpass.OfflineClientJWKS` do the same
 ([example](https://pkg.go.dev/github.com/osanderson/singpass-client-go#example-OfflineClientJWKS)).
 
+Once your JWKS is published at the URL you registered, check it serves these
+keys. A JWKS URL with stale or other keys otherwise shows up at login only as
+`invalid_client`:
+
+```sh
+singpass-keygen -dir keys/login -sig-kid login-sig-1 -enc-kid login-enc-1 -check https://app.example.com/login/jwks.json
+```
+
+From a running app, `client.CheckPublishedJWKS(ctx, url)` does the same, e.g.
+as a readiness check. The constructors also check your options up front:
+a missing `openid` scope, a malformed or non-https redirect URI and an empty
+key ID fail at startup, with an error naming the option, rather than at
+Singpass.
+
 ## Test accounts
 
 Singpass and Corppass publish staging test personas with Myinfo data:

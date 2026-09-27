@@ -14,8 +14,15 @@ choices, and the library refuses the unsafe ones.
       HSM/KMS-held keys: pass a `crypto.Signer` as `SigningKey`, and an
       `ECDHAgreer` as `EncryptionAgreer`. Register the public JWKS:
       `OfflineClientJWKS` needs only the public keys.
+- [ ] **The JWKS URL serves those keys.** Once deployed, check the URL
+      registered in the portal with `client.CheckPublishedJWKS(ctx, url)`
+      (e.g. as a readiness check) or
+      `singpass-keygen -dir … -sig-kid … -enc-kid … -check <url>`. A JWKS URL
+      serving stale or other keys shows up at login only as `invalid_client`.
+      Run the check again after every key rotation.
 - [ ] **Production redirect URIs**, over `https`, registered exactly as the app
-      sends them. They must not contain "singpass", "corppass" or "myinfo" (see
+      sends them. The constructors refuse a plain-`http` redirect URI under
+      production assurance. They must not contain "singpass", "corppass" or "myinfo" (see
       [singpass-quirks.md](singpass-quirks.md)).
 - [ ] **Scopes whitelisted.** Request only scopes the production client is
       approved for; anything else is rejected.
