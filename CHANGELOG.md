@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/osanderson/singpass-client-go/compare/v0.6.2...v0.7.0) (2026-09-27)
+
+
+### Features
+
+* **myinfo:** add typed person and entity profiles ([#38](https://github.com/osanderson/singpass-client-go/issues/38)) ([5102816](https://github.com/osanderson/singpass-client-go/commit/5102816c11b3546fa2795684a18a0f59042ce08d))
+
 ## [0.6.2](https://github.com/osanderson/singpass-client-go/compare/v0.6.1...v0.6.2) (2026-09-27)
 
 
