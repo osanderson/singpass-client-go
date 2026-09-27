@@ -125,8 +125,11 @@ id.Myinfo.Raw()                          // the full decoded response
 
 Absent blocks and fields return zero values rather than panicking. The id_token
 claims have typed accessors too: `id.Issuer()`, `id.AuthMethods()`,
-`id.AssuranceLevel()`, `id.SubjectType()`, `id.ActingParty()`,
-`id.SubjectAttributes()`.
+`id.AssuranceLevel()`, `id.SubjectType()`, and `id.SubjectAttributes()` with
+named fields (`IdentityNumber`, `AccountType`, `Name`, … for a person;
+`EntityName`, `EntityRegNumber`, … for a Corppass entity). For Corppass,
+`id.ActingParty()` is the person acting for the entity, with the same typed
+`Attributes`.
 
 ## Packages
 

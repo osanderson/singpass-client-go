@@ -307,9 +307,7 @@ func idTokenHighlights(id *singpass.Identity) []demoapp.Highlight {
 	// acting party, distinct from the entity subject.
 	if act := id.ActingParty(); act != nil {
 		add("Acting user", act.Subject, strings.TrimSpace(act.SubjectType))
-		for _, k := range sortedKeys(act.Attributes) {
-			add("Acting user › "+prettyLabel(k), claimString(act.Attributes, k), "act.sub_attributes")
-		}
+		attributeRows(add, "Acting user › ", "act.sub_attributes", act.Attributes)
 	}
 	if !id.IDTokenIssuedAt.IsZero() {
 		add("Issued at", id.IDTokenIssuedAt.Format(time.RFC3339), "")
@@ -321,15 +319,35 @@ func idTokenHighlights(id *singpass.Identity) []demoapp.Highlight {
 		}
 		add("Expires", id.IDTokenExpiry.Format(time.RFC3339), note)
 	}
-	// sub_attributes carries descriptor claims about the subject — for Corppass
-	// Myinfo Business the entity's name / registration number / type / status etc.
-	// Its members are flow-specific, so render whichever are present.
-	if sa := id.SubjectAttributes(); sa != nil {
-		for _, k := range sortedKeys(sa) {
-			add(prettyLabel(k), claimString(sa, k), "sub_attributes")
+	// sub_attributes describes the subject: a Singpass person's identity details
+	// (released per scope) or a Corppass entity's.
+	attributeRows(add, "", "sub_attributes", id.SubjectAttributes())
+	return hs
+}
+
+// modelledAttributes are the sub_attributes members singpass.SubjectAttributes
+// has typed fields for; attributeRows shows any other member from Raw.
+var modelledAttributes = map[string]bool{
+	"account_type": true, "identity_number": true, "identity_coi": true, "name": true, "email": true, "mobileno": true,
+	"entity_type": true, "entity_reg_number": true, "entity_coi": true, "entity_name": true, "entity_uen_status": true,
+}
+
+// attributeRows adds one row per set field of a, labelled with prefix, then
+// any member the library doesn't model yet (so a new Singpass field still shows).
+func attributeRows(add func(label, value, note string), prefix, note string, a singpass.SubjectAttributes) {
+	for _, f := range []struct{ label, value string }{
+		{"Name", a.Name}, {"Identity number", a.IdentityNumber}, {"Identity country", a.IdentityCOI},
+		{"Account type", a.AccountType}, {"Email", a.Email}, {"Mobile no.", a.MobileNo},
+		{"Entity name", a.EntityName}, {"Entity reg. number", a.EntityRegNumber}, {"Entity type", a.EntityType},
+		{"Entity country", a.EntityCOI}, {"Entity UEN status", a.EntityUENStatus},
+	} {
+		add(prefix+f.label, f.value, note)
+	}
+	for _, k := range sortedKeys(a.Raw) {
+		if !modelledAttributes[k] {
+			add(prefix+prettyLabel(k), claimString(a.Raw, k), note)
 		}
 	}
-	return hs
 }
 
 // claimString reads a scalar claim as text (string / number / bool), or "".

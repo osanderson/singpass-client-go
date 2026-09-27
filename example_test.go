@@ -119,6 +119,9 @@ func ExampleIdentity() {
 			"aud": "your-client-id",
 			"amr": []any{"pwd", "otp-sms"},
 			"acr": "urn:singpass:authentication:loa:2",
+			"sub_attributes": map[string]any{ // released by the user.identity scope
+				"account_type": "standard", "identity_number": "S1234567G", "identity_coi": "SG",
+			},
 		},
 		IDTokenIssuedAt: time.Unix(1_700_000_000, 0),
 		IDTokenExpiry:   time.Unix(1_700_000_600, 0),
@@ -128,11 +131,13 @@ func ExampleIdentity() {
 	fmt.Println(id.Audience())
 	fmt.Println(id.AuthMethods())
 	fmt.Println("LOA", id.AssuranceLevel())
+	fmt.Println(id.SubjectAttributes().IdentityNumber, id.SubjectAttributes().IdentityCOI)
 	fmt.Println(id.IDTokenExpiry.Sub(id.IDTokenIssuedAt))
 	// Output:
 	// https://stg-id.singpass.gov.sg/fapi
 	// [your-client-id]
 	// [pwd otp-sms]
 	// LOA 2
+	// S1234567G SG
 	// 10m0s
 }

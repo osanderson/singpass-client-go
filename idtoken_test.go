@@ -44,11 +44,11 @@ func TestIDTokenAccessors(t *testing.T) {
 		t.Errorf("AuthMethods() = %v, want [pwd otp]", got)
 	}
 	act := corppass.ActingParty()
-	if act == nil || act.Subject != "s=S1234567D,u=user" || act.SubjectType != "user" || act.Attributes["name"] != "JOHN TAN" {
+	if act == nil || act.Subject != "s=S1234567D,u=user" || act.SubjectType != "user" || act.Attributes.Name != "JOHN TAN" {
 		t.Errorf("ActingParty() = %+v", act)
 	}
 	sa := corppass.SubjectAttributes()
-	if sa["entity_name"] != "ACME PTE LTD" || sa["entity_reg_number"] != "200012345A" {
+	if sa.EntityName != "ACME PTE LTD" || sa.EntityRegNumber != "200012345A" || sa.Raw["entity_name"] != "ACME PTE LTD" {
 		t.Errorf("SubjectAttributes() = %+v", sa)
 	}
 
@@ -72,7 +72,7 @@ func TestIDTokenAccessors(t *testing.T) {
 	if personal.ActingParty() != nil {
 		t.Errorf("ActingParty() should be nil without an act claim")
 	}
-	if personal.SubjectAttributes() != nil {
+	if personal.SubjectAttributes().Present() {
 		t.Errorf("SubjectAttributes() should be nil without the claim")
 	}
 	if got := personal.AssuranceLevel(); got != "" {
@@ -83,11 +83,36 @@ func TestIDTokenAccessors(t *testing.T) {
 	var nilID *Identity
 	if nilID.Issuer() != "" || nilID.Audience() != nil || nilID.AuthMethods() != nil ||
 		nilID.SubjectType() != "" || nilID.AssuranceLevel() != "" ||
-		nilID.ActingParty() != nil || nilID.SubjectAttributes() != nil {
+		nilID.ActingParty() != nil || nilID.SubjectAttributes().Present() {
 		t.Errorf("nil Identity accessors should return zero values")
 	}
 	empty := &Identity{}
 	if empty.Issuer() != "" || empty.Audience() != nil || empty.ActingParty() != nil {
 		t.Errorf("empty Identity accessors should return zero values")
+	}
+}
+
+// TestSubjectAttributesSingpassPerson checks the typed person fields, using the
+// Singpass spec's example, and that unmodelled members stay reachable via Raw.
+func TestSubjectAttributesSingpassPerson(t *testing.T) {
+	id := &Identity{Claims: map[string]any{
+		"sub_attributes": map[string]any{
+			"account_type": "standard", "identity_number": "S1234567G", "identity_coi": "SG",
+			"name": "JOHN DOE", "email": "johndoe@example.com", "mobileno": "91231234",
+			"future_field": "kept",
+		},
+	}}
+	a := id.SubjectAttributes()
+	want := SubjectAttributes{
+		AccountType: "standard", IdentityNumber: "S1234567G", IdentityCOI: "SG",
+		Name: "JOHN DOE", Email: "johndoe@example.com", MobileNo: "91231234",
+	}
+	raw := a.Raw
+	a.Raw = nil
+	if !reflect.DeepEqual(a, want) {
+		t.Errorf("SubjectAttributes() = %+v, want %+v", a, want)
+	}
+	if raw["future_field"] != "kept" {
+		t.Error("Raw should keep members the struct doesn't model")
 	}
 }
