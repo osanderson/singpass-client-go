@@ -73,14 +73,63 @@ func (id *Identity) AssuranceLevel() string {
 	return ""
 }
 
+// SubjectAttributes are the "sub_attributes" descriptor claims about a subject,
+// with the members Singpass and Corppass define as typed fields. Which fields
+// are set depends on the subject and the granted scopes; unset fields are "".
+//
+// For a person (Singpass Login / Myinfo, or the acting person in a Corppass
+// login) Singpass releases each item with its scope: user.identity gives
+// AccountType, IdentityNumber and IdentityCOI; the name, email and mobileno
+// scopes give Name, Email and MobileNo. For a Corppass entity the Entity* fields
+// describe the organisation.
+type SubjectAttributes struct {
+	AccountType    string // account_type: "standard" (citizen / PR) or "foreign"
+	IdentityNumber string // identity_number: NRIC, FIN or foreign ID number
+	IdentityCOI    string // identity_coi: the ID's country of issuance, e.g. "SG"
+	Name           string // name
+	Email          string // email
+	MobileNo       string // mobileno (absent for foreign account holders)
+
+	EntityType      string // entity_type: "UEN", "NON-UEN" or "GSTN"
+	EntityRegNumber string // entity_reg_number, e.g. the UEN
+	EntityCOI       string // entity_coi: country of incorporation
+	EntityName      string // entity_name
+	EntityUENStatus string // entity_uen_status: "Registered", "Deregistered", "Withdrawn"
+
+	// Raw is the claim as sent, including any member not modelled above; nil
+	// when the token carries no sub_attributes.
+	Raw map[string]any
+}
+
+// Present reports whether the token carried the sub_attributes claim.
+func (a SubjectAttributes) Present() bool { return a.Raw != nil }
+
+func parseSubjectAttributes(v any) SubjectAttributes {
+	m, _ := v.(map[string]any)
+	return SubjectAttributes{
+		AccountType:     asString(m["account_type"]),
+		IdentityNumber:  asString(m["identity_number"]),
+		IdentityCOI:     asString(m["identity_coi"]),
+		Name:            asString(m["name"]),
+		Email:           asString(m["email"]),
+		MobileNo:        asString(m["mobileno"]),
+		EntityType:      asString(m["entity_type"]),
+		EntityRegNumber: asString(m["entity_reg_number"]),
+		EntityCOI:       asString(m["entity_coi"]),
+		EntityName:      asString(m["entity_name"]),
+		EntityUENStatus: asString(m["entity_uen_status"]),
+		Raw:             m,
+	}
+}
+
 // ActingParty is the "act" (actor) claim: for Corppass, the person who
 // authenticated on behalf of the entity, distinct from the entity Subject.
 type ActingParty struct {
 	Subject     string // act.sub — the acting person's Singpass identifier
 	SubjectType string // act.sub_type — typically "user"
 	// Attributes is act.sub_attributes, describing the person: Corppass sends
-	// account_type, identity_number, identity_coi and name. Nil when absent.
-	Attributes map[string]any
+	// AccountType, IdentityNumber, IdentityCOI and Name.
+	Attributes SubjectAttributes
 }
 
 // ActingParty returns the "act" actor claim, or nil when the token carries none
@@ -93,27 +142,22 @@ func (id *Identity) ActingParty() *ActingParty {
 	if !ok {
 		return nil
 	}
-	attrs, _ := act["sub_attributes"].(map[string]any)
 	return &ActingParty{
 		Subject:     asString(act["sub"]),
 		SubjectType: asString(act["sub_type"]),
-		Attributes:  attrs,
+		Attributes:  parseSubjectAttributes(act["sub_attributes"]),
 	}
 }
 
-// SubjectAttributes returns the "sub_attributes" descriptor claims about the
-// subject. For a Singpass person they are released per scope — user.identity
-// gives account_type, identity_number and identity_coi; name, email and
-// mobileno give the same-named item. For a Corppass entity they are the
-// entity's type, registration number, country, name and UEN status. Its members
-// are flow-specific, so it is returned as the raw object for the caller to
-// read; nil when the claim is absent.
-func (id *Identity) SubjectAttributes() map[string]any {
+// SubjectAttributes returns the "sub_attributes" claim about the subject: a
+// Singpass person's identity details released by the granted scopes, or a
+// Corppass entity's details. The zero value (Present false) when the claim is
+// absent.
+func (id *Identity) SubjectAttributes() SubjectAttributes {
 	if id == nil {
-		return nil
+		return SubjectAttributes{}
 	}
-	sa, _ := id.Claims["sub_attributes"].(map[string]any)
-	return sa
+	return parseSubjectAttributes(id.Claims["sub_attributes"])
 }
 
 // stringSliceClaim normalises a claim that OIDC allows to be a single string or an
