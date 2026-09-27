@@ -92,6 +92,8 @@ discovery document exists — using the same FAPIgo library code the live client
 `Client.PublicJWKS` resolves through, so the offline and online sets are
 identical ([`keys.go`](../keys.go)). The DPoP key is deliberately not published.
 
+Singpass takes the JWKS as a URL it fetches (a JWKS endpoint) or pasted into
+the portal (a JWKS object); see [onboarding.md](onboarding.md#3-create-a-staging-app).
 After publishing the JWKS at the URL registered in the portal, check it with
 `client.CheckPublishedJWKS(ctx, url)` — or, before there is a client,
 `singpass.CheckPublishedJWKS(ctx, nil, url, jwks)` or `singpass-keygen -check
