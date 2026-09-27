@@ -54,7 +54,7 @@ func rotationLogin(t *testing.T, registeredSig, registeredEnc kidKey, opts singp
 	if err != nil {
 		t.Fatal(err)
 	}
-	redirect, _, err := client.BeginLogin(ctx)
+	redirect, state, err := client.BeginLogin(ctx)
 	if err != nil {
 		return client, err
 	}
@@ -62,7 +62,7 @@ func rotationLogin(t *testing.T, registeredSig, registeredEnc kidKey, opts singp
 	if err != nil {
 		return client, err
 	}
-	id, err := client.Complete(ctx, callback)
+	id, err := client.Complete(ctx, callback, state)
 	if err == nil && id.Myinfo.PersonProfile().Name.String() == "" {
 		t.Error("no person data after login")
 	}

@@ -160,7 +160,7 @@ func TestFullLoginThroughStore(t *testing.T) {
 		t.Fatalf("NewMyinfo: %v", err)
 	}
 
-	redirectURL, _, err := c.BeginLogin(ctx)
+	redirectURL, state, err := c.BeginLogin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,12 +168,12 @@ func TestFullLoginThroughStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := c.Complete(ctx, callback)
+	id, err := c.Complete(ctx, callback, state)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 	// Replaying the callback finds the session already consumed.
-	if _, err := c.Complete(ctx, callback); !errors.Is(err, singpass.ErrLoginExpired) {
+	if _, err := c.Complete(ctx, callback, state); !errors.Is(err, singpass.ErrLoginExpired) {
 		t.Errorf("replayed callback: %v, want ErrLoginExpired", err)
 	}
 

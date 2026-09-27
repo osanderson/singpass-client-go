@@ -58,7 +58,7 @@ func register(t *testing.T, srv *singpasstest.Server, id string, app singpasstes
 func login(t *testing.T, srv *singpasstest.Server, c *singpass.Client) *singpass.Identity {
 	t.Helper()
 	ctx := context.Background()
-	redirectURL, _, err := c.BeginLogin(ctx)
+	redirectURL, state, err := c.BeginLogin(ctx)
 	if err != nil {
 		t.Fatalf("BeginLogin: %v", err)
 	}
@@ -66,7 +66,7 @@ func login(t *testing.T, srv *singpasstest.Server, c *singpass.Client) *singpass
 	if err != nil {
 		t.Fatalf("Authorize: %v", err)
 	}
-	id, err := c.Complete(ctx, query)
+	id, err := c.Complete(ctx, query, state)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestCancelledLoginIsDenied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLogin: %v", err)
 	}
-	redirectURL, _, err := c.BeginLogin(context.Background())
+	redirectURL, state, err := c.BeginLogin(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestCancelledLoginIsDenied(t *testing.T) {
 	res.Body.Close()
 	loc, _ := url.Parse(res.Header.Get("Location"))
 
-	_, err = c.Complete(context.Background(), loc.RawQuery)
+	_, err = c.Complete(context.Background(), loc.RawQuery, state)
 	var denied *singpass.DeniedError
 	if !errors.As(err, &denied) || denied.Code != "access_denied" {
 		t.Fatalf("Complete err = %v, want DeniedError access_denied", err)
@@ -300,7 +300,7 @@ func TestLoopbackHTTPRedirectURI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLogin: %v", err)
 	}
-	redirectURL, _, err := c.BeginLogin(context.Background())
+	redirectURL, state, err := c.BeginLogin(context.Background())
 	if err != nil {
 		t.Fatalf("BeginLogin: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestLoopbackHTTPRedirectURI(t *testing.T) {
 		t.Fatalf("callback = %q, want it on %s", loc, local)
 	}
 	u, _ := url.Parse(loc)
-	if _, err := c.Complete(context.Background(), u.RawQuery); err != nil {
+	if _, err := c.Complete(context.Background(), u.RawQuery, state); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 }
@@ -342,7 +342,7 @@ func TestCorppassFormerSubjectDeviation(t *testing.T) {
 	}
 	complete := func(c *singpass.Client) error {
 		ctx := context.Background()
-		redirectURL, _, err := c.BeginLogin(ctx)
+		redirectURL, state, err := c.BeginLogin(ctx)
 		if err != nil {
 			t.Fatalf("BeginLogin: %v", err)
 		}
@@ -350,7 +350,7 @@ func TestCorppassFormerSubjectDeviation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Authorize: %v", err)
 		}
-		_, err = c.Complete(ctx, query)
+		_, err = c.Complete(ctx, query, state)
 		return err
 	}
 

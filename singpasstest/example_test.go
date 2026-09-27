@@ -48,7 +48,7 @@ func Example() {
 		log.Fatal(err)
 	}
 
-	redirectURL, _, err := client.BeginLogin(ctx)
+	redirectURL, state, err := client.BeginLogin(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func Example() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	id, err := client.Complete(ctx, callback)
+	id, err := client.Complete(ctx, callback, state)
 	if err != nil {
 		log.Fatal(err)
 	}

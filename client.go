@@ -79,6 +79,15 @@ type Dependencies struct {
 	// (and /userinfo response). Required. See NewECDHDecrypter.
 	Decryption Decrypter
 
+	// KeyCustody declares how the private keys behind Keys and Decryption are
+	// held. AssuranceProduction requires Durable: the keys survive a restart
+	// (loaded from a file or secret store, or held in an HSM or KMS), as they
+	// must anyway once Singpass has your JWKS. It applies to the Keys and
+	// Decryption this package builds (the product constructors, NewKeyManager,
+	// NewECDHDecrypter, …); one built with FAPIgo directly declares its own
+	// custody with keys.DeclareCustody.
+	KeyCustody KeyCustody
+
 	// Sessions persists in-progress authorization-flow state. Nil installs
 	// NewMemorySessionStore(0): per-process and non-durable, but expired
 	// sessions are dropped and pending logins are capped, so abandoned logins
@@ -104,8 +113,14 @@ type Dependencies struct {
 	Clock Clock
 
 	// Random is the randomness source for state/nonce/PKCE. Nil means
-	// crypto/rand.Reader.
+	// crypto/rand.Reader, which AssuranceProduction requires.
 	Random io.Reader
+
+	// BeginLoginRetries is how many times BeginLogin retries a pushed
+	// authorization request that failed temporarily (see IsTemporary), with
+	// exponential backoff from 250ms, within the request's context. Zero
+	// means no retries; Singpass allows up to 3.
+	BeginLoginRetries int
 
 	// Limits bounds token lifetimes and JOSE/HTTP sizes. Nil means
 	// RecommendedLimits(HTTPTimeout).
@@ -149,6 +164,9 @@ type Client struct {
 
 	// httpClient is the base HTTP client, for CheckPublishedJWKS.
 	httpClient *http.Client
+
+	// retries is Dependencies.BeginLoginRetries.
+	retries int
 
 	// decryption and encAlg let PublicJWKS publish a NewRotatingDecrypter's
 	// additional encryption keys, which FAPIgo's own JWKS doesn't include.
@@ -204,6 +222,10 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	if err := validateOptions(opts, deps.Assurance == AssuranceProduction); err != nil {
 		return nil, err
 	}
+	if deps.BeginLoginRetries < 0 || deps.BeginLoginRetries > maxBeginLoginRetries {
+		return nil, fmt.Errorf("singpass: Dependencies.BeginLoginRetries must be between 0 and %d", maxBeginLoginRetries)
+	}
+	deps = withKeyCustody(deps, deps.KeyCustody)
 
 	httpTimeout := deps.HTTPTimeout
 	if httpTimeout == 0 {
@@ -220,6 +242,11 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 			return nil, fmt.Errorf("singpass: Dependencies.AllowLoopbackHTTP is refused under AssuranceProduction")
 		}
 		urlOpts = append(urlOpts, fapi.AllowLoopbackHTTP())
+	}
+	if deps.Assurance == AssuranceProduction {
+		if err := checkKeyCustody(deps); err != nil {
+			return nil, err
+		}
 	}
 
 	issuer, err := fapi.ParseIssuerURL(opts.Issuer, urlOpts...)
@@ -377,6 +404,7 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		fetchUserInfo: opts.FetchUserInfo,
 		httpClient:    base,
 		decryption:    deps.Decryption,
+		retries:       deps.BeginLoginRetries,
 		encAlg:        cfg.Algorithms.IDTokenKeyManagement,
 	}, nil
 }
@@ -437,27 +465,47 @@ func (c *Client) PublicJWKS(ctx context.Context) ([]byte, error) {
 }
 
 // BeginLogin starts an authorization attempt: it runs the pushed authorization
-// request and returns the URL to redirect the browser to, plus the opaque state
-// handle (usable as a defense-in-depth cookie binding the request to its
-// eventual callback).
+// request and returns the URL to redirect the browser to, plus the login's
+// state. Keep the state with the browser — typically in an HttpOnly,
+// SameSite=Lax cookie — and pass it to Complete at the callback: it binds the
+// callback to the browser that started the login. With
+// Dependencies.BeginLoginRetries set, a temporary failure is retried.
 func (c *Client) BeginLogin(ctx context.Context) (redirectURL string, state string, err error) {
-	session, err := c.engine.BeginAuthorization(ctx, client.BeginAuthorizationRequest{
-		Scope:      c.scopes,
-		ACRValues:  c.acrValues,
-		Extensions: c.extensions,
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("singpass: begin authorization: %w", err)
+	for attempt := 0; ; attempt++ {
+		session, err := c.engine.BeginAuthorization(ctx, client.BeginAuthorizationRequest{
+			Scope:      c.scopes,
+			ACRValues:  c.acrValues,
+			Extensions: c.extensions,
+		})
+		if err == nil {
+			return session.URL().String(), session.Handle().String(), nil
+		}
+		err = fmt.Errorf("singpass: begin authorization: %w", err)
+		if attempt >= c.retries || !IsTemporary(err) {
+			return "", "", err
+		}
+		select {
+		case <-ctx.Done():
+			return "", "", err
+		case <-time.After(retryDelay(attempt)):
+		}
 	}
-	return session.URL().String(), session.Handle().String(), nil
 }
 
 // Complete validates the authorization callback (identified by its raw query
 // string), exchanges the code for tokens, and returns the authenticated
-// identity. A user-declined or server-denied login is reported as a
-// *DeniedError.
-func (c *Client) Complete(ctx context.Context, rawQuery string) (*Identity, error) {
-	result, err := c.engine.CompleteAuthorization(ctx, client.AuthorizationCallback{RawQuery: rawQuery})
+// identity. state is the value BeginLogin returned, recovered from the
+// browser (e.g. its cookie) — never from the callback itself — so a callback
+// URL delivered to another browser can't complete this login (RFC 9700 §4.7).
+// A callback without a matching state, or a stale one (expired, reloaded or
+// replayed), matches errors.Is(err, ErrLoginExpired); a user-declined or
+// server-denied login is reported as a *DeniedError.
+func (c *Client) Complete(ctx context.Context, rawQuery, state string) (*Identity, error) {
+	handle, err := callbackSession(rawQuery, state)
+	if err != nil {
+		return nil, err
+	}
+	result, err := c.engine.CompleteAuthorization(ctx, client.AuthorizationCallback{RawQuery: rawQuery, Session: handle})
 	if err != nil {
 		return nil, fmt.Errorf("singpass: complete authorization: %w", err)
 	}

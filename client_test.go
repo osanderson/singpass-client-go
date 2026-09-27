@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net"
@@ -54,6 +55,17 @@ func discoveryDoc() map[string]any {
 // and returns an HTTP client that reaches it for testIssuer.
 func fakeIssuer(t *testing.T, doc map[string]any) *http.Client {
 	t.Helper()
+	return fakeIssuerWithPAR(t, doc, func(w http.ResponseWriter, _ *http.Request) {
+		// Accept any pushed authorization request (RFC 9126 §2.2).
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"request_uri":"urn:ietf:params:oauth:request_uri:test","expires_in":60}`))
+	})
+}
+
+// fakeIssuerWithPAR is fakeIssuer with par answering pushed authorization
+// requests.
+func fakeIssuerWithPAR(t *testing.T, doc map[string]any, par http.HandlerFunc) *http.Client {
+	t.Helper()
 	body, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -66,9 +78,7 @@ func fakeIssuer(t *testing.T, doc map[string]any) *http.Client {
 		case "/jwks":
 			_, _ = w.Write([]byte(`{"keys":[]}`))
 		case "/par":
-			// Accept any pushed authorization request (RFC 9126 §2.2).
-			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"request_uri":"urn:ietf:params:oauth:request_uri:test","expires_in":60}`))
+			par(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -375,8 +385,10 @@ func TestCompleteStaleStateIsLoginExpired(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	q := url.Values{"state": {"never-issued"}, "code": {"x"}, "iss": {testIssuer}}
-	_, err = c.Complete(context.Background(), q.Encode())
+	// A well-formed state that was never issued: the session store reports it.
+	state := base64.RawURLEncoding.EncodeToString(make([]byte, 32))
+	q := url.Values{"state": {state}, "code": {"x"}, "iss": {testIssuer}}
+	_, err = c.Complete(context.Background(), q.Encode(), state)
 	if !errors.Is(err, ErrLoginExpired) {
 		t.Fatalf("Complete err = %v, want ErrLoginExpired", err)
 	}

@@ -39,7 +39,8 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
     SigningKey:  signer, SigningKID: "myinfo-sig-2026",
     EncryptionAgreer: agreer, // HSM/KMS ECDH; or EncryptionKey + EncryptionKID
 }, singpass.Dependencies{
-    Sessions: durableStore, // required under AssuranceProduction; see §3
+    Sessions:   durableStore,                       // required under AssuranceProduction; see §3
+    KeyCustody: singpass.KeyCustody{Durable: true}, // required too: your keys survive a restart
 })
 ```
 
@@ -47,6 +48,17 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
       (`https://id.singpass.gov.sg/fapi`, or `https://id.corppass.gov.sg` for
       Myinfo Business) and, unless you set `Dependencies.Assurance` yourself,
       `AssuranceProduction`.
+- [ ] **Declare your keys durable: `Dependencies.KeyCustody`.** Production
+      assurance requires `KeyCustody{Durable: true}` — a statement that the
+      keys survive a restart: loaded from a file or secret store, or held in an
+      HSM or KMS (they must, once Singpass has your JWKS). Keys you build with
+      FAPIgo directly declare it with `keys.DeclareCustody` instead.
+- [ ] **Leave `Dependencies.Random` unset.** Production assurance requires
+      `crypto/rand.Reader`, the default.
+- [ ] **Retry temporary failures:** `Dependencies.BeginLoginRetries: 3` retries
+      `BeginLogin` with backoff on `server_error`, `temporarily_unavailable`
+      and `upstream_dependency_error`, as Singpass allows. A failed `Complete`
+      can't be retried: restart the login.
 - [ ] **`Dependencies.Debug` off.** It logs the client assertion.
 - [ ] **`Dependencies.AllowLoopbackHTTP` off.** It's refused under
       `AssuranceProduction` anyway.

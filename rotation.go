@@ -62,7 +62,7 @@ func NewRotatingKeyManager(sig crypto.Signer, sigKID string, published ...Publis
 		seen[p.KID] = true
 		infos = append(infos, keys.PublicKeyInfo{KeyID: p.KID, PublicKey: p.Key})
 	}
-	return rotatingKeyManager{KeyManager: km, published: infos}, nil
+	return &rotatingKeyManager{KeyManager: km.(*rotatingKeyManager).KeyManager, published: infos}, nil
 }
 
 // rotatingKeyManager signs with its KeyManager's key and, through FAPIgo's
@@ -70,9 +70,13 @@ func NewRotatingKeyManager(sig crypto.Signer, sigKID string, published ...Publis
 type rotatingKeyManager struct {
 	keys.KeyManager
 	published []keys.PublicKeyInfo
+	custody   keys.KeyCustody // declared through Dependencies.KeyCustody
 }
 
-func (m rotatingKeyManager) PublicKeys(ctx context.Context, purpose keys.SigningPurpose, alg fapi.SignatureAlgorithm) (keys.SigningKeySet, error) {
+// KeyCustody implements keys.KeyCustodyAssurance.
+func (m *rotatingKeyManager) KeyCustody() keys.KeyCustody { return m.custody }
+
+func (m *rotatingKeyManager) PublicKeys(ctx context.Context, purpose keys.SigningPurpose, alg fapi.SignatureAlgorithm) (keys.SigningKeySet, error) {
 	current, err := m.PublicKey(ctx, purpose, alg)
 	if err != nil {
 		return keys.SigningKeySet{}, err
@@ -147,6 +151,38 @@ type rotatingDecrypter struct {
 	current   keys.ECDHAgreer
 	byKID     map[string]keys.ECDHAgreer
 	published []keys.ECDHAgreer
+	custody   keys.KeyCustody // declared through Dependencies.KeyCustody
+}
+
+// KeyCustody implements keys.KeyCustodyAssurance.
+func (d *rotatingDecrypter) KeyCustody() keys.KeyCustody { return d.custody }
+
+// withKeyCustody returns deps with c declared on the Keys and Decryption this
+// package built, which are the only ones it can vouch for; a KeyManager or
+// Decrypter built elsewhere declares its own custody (keys.DeclareCustody).
+func withKeyCustody(deps Dependencies, c KeyCustody) Dependencies {
+	if km, ok := deps.Keys.(*rotatingKeyManager); ok {
+		cp := *km
+		cp.custody = c
+		deps.Keys = &cp
+	}
+	if d, ok := deps.Decryption.(*rotatingDecrypter); ok {
+		cp := *d
+		cp.custody = c
+		deps.Decryption = &cp
+	}
+	return deps
+}
+
+// checkKeyCustody explains a missing custody declaration under production
+// assurance, where FAPIgo requires durable keys.
+func checkKeyCustody(deps Dependencies) error {
+	for name, v := range map[string]any{"signing": deps.Keys, "encryption": deps.Decryption} {
+		if a, ok := v.(keys.KeyCustodyAssurance); ok && !a.KeyCustody().Durable {
+			return fmt.Errorf("singpass: production assurance needs durable %s keys: once your keys survive a restart (loaded from a file or secret store, or held in an HSM or KMS), set Dependencies.KeyCustody = singpass.KeyCustody{Durable: true}", name)
+		}
+	}
+	return nil
 }
 
 // kidAgreer routes the ECDH step to the key the JWE "kid" names.
