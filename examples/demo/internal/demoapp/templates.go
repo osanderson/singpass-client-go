@@ -154,6 +154,7 @@ var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
 </style>
 </head>
 <body>
+<main>
 <h1>singpass-client-go demo</h1>
 <p class="intro">A demo of <a href="` + RepoURL + `"><strong>singpass-client-go</strong></a>, an open-source Go library for
 integrating Singpass Login, Myinfo and Myinfo Business. Log in below to see what the library returns:
@@ -166,6 +167,7 @@ servers (<code>singpasstest</code>) with test personas — no real accounts or p
 <ul>
 {{range .Apps}}<li><a class="btn" href="/{{.Name}}/login">Sign in with {{.Title}}</a></li>{{end}}
 </ul>
+</main>
 ` + footerHTML + `
 </body>
 </html>`))
@@ -182,18 +184,21 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
   h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
   h3 { font-size: .95rem; margin: 1.5rem 0 .4rem; }
   h3:first-of-type { margin-top: .5rem; }
-  h4 { font-size: .82rem; text-transform: uppercase; letter-spacing: .03em; color: #777; margin: 1.1rem 0 .35rem; }
+  h4 { font-size: .82rem; text-transform: uppercase; letter-spacing: .03em; color: #666; margin: 1.1rem 0 .35rem; }
   h4.group { font-size: .9rem; text-transform: none; letter-spacing: 0; color: #1a1a1a; font-weight: 600; margin: 1.3rem 0 .35rem; }
   .group + dl, h4.group + dl { margin-left: .5rem; }
   .card { border: 1px solid #e5e5e5; border-radius: .6rem; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
   .card > h2 { color: #d1350f; }
-  .note { color: #888; font-size: .8rem; font-weight: 400; }
+  .note { color: #666; font-size: .8rem; font-weight: 400; }
+  .empty { color: #666; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 0; }
   dt { font-weight: 600; }
   dd { margin: 0; }
   code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
   pre { background: #f5f5f5; border: 1px solid #ddd; border-radius: .4rem; padding: 1rem; overflow-x: auto; font-size: .8rem; }
-  table { border-collapse: collapse; width: 100%; font-size: .82rem; display: block; overflow-x: auto; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .82rem; }
   th, td { border: 1px solid #e6e6e6; padding: .35rem .6rem; text-align: left; vertical-align: top; white-space: nowrap; }
   th { background: #faf3f1; font-weight: 600; }
   tbody tr:nth-child(even) { background: #fafafa; }
@@ -201,11 +206,11 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
   .lock { font-size: .75rem; cursor: help; }
   .chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
   .chip { background: #f1f1f1; border-radius: 1rem; padding: .15rem .6rem; font-size: .75rem; font-family: ui-monospace, monospace; }
-  .badge { font-size: .7rem; font-weight: 500; background: #f1f1f1; color: #777; border: 1px solid #e0e0e0; border-radius: 1rem; padding: .1rem .55rem; vertical-align: middle; }
+  .badge { font-size: .7rem; font-weight: 500; background: #f1f1f1; color: #5f5f5f; border: 1px solid #e0e0e0; border-radius: 1rem; padding: .1rem .55rem; vertical-align: middle; }
   .badge.gov { background: #eef7ee; color: #2f7d32; border-color: #cfe6cf; }
   .badge.userv { background: #e9f2fb; color: #1565a7; border-color: #c5dcf2; }
-  .badge.user { background: #fdf4e3; color: #a5680a; border-color: #f0dcb0; }
-  .badge.na { background: #f1f1f1; color: #777; border-color: #e0e0e0; }
+  .badge.user { background: #fdf4e3; color: #8a5608; border-color: #f0dcb0; }
+  .badge.na { background: #f1f1f1; color: #5f5f5f; border-color: #e0e0e0; }
   details { margin-top: 1.1rem; }
   summary { cursor: pointer; color: #666; font-size: .85rem; }
   a { color: #d1350f; }
@@ -223,6 +228,7 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 </style>
 </head>
 <body>
+<main>
 <p class="brand"><a href="` + RepoURL + `">singpass-client-go</a> demo{{if .Mock}} · mock mode (test persona){{end}}</p>
 <h1>Signed in via {{.Title}}</h1>
 <dl>
@@ -236,35 +242,36 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 <section class="card">
 <h2>id_token <span class="note">interpreted from the validated claims</span></h2>
 {{if .TokenHighlights}}<dl>
-{{range .TokenHighlights}}  <dt>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<em style="color:#999">—</em>{{end}}{{if .Note}} <span class="note">{{.Note}}</span>{{end}}</dd>
+{{range .TokenHighlights}}  <dt>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}{{if .Note}} <span class="note">{{.Note}}</span>{{end}}</dd>
 {{end}}</dl>{{end}}
 <details><summary>Raw id_token claims (JSON)</summary><pre>{{.ClaimsPre}}</pre></details>
 </section>
 
 {{if or .Sections .PersonInfoPre}}<section class="card">
 <h2>Person data <span class="note">read via the myinfo.Response accessor{{if .Blocks}} · blocks: {{.Blocks}}{{end}}</span></h2>
-{{if .Sections}}<div class="legend"><span class="badge gov">government-verified</span> <span class="badge userv">user-provided (verified)</span> <span class="badge user">user-provided</span> <span class="badge na">not-applicable</span> <span class="legkey"><span class="lock">🔒</span> confidential</span></div>{{end}}
+{{if .Sections}}<div class="legend"><span class="badge gov">government-verified</span> <span class="badge userv">user-provided (verified)</span> <span class="badge user">user-provided</span> <span class="badge na">not-applicable</span> <span class="legkey"><span class="lock" aria-hidden="true">🔒</span> confidential</span></div>{{end}}
 {{if gt (len .Sections) 1}}<nav class="toc"><span>Jump to:</span> {{range .Sections}}<a href="#{{.Anchor}}">{{.Title}}</a>{{end}}</nav>{{end}}
 {{range .Sections}}<h3 id="{{.Anchor}}">{{.Title}}{{if .Badge}} <span class="badge {{.BadgeKind}}">{{.Badge}}</span>{{end}}</h3>
 {{if .Rows}}<dl>
-{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<em style="color:#999">—</em>{{end}}{{if .Confidential}} <span class="lock" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}</dd>
+{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}</dd>
 {{end}}</dl>{{end}}
-{{range .Groups}}<h4 class="group"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Title}}{{if .Confidential}} <span class="lock" title="Confidential">🔒</span>{{end}}{{if .Badge}} <span class="badge {{.BadgeKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Badge}}</span>{{end}}</h4>
+{{range .Groups}}<h4 class="group"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Title}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Badge}} <span class="badge {{.BadgeKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Badge}}</span>{{end}}</h4>
 {{if .Rows}}<dl>
-{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<em style="color:#999">—</em>{{end}}{{if .Confidential}} <span class="lock" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}</dd>
+{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}</dd>
 {{end}}</dl>{{end}}
 {{range .Tables}}<h4>{{.Title}}{{if .Badge}} <span class="badge {{.BadgeKind}}">{{.Badge}}</span>{{end}}</h4>
-<table><thead><tr>{{range .Columns}}<th>{{.}}</th>{{end}}</tr></thead>
-<tbody>{{range .Rows}}<tr>{{range .Cells}}<td>{{if .}}{{.}}{{else}}<span style="color:#ccc">—</span>{{end}}</td>{{end}}</tr>{{end}}</tbody></table>
+<div class="tablewrap"><table><thead><tr>{{range .Columns}}<th scope="col">{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr>{{range .Cells}}<td>{{if .}}{{.}}{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}</td>{{end}}</tr>{{end}}</tbody></table></div>
 {{end}}{{end}}
 {{range .Tables}}<h4>{{.Title}}{{if .Badge}} <span class="badge {{.BadgeKind}}">{{.Badge}}</span>{{end}}</h4>
-<table><thead><tr>{{range .Columns}}<th>{{.}}</th>{{end}}</tr></thead>
-<tbody>{{range .Rows}}<tr>{{range .Cells}}<td>{{if .}}{{.}}{{else}}<span style="color:#ccc">—</span>{{end}}</td>{{end}}</tr>{{end}}</tbody></table>
+<div class="tablewrap"><table><thead><tr>{{range .Columns}}<th scope="col">{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr>{{range .Cells}}<td>{{if .}}{{.}}{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}</td>{{end}}</tr>{{end}}</tbody></table></div>
 {{end}}{{end}}
 {{if .PersonInfoPre}}<details><summary>Raw /userinfo response (JSON)</summary><pre>{{.PersonInfoPre}}</pre></details>{{end}}
 </section>{{end}}
 
 <form method="post" action="/{{.App}}/logout"><button class="btn" type="submit">Log out</button></form>
+</main>
 ` + footerHTML + `
 </body>
 </html>`))

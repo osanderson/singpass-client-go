@@ -49,3 +49,26 @@ func TestHomeDescribesTheMode(t *testing.T) {
 		t.Error("profile page doesn't flag mock mode")
 	}
 }
+
+// TestProfileAccessibilityMarkup checks the screen-reader affordances: a
+// labelled lock, empty values read as "no value", and column headers scoped.
+func TestProfileAccessibilityMarkup(t *testing.T) {
+	rec := httptest.NewRecorder()
+	RenderProfile(rec, ProfileData{App: "mi", Title: "Myinfo", Sections: []Section{{
+		Title: "Person",
+		Rows:  []Highlight{{Label: "Name", Value: "TAN", Confidential: true}, {Label: "Email"}},
+		Tables: []Table{{Title: "Vehicles", Columns: []string{"Make", "Model"},
+			Rows: []TableRow{{Cells: []string{"TOYOTA", ""}}}}},
+	}}})
+	body := rec.Body.String()
+	for _, want := range []string{
+		`role="img" aria-label="Confidential"`,
+		`<span class="sr-only">no value</span>`,
+		`<th scope="col">Make</th>`,
+		`<div class="tablewrap"><table>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("profile page lacks %q", want)
+		}
+	}
+}
