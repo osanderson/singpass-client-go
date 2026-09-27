@@ -12,11 +12,15 @@
 // client_id. New is the lower-level constructor for full control or a
 // non-standard product.
 //
+// A login is BeginLogin, which returns the redirect URL and the login's state
+// to keep with the browser, then Complete at the callback, given that state.
+//
 // The defaults target staging. Set Environment: Production in the product
 // options for the production issuers and AssuranceProduction, which requires a
-// durable Dependencies.Sessions store (see the sqlstore package). A stale or
-// replayed login is reported as ErrLoginExpired and a cancelled or denied one
-// as *DeniedError.
+// durable Dependencies.Sessions store (see the sqlstore package) and durable
+// keys (Dependencies.KeyCustody). A stale or replayed login is reported as
+// ErrLoginExpired and a cancelled or denied one as *DeniedError; ErrorCode and
+// IsTemporary read the error Singpass or Corppass sent.
 package singpass
 
 import (

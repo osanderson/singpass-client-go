@@ -31,8 +31,9 @@ Singpass pieces.
   server in-process for integration tests, and the demo runs against it with
   one environment variable.
 - **Production pieces included** — `Environment: singpass.Production`, durable
-  session stores (`sqlstore`), browser security headers (`web.SecureHeaders`)
-  and a key generator (`singpass-keygen`).
+  session stores (`sqlstore`), key rotation without downtime, a published-JWKS
+  check, retries for temporary Singpass errors, browser security headers
+  (`web.SecureHeaders`) and a key generator (`singpass-keygen`).
 
 **Try it now**, no Singpass account or onboarding needed:
 
@@ -124,8 +125,8 @@ singpass-keygen -dir keys/login -sig-kid login-sig-1 -enc-kid login-enc-1 -check
 
 From a running app, `client.CheckPublishedJWKS(ctx, url)` does the same, e.g.
 as a readiness check. The constructors also check your options up front:
-a missing `openid` scope, a malformed or non-https redirect URI and an empty
-key ID fail at startup, with an error naming the option, rather than at
+a missing `openid` scope, a malformed, non-https or IP-address redirect URI and
+an empty key ID fail at startup, with an error naming the option, rather than at
 Singpass.
 
 ## Test accounts
@@ -210,7 +211,8 @@ The defaults target **staging**. For production, set
 production issuer and production assurance, under which the in-memory session
 store is refused, so supply a durable `Dependencies.Sessions` — `sqlstore`
 provides one (and the `web` helper's login sessions) on Postgres, MySQL or
-SQLite. Work through the [go-live checklist](docs/production.md), which also
+SQLite — and declare durable keys with
+`Dependencies.KeyCustody: singpass.KeyCustody{Durable: true}`. Work through the [go-live checklist](docs/production.md), which also
 covers [rotating keys](docs/production.md#7-rotating-keys) without downtime.
 
 ## Documentation
@@ -222,7 +224,7 @@ covers [rotating keys](docs/production.md#7-rotating-keys) without downtime.
 - [Going to production](docs/production.md) — the go-live checklist
 - [How it works](docs/architecture.md) — what Singpass needs and where each piece is handled
 - [Singpass quirks](docs/singpass-quirks.md) and [Corppass quirks](docs/corppass-quirks.md) — non-obvious server behaviour
-- [Examples](examples) — [`minimal`](examples/minimal) (one product, ~70 lines) and [`demo`](examples/demo) (all three, [live on staging](https://rp-demo-1090410730433.asia-southeast1.run.app))
+- [Examples](examples) — [`minimal`](examples/minimal) (one product, ~75 lines) and [`demo`](examples/demo) (all three, [live on staging](https://rp-demo-1090410730433.asia-southeast1.run.app))
 
 ## Stability
 

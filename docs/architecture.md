@@ -45,16 +45,27 @@ few places, all handled inside FAPIgo with small hooks this library supplies:
 2. **Encrypted `id_token` (inbound) — driven by FAPIgo.** Singpass returns a JWE
    wrapping a JWS (`ECDH-ES+A256KW` + `A256CBC-HS512`). This library declares those
    algorithms and provides a `keys.Decrypter` built from FAPIgo's
-   `keys.NewSingleKeyDecrypter` / `keys.NewInMemoryECDH` ([`keys.go`](../keys.go)).
+   `keys.NewSingleKeyDecrypter` / `keys.NewInMemoryECDH`, which picks the
+   decryption key by the JWE `kid` so several keys can be held during a
+   rotation ([`keys.go`](../keys.go), [`rotation.go`](../rotation.go)).
    FAPIgo parses the compact JWE, delegates only the ECDH primitive to that
    decrypter to recover the content-encryption key, decrypts the payload, checks
    `cty=JWT`, and verifies the inner JWS itself. Declaring the algorithms also
    enables FAPIgo's **downgrade protection**: a plain (unencrypted) `id_token` is
    rejected. The validated claims land on `Identity.Claims`.
 
+3. **Callback bound to the browser (RFC 9700 §4.7).** `BeginLogin` returns the
+   login's state, which the app keeps with the browser (the `web` helper uses a
+   cookie) and passes to `Complete`. `Complete` checks it matches the
+   callback's `state` before FAPIgo consumes the session, so a callback URL
+   delivered to another browser can't complete someone else's login; a
+   mismatch reports `ErrLoginExpired`.
+
 Everything else — PKCE S256, `private_key_jwt`, the token-endpoint DPoP proof,
 `iss` checking (RFC 9207), and the id_token's own signature / iss / aud / nonce /
-exp validation — is FAPIgo's.
+exp validation — is FAPIgo's. When Singpass or Corppass returns an OAuth error,
+FAPIgo carries it on the error (`client.Error.ServerResponse`), which
+`singpass.ServerError`, `ErrorCode` and `IsTemporary` read.
 
 ## Myinfo and `/userinfo`
 
@@ -97,6 +108,13 @@ configuration, encoded in `NewMyinfoBusiness`:
   registered nowhere — sender-constraining and correctly non-persistent. It signs
   the DPoP proof at PAR, the token request and `/userinfo`, so all three match the
   token binding.
+- **Rotation.** Extra signing keys are published through FAPIgo's
+  `keys.RotatingKeyManager` but never used to sign; extra encryption keys are
+  decrypted with by `kid`, and published unless decrypt-only. `Client.PublicJWKS`
+  lists them all ([production.md](production.md#7-rotating-keys)).
+- **Custody.** Under production assurance FAPIgo requires the key manager and
+  decrypter to declare durable custody; `Dependencies.KeyCustody` declares it
+  for the ones this package builds.
 - **JOSE size cap.** FAPIgo bounds the compact JWS/JWE size it will parse. The
   default `RecommendedLimits` raises `MaxJOSECompactBytes` to 256 KiB
   ([`limits.go`](../limits.go)), since a full-scope Myinfo `/userinfo` response runs well past
