@@ -141,3 +141,49 @@ singpass: construct client: client: dependencies: sessions must implement storag
       [CHANGELOG](../CHANGELOG.md) before upgrading: pre-1.0 minor versions may
       change the API. Security fixes are announced as GitHub security
       advisories.
+
+## 7. Rotating keys
+
+Singpass and Corppass fetch your JWKS and cache it for up to an hour, so a
+rotation publishes the new key first and keeps the old one usable until every
+cache has expired. The steps below follow their documented procedures
+([Singpass](https://docs.developer.singpass.gov.sg/docs/technical-specifications/technical-concepts/json-web-key-sets-jwks),
+[Corppass](https://docs.corppass.gov.sg/technical-specifications/technical-concepts/client-jwks)).
+Rehearse on staging first, and run `client.CheckPublishedJWKS` (or
+`singpass-keygen -check`) after each deploy.
+
+**Signing key** (S1 → S2): publish S2, wait, then sign with it.
+
+1. Deploy with S2 published but not used to sign:
+
+   ```go
+   SigningKey: s1, SigningKID: "sig-1",
+   AdditionalSigningKeys: []singpass.PublishedKey{{Key: &s2.PublicKey, KID: "sig-2"}},
+   ```
+
+2. Wait at least an hour, so Singpass has fetched S2.
+3. Deploy with `SigningKey: s2, SigningKID: "sig-2"` and no additional keys.
+
+**Encryption key** (E1 → E2): publish E2 in place of E1, and decrypt with both
+until Singpass has stopped using E1. Tokens carry the key's `kid` in their JWE
+header, and the client decrypts with the key it names.
+
+1. Deploy with E2 as the current, published key, and E1 kept for decryption
+   only:
+
+   ```go
+   EncryptionKey: e2, EncryptionKID: "enc-2",
+   AdditionalEncryptionKeys: []singpass.DecryptionKey{
+       {Key: e1, KID: "enc-1", DecryptOnly: true},
+   },
+   ```
+
+2. Wait at least an hour: tokens may arrive encrypted to either key meanwhile.
+3. Deploy without E1.
+
+Every key needs a new `kid`. With HSM/KMS keys, use `PublishedKey` with the
+key's public half, and `DecryptionKey.Agreer` in place of `Key`; if you inject
+`Dependencies.Keys` or `Dependencies.Decryption` yourself, build them with
+`singpass.NewRotatingKeyManager` and `singpass.NewRotatingDecrypter`. For a JWKS
+published as a static file, `singpass.OfflineJWKS` builds it from the public
+keys, listing every published key.

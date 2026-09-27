@@ -99,6 +99,11 @@ After publishing the JWKS at the URL registered in the portal, check it with
 key and use, and that no private key material is exposed. Extra keys, such as
 an outgoing key during a rotation, are allowed.
 
+To rotate keys without downtime, the product options take extra keys:
+`AdditionalSigningKeys` (published, never used to sign) and
+`AdditionalEncryptionKeys` (decrypted with, and published unless
+`DecryptOnly`). The steps are in [production.md](production.md#7-rotating-keys).
+
 ```go
 // Reuses keys/login/{sig,enc}.pem, or creates them (owner-only, never overwriting).
 sig, _, _ := keyfile.LoadOrGenerate("keys/login/sig.pem")

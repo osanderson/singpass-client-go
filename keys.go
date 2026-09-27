@@ -143,15 +143,41 @@ func OfflineClientJWKS(ctx context.Context, sigKey *ecdsa.PublicKey, sigKID stri
 	if sigKey == nil || encKey == nil {
 		return nil, errors.New("singpass: OfflineClientJWKS needs both public keys")
 	}
-	km, err := NewKeyManager(publicOnlySigner{sigKey}, sigKID)
+	return OfflineJWKS(ctx, []PublishedKey{{Key: sigKey, KID: sigKID}}, []PublishedKey{{Key: encKey, KID: encKID}})
+}
+
+// OfflineJWKS is OfflineClientJWKS for any number of keys, e.g. to publish a
+// static JWKS during a key rotation (see docs/production.md): every signing
+// and encryption key is published under its kid, and the result equals
+// Client.PublicJWKS for a client holding those keys, with the first of each
+// list as the current key.
+func OfflineJWKS(ctx context.Context, signing, encryption []PublishedKey) ([]byte, error) {
+	if len(signing) == 0 || len(encryption) == 0 {
+		return nil, errors.New("singpass: OfflineJWKS needs at least one signing and one encryption key")
+	}
+	if signing[0].Key == nil {
+		return nil, fmt.Errorf("singpass: signing key %q has no public key", signing[0].KID)
+	}
+	km, err := NewRotatingKeyManager(publicOnlySigner{signing[0].Key}, signing[0].KID, signing[1:]...)
 	if err != nil {
 		return nil, err
 	}
-	encPub, err := encKey.ECDH()
-	if err != nil {
-		return nil, err
+	agreers := make([]keys.ECDHAgreer, len(encryption))
+	for i, e := range encryption {
+		if e.Key == nil {
+			return nil, fmt.Errorf("singpass: encryption key %q has no public key", e.KID)
+		}
+		pub, err := e.Key.ECDH()
+		if err != nil {
+			return nil, fmt.Errorf("singpass: encryption key %q: %w", e.KID, err)
+		}
+		agreers[i] = publicOnlyAgreer{kid: e.KID, pub: pub}
 	}
-	decrypter, err := NewAgreerDecrypter(publicOnlyAgreer{kid: encKID, pub: encPub})
+	others := make([]DecryptionKey, 0, len(agreers)-1)
+	for _, a := range agreers[1:] {
+		others = append(others, DecryptionKey{Agreer: a})
+	}
+	decrypter, err := NewRotatingDecrypter(ctx, agreers[0], others...)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +189,11 @@ func OfflineClientJWKS(ctx context.Context, sigKey *ecdsa.PublicKey, sigKID stri
 	if err != nil {
 		return nil, err
 	}
+	extra, err := publishedEncryptionKeys(ctx, decrypter, fapi.ECDHESA256KW)
+	if err != nil {
+		return nil, err
+	}
+	set.Keys = appendNewKIDs(set.Keys, extra)
 	return json.MarshalIndent(set, "", "  ")
 }
 

@@ -8,10 +8,16 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
-// maxJWKSBytes bounds the JWKS CheckPublishedJWKS reads.
-const maxJWKSBytes = 1 << 20
+const (
+	// maxJWKSBytes bounds the JWKS CheckPublishedJWKS reads.
+	maxJWKSBytes = 1 << 20
+	// maxJWKSResponseTime is how quickly Singpass and Corppass require a
+	// client's JWKS endpoint to respond.
+	maxJWKSResponseTime = 3 * time.Second
+)
 
 // CheckPublishedJWKS fetches the JWKS at jwksURL — the JWKS URL registered for
 // this client in the Singpass or Corppass developer portal — and checks that it
@@ -19,8 +25,9 @@ const maxJWKSBytes = 1 << 20
 // its kid, with the same public key and use, and no private key material. A
 // mismatch there is the usual cause of an "invalid_client" error at login, so
 // run it after deploying or rotating keys, e.g. as a startup or readiness
-// check. It returns nil when the published set is correct, or an error
-// naming each problem. Extra published keys, such as an outgoing key during a
+// check. It also checks the endpoint answers within the 3 seconds Singpass
+// and Corppass allow, without a redirect. It returns nil when the published
+// set is correct, or an error naming each problem. Extra published keys, such as an outgoing key during a
 // rotation, are allowed.
 func (c *Client) CheckPublishedJWKS(ctx context.Context, jwksURL string) error {
 	want, err := c.PublicJWKS(ctx)
@@ -66,11 +73,18 @@ func fetchJWKS(ctx context.Context, hc *http.Client, jwksURL string) (jwkSet, er
 		return jwkSet{}, fmt.Errorf("singpass: fetch JWKS: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := hc.Do(req)
+	// Report a redirect rather than follow it: Corppass doesn't follow them.
+	noRedirects := *hc
+	noRedirects.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	start := time.Now()
+	resp, err := noRedirects.Do(req)
 	if err != nil {
 		return jwkSet{}, fmt.Errorf("singpass: fetch JWKS from %s: %w", jwksURL, err)
 	}
 	defer resp.Body.Close()
+	if loc := resp.Header.Get("Location"); resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return jwkSet{}, fmt.Errorf("singpass: %s redirects (HTTP %d to %q): register the final URL, as Corppass doesn't follow redirects", jwksURL, resp.StatusCode, loc)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return jwkSet{}, fmt.Errorf("singpass: fetch JWKS from %s: HTTP %d", jwksURL, resp.StatusCode)
 	}
@@ -80,6 +94,9 @@ func fetchJWKS(ctx context.Context, hc *http.Client, jwksURL string) (jwkSet, er
 	}
 	if len(body) > maxJWKSBytes {
 		return jwkSet{}, fmt.Errorf("singpass: JWKS at %s is larger than %d bytes", jwksURL, maxJWKSBytes)
+	}
+	if took := time.Since(start); took > maxJWKSResponseTime {
+		return jwkSet{}, fmt.Errorf("singpass: %s took %s to respond: Singpass and Corppass need it within %s, or logins fail", jwksURL, took.Round(time.Millisecond), maxJWKSResponseTime)
 	}
 	var set jwkSet
 	if err := json.Unmarshal(body, &set); err != nil || set.Keys == nil {
