@@ -18,6 +18,9 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 		"http redirect":        {func(o *Options) { o.RedirectURI = "http://rp.example/callback" }, false, []string{"must use https"}},
 		"fragment":             {func(o *Options) { o.RedirectURI = "https://rp.example/callback#x" }, false, []string{"fragment"}},
 		"loopback, production": {func(o *Options) { o.RedirectURI = "http://localhost:8080/callback" }, true, []string{"production redirect URIs must use https"}},
+		"loopback IP":          {func(o *Options) { o.RedirectURI = "http://127.0.0.1:8080/callback" }, false, []string{"IP address"}},
+		"IPv6 loopback":        {func(o *Options) { o.RedirectURI = "http://[::1]:8080/callback" }, false, []string{"IP address"}},
+		"https IP":             {func(o *Options) { o.RedirectURI = "https://203.0.113.10/callback" }, false, []string{"IP address"}},
 		"no scopes":            {func(o *Options) { o.Scopes = nil }, false, []string{"no Scopes"}},
 		"no openid":            {func(o *Options) { o.Scopes = []string{"name"} }, false, []string{`"openid" is missing from Scopes`}},
 		"joined scopes":        {func(o *Options) { o.Scopes = []string{"openid name"} }, false, []string{"contains whitespace", `"openid" is missing from Scopes`}},
@@ -50,8 +53,6 @@ func TestValidateOptionsAccepts(t *testing.T) {
 		"https://rp.example/callback",
 		"https://rp.example:8443/cb?app=login",
 		"http://localhost:8080/callback",
-		"http://127.0.0.1/callback",
-		"http://[::1]:8080/callback",
 	} {
 		o := baseOptions()
 		o.RedirectURI = uri

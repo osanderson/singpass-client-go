@@ -32,8 +32,9 @@ func validateOptions(opts Options, production bool) error {
 }
 
 // validateRedirectURI checks the redirect URI is one Singpass can register
-// and redirect to: absolute, without a fragment, and https — or http on a
-// loopback host for local development, which Singpass staging allows.
+// and redirect to: absolute, without a fragment, with a host name rather than
+// an IP address (the developer portal refuses those), and https — or
+// http://localhost for local development, which Singpass staging allows.
 func validateRedirectURI(raw string, production bool) error {
 	if raw == "" {
 		return errors.New("RedirectURI is required: use the redirect URI registered in the developer portal")
@@ -47,15 +48,17 @@ func validateRedirectURI(raw string, production bool) error {
 		return fmt.Errorf("RedirectURI %q must be an absolute URL, e.g. https://app.example.com/callback", raw)
 	case u.Fragment != "" || strings.Contains(raw, "#"):
 		return fmt.Errorf("RedirectURI %q must not contain a fragment (#…)", raw)
+	case net.ParseIP(u.Hostname()) != nil:
+		return fmt.Errorf("RedirectURI %q uses an IP address, which the developer portal doesn't accept: use a host name (localhost for local development)", raw)
 	case u.Scheme == "https":
 		return nil
-	case u.Scheme == "http" && isLoopback(u.Hostname()):
+	case u.Scheme == "http" && strings.EqualFold(u.Hostname(), "localhost"):
 		if production {
 			return fmt.Errorf("RedirectURI %q uses http: production redirect URIs must use https", raw)
 		}
 		return nil
 	case u.Scheme == "http":
-		return fmt.Errorf("RedirectURI %q must use https (http is only accepted for localhost, in development)", raw)
+		return fmt.Errorf("RedirectURI %q must use https (http is only accepted for localhost, on staging)", raw)
 	default:
 		return fmt.Errorf("RedirectURI %q must use https", raw)
 	}

@@ -34,10 +34,10 @@ The constructors check the options before contacting the issuer, and report
 every problem at once, each naming the option to fix:
 
 - `ClientID` and `RedirectURI` are required.
-- `RedirectURI` must be an absolute `https` URL without a fragment. Plain
-  `http` is accepted only for a loopback host (`localhost`, `127.0.0.1`,
-  `[::1]`), which Singpass staging allows for local development, and never
-  under `AssuranceProduction`.
+- `RedirectURI` must be an absolute `https` URL without a fragment, with a
+  host name: the developer portal refuses IP addresses. Plain `http` is
+  accepted only for `localhost`, which Singpass allows for staging apps, and
+  never under `AssuranceProduction`.
 - `Scopes` must include `"openid"`, and list each scope once, as its own
   entry (`[]string{"openid", "name"}`, not `[]string{"openid name"}`).
 - The signing and encryption key IDs (`SigningKID`, `EncryptionKID`) must be
