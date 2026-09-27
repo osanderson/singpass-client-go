@@ -63,6 +63,12 @@ func TestAddressLines(t *testing.T) {
 			"type": "SG", "block": v("10"), "street": v("HARBOURFRONT AVENUE"), "building": v("KEPPEL BAY TOWER"),
 			"floor": v("08"), "unit": v("01"), "postal": v("098632"), "country": map[string]any{"code": "SG", "desc": "SINGAPORE"},
 		}, []string{"10 HARBOURFRONT AVENUE", "#08-01 KEPPEL BAY TOWER", "SINGAPORE 098632"}},
+		"one-digit floor padded": {map[string]any{
+			"type": "SG", "block": v("18"), "street": v("HAVELOCK ROAD"), "floor": v("2"), "unit": v("123"), "postal": v("597642"),
+		}, []string{"18 HAVELOCK ROAD", "#02-123", "SINGAPORE 597642"}},
+		"basement floor as sent": {map[string]any{
+			"type": "SG", "block": v("1"), "street": v("RAFFLES PLACE"), "floor": v("B1"), "unit": v("05"), "postal": v("048616"),
+		}, []string{"1 RAFFLES PLACE", "#B1-05", "SINGAPORE 048616"}},
 		"sg landed, no country": {map[string]any{
 			"type": "SG", "block": v("7"), "street": v("JALAN KAYU"), "postal": v("799000"),
 		}, []string{"7 JALAN KAYU", "SINGAPORE 799000"}},
