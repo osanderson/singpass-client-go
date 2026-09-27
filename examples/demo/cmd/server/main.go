@@ -139,6 +139,7 @@ func main() {
 			}
 			if id.Myinfo != nil {
 				pd.Blocks = strings.Join(id.Myinfo.Blocks(), ", ")
+				pd.Summary = summary(id)
 				pd.Sections = myinfoSections(id.Myinfo)
 				pd.PersonInfoPre = demoapp.PrettyJSON(id.Myinfo.Raw())
 			}
