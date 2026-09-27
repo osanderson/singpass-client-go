@@ -1,0 +1,146 @@
+package myinfo
+
+// PersonProfile is a typed view of the common person_info items, so they can
+// be found by name instead of by key. Each item is a Field, keeping its value,
+// code and provenance; an item the response didn't carry — its scope wasn't
+// requested, or Myinfo has no record — is the zero Field (Available false).
+// Anything not modelled here is still reachable through Data.
+//
+// Read coded items (Sex, Race, Nationality, …) with Field.Code for the code
+// and Field.String for its description, and dates (DOB, …) with Field.Date.
+type PersonProfile struct {
+	UINFIN               Field // uinfin: NRIC or FIN
+	Name                 Field // name
+	AliasName            Field // aliasname
+	HanyuPinyinName      Field // hanyupinyinname
+	HanyuPinyinAliasName Field // hanyupinyinaliasname
+	MarriedName          Field // marriedname
+	Sex                  Field // sex (coded)
+	Race                 Field // race (coded)
+	SecondaryRace        Field // secondaryrace (coded)
+	Dialect              Field // dialect (coded)
+	Nationality          Field // nationality (coded)
+	DOB                  Field // dob: date of birth
+	BirthCountry         Field // birthcountry (coded)
+	ResidentialStatus    Field // residentialstatus (coded)
+	Marital              Field // marital: marital status (coded)
+
+	Email    Field   // email
+	MobileNo Phone   // mobileno
+	RegAdd   Address // regadd: registered address
+
+	HousingType Field // housingtype (coded)
+	HDBType     Field // hdbtype (coded)
+
+	PassportNumber     Field // passportnumber
+	PassportExpiryDate Field // passportexpirydate
+	PassType           Field // passtype (coded), for a foreigner
+	PassStatus         Field // passstatus
+	PassExpiryDate     Field // passexpirydate
+
+	Occupation       Field // occupation (coded)
+	EmploymentSector Field // employmentsector
+
+	CPFBalances CPFBalances // cpfbalances
+
+	// Data is the whole person_info block.
+	Data Data
+}
+
+// CPFBalances is the person's CPF account balances; read each with
+// Field.Float.
+type CPFBalances struct {
+	OA Field // oa: Ordinary Account
+	SA Field // sa: Special Account
+	MA Field // ma: MediSave Account
+	RA Field // ra: Retirement Account
+
+	// Data is the cpfbalances object, for its provenance.
+	Data Data
+}
+
+// PersonProfile returns the typed view of the person_info block — Singpass
+// Myinfo's person, or the logged-in person on Myinfo Business. It is safe on a
+// nil Response or a response without person data: every item is then empty.
+func (m *Response) PersonProfile() PersonProfile {
+	var p Data
+	if m != nil {
+		p = m.Person
+	}
+	cpf := p.Object("cpfbalances")
+	return PersonProfile{
+		UINFIN:               p.Field("uinfin"),
+		Name:                 p.Field("name"),
+		AliasName:            p.Field("aliasname"),
+		HanyuPinyinName:      p.Field("hanyupinyinname"),
+		HanyuPinyinAliasName: p.Field("hanyupinyinaliasname"),
+		MarriedName:          p.Field("marriedname"),
+		Sex:                  p.Field("sex"),
+		Race:                 p.Field("race"),
+		SecondaryRace:        p.Field("secondaryrace"),
+		Dialect:              p.Field("dialect"),
+		Nationality:          p.Field("nationality"),
+		DOB:                  p.Field("dob"),
+		BirthCountry:         p.Field("birthcountry"),
+		ResidentialStatus:    p.Field("residentialstatus"),
+		Marital:              p.Field("marital"),
+		Email:                p.Field("email"),
+		MobileNo:             p.Phone("mobileno"),
+		RegAdd:               p.Address("regadd"),
+		HousingType:          p.Field("housingtype"),
+		HDBType:              p.Field("hdbtype"),
+		PassportNumber:       p.Field("passportnumber"),
+		PassportExpiryDate:   p.Field("passportexpirydate"),
+		PassType:             p.Field("passtype"),
+		PassStatus:           p.Field("passstatus"),
+		PassExpiryDate:       p.Field("passexpirydate"),
+		Occupation:           p.Field("occupation"),
+		EmploymentSector:     p.Field("employmentsector"),
+		CPFBalances: CPFBalances{
+			OA: cpf.Field("oa"), SA: cpf.Field("sa"), MA: cpf.Field("ma"), RA: cpf.Field("ra"),
+			Data: cpf,
+		},
+		Data: p,
+	}
+}
+
+// EntityProfile is a typed view of a Myinfo Business entity_info block: the
+// basic profile items, the address and the appointment and shareholder
+// records. The entity's registration number (UEN) is also in the id_token —
+// Identity.SubjectAttributes().EntityRegNumber. Anything not modelled here is
+// reachable through BasicProfile and Data.
+type EntityProfile struct {
+	Name        Field   // basic_profile.name
+	CompanyType Field   // basic_profile.company_type (coded)
+	UENStatus   Field   // basic_profile.uen_status (coded)
+	Address     Address // address
+
+	Appointments []Appointment // appointments
+	Shareholders []Shareholder // shareholders
+
+	// BasicProfile is the basic_profile object, and Data the whole
+	// entity_info block.
+	BasicProfile Data
+	Data         Data
+}
+
+// EntityProfile returns the typed view of the entity_info block. It is safe
+// on a nil Response or a response without entity data: every item is then
+// empty.
+func (m *Response) EntityProfile() EntityProfile {
+	var e Data
+	if m != nil {
+		e = m.Entity
+	}
+	bp := e.Object("basic_profile")
+	return EntityProfile{
+		Name:         bp.Field("name"),
+		CompanyType:  bp.Field("company_type"),
+		UENStatus:    bp.Field("uen_status"),
+		Address:      e.Address("address"),
+		Appointments: e.Appointments(),
+		Shareholders: e.Shareholders(),
+		BasicProfile: bp,
+		Data:         e,
+	}
+}
