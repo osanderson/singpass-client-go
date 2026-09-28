@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/osanderson/singpass-client-go/compare/v0.9.1...v0.9.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* **deps:** update FAPIgo to v0.39.0 ([#54](https://github.com/osanderson/singpass-client-go/issues/54)) ([8a9363e](https://github.com/osanderson/singpass-client-go/commit/8a9363e620f18f686a7b0e48c50b1ac0b27ca860))
+
 ## [0.9.1](https://github.com/osanderson/singpass-client-go/compare/v0.9.0...v0.9.1) (2026-09-27)
 
 
