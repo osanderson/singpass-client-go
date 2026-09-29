@@ -76,9 +76,10 @@ func serve(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
 	case <-ctx.Done():
 	}
 	// Cloud Run allows 10s between SIGTERM and SIGKILL; let in-flight
-	// callbacks finish within that.
+	// callbacks finish within that. ctx is already cancelled, so the
+	// shutdown gets its own deadline, keeping ctx's values.
 	logger.Info("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
 }
@@ -97,7 +98,9 @@ func newApp(ctx context.Context, cfg *config.Config, logger *slog.Logger) (http.
 		Debug:       cfg.Debug,
 		Logger:      logger,
 	}
-	closeApp := func() {}
+	closeApp := func() {
+		// Nothing to release unless mock mode starts the fake servers.
+	}
 	if cfg.Mock {
 		closeMock, err := startMock(cfg, logger)
 		if err != nil {
