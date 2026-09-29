@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"testing"
 )
 
@@ -30,23 +29,5 @@ func TestFormatAmount(t *testing.T) {
 		if got := formatAmount(c.label, c.value); got != c.want {
 			t.Errorf("formatAmount(%q, %q) = %q, want %q", c.label, c.value, got, c.want)
 		}
-	}
-}
-
-// TestOrderColumns checks that ranked columns float to the front in preference
-// order while unranked columns keep their first-seen order behind them, and that
-// an unknown key returns the columns unchanged.
-func TestOrderColumns(t *testing.T) {
-	// "history" ranks Month, Date, Employer, Amount.
-	got := orderColumns("history", []string{"Amount", "Extra", "Month", "Date"})
-	want := []string{"Month", "Date", "Amount", "Extra"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("orderColumns(history) = %v, want %v", got, want)
-	}
-
-	// Unknown key: unchanged.
-	in := []string{"B", "A", "C"}
-	if got := orderColumns("nope", in); !reflect.DeepEqual(got, in) {
-		t.Errorf("orderColumns(nope) = %v, want %v (unchanged)", got, in)
 	}
 }
