@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/osanderson/singpass-client-go/compare/v0.10.0...v0.11.0) (2026-09-29)
+
+
+### Features
+
+* **myinfo:** accept entity.identity and fix the grants last_updated_date scope ([#76](https://github.com/osanderson/singpass-client-go/issues/76)) ([ce832f4](https://github.com/osanderson/singpass-client-go/commit/ce832f4fa33cf8adc64c88aa7d83f6d907b4105d))
+
 ## [0.10.0](https://github.com/osanderson/singpass-client-go/compare/v0.9.2...v0.10.0) (2026-09-29)
 
 
