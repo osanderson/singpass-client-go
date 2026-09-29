@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.10.0](https://github.com/osanderson/singpass-client-go/compare/v0.9.2...v0.10.0) (2026-09-29)
+
+
+### Features
+
+* add singpass-fake-server, the fake servers as a standalone command ([#67](https://github.com/osanderson/singpass-client-go/issues/67)) ([94ccd69](https://github.com/osanderson/singpass-client-go/commit/94ccd694cdbed2a685ad26c9ba868e9bb69352fb))
+* **demo:** show masked NRIC, employer, CPF contribution and Corppass email ([#65](https://github.com/osanderson/singpass-client-go/issues/65)) ([cbf1cf6](https://github.com/osanderson/singpass-client-go/commit/cbf1cf6482cbb13c549094b01e6ebd90d21f5418))
+* **keyfile:** load SEC1 EC keys, as openssl writes them ([#75](https://github.com/osanderson/singpass-client-go/issues/75)) ([a0f16c2](https://github.com/osanderson/singpass-client-go/commit/a0f16c2d504ed2981d7b54c4cc07bc4316f729b4))
+* **keygen:** publish several keys with -sig and -enc lists ([#62](https://github.com/osanderson/singpass-client-go/issues/62)) ([2430a83](https://github.com/osanderson/singpass-client-go/commit/2430a8398768a4dc3060a2af57f6efee90725ee1))
+* **myinfo:** add Myinfo Business scope constants ([#60](https://github.com/osanderson/singpass-client-go/issues/60)) ([9a6b10d](https://github.com/osanderson/singpass-client-go/commit/9a6b10de494cec808a78f22cda64642b1d289971))
+* **myinfo:** add scope helpers and typed NOA, vehicle, HDB and licence data ([#59](https://github.com/osanderson/singpass-client-go/issues/59)) ([f192ea5](https://github.com/osanderson/singpass-client-go/commit/f192ea5666795f45de36be2509d446ed229fcc21))
+* **myinfo:** complete EntityProfile from Corppass's entity_info specification ([#61](https://github.com/osanderson/singpass-client-go/issues/61)) ([b15388e](https://github.com/osanderson/singpass-client-go/commit/b15388edb6665b932658e3d0ebf90b522a479941))
+* **myinfo:** type every Myinfo item and the Corppass account block ([#64](https://github.com/osanderson/singpass-client-go/issues/64)) ([7b62c93](https://github.com/osanderson/singpass-client-go/commit/7b62c93b40bb9ef9f48820526056d900227d027e))
+* **singpasstest:** load test users from JSON files ([#70](https://github.com/osanderson/singpass-client-go/issues/70)) ([b83d82f](https://github.com/osanderson/singpass-client-go/commit/b83d82f384ee15e3b620fee348791ae6ff7e6891))
+* **singpasstest:** log in as any user, and richer built-in test users ([#66](https://github.com/osanderson/singpass-client-go/issues/66)) ([24e93fa](https://github.com/osanderson/singpass-client-go/commit/24e93fa29c6b27de62092fb11e7e14d6dc975090))
+* support the Singpass Login context message and mobile-app redirects ([#58](https://github.com/osanderson/singpass-client-go/issues/58)) ([d3a7338](https://github.com/osanderson/singpass-client-go/commit/d3a7338410fc73d40a682b09fb793466853cd88b))
+
+
+### Documentation
+
+* add an upgrade guide and a stability policy ([#56](https://github.com/osanderson/singpass-client-go/issues/56)) ([0f32ca8](https://github.com/osanderson/singpass-client-go/commit/0f32ca8b57433987dde7bb4fad85359f9999b953))
+* cover the standalone fake server and the typed profiles ([#68](https://github.com/osanderson/singpass-client-go/issues/68)) ([2276115](https://github.com/osanderson/singpass-client-go/commit/2276115d0e741bc1e8c4a2573f0ecc0b88816151))
+* state in the package docs that the library is unofficial ([#71](https://github.com/osanderson/singpass-client-go/issues/71)) ([7349535](https://github.com/osanderson/singpass-client-go/commit/7349535f6b8b878f8bc355bba533b579d66a108a))
+
 ## [0.9.2](https://github.com/osanderson/singpass-client-go/compare/v0.9.1...v0.9.2) (2026-09-28)
 
 
