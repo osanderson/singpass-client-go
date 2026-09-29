@@ -72,3 +72,17 @@ func TestProfileAccessibilityMarkup(t *testing.T) {
 		}
 	}
 }
+
+// The staging home page points to the published test personas; mock mode,
+// which has its own test users, doesn't.
+func TestHomeTestAccounts(t *testing.T) {
+	for mock, want := range map[bool]bool{false: true, true: false} {
+		rec := httptest.NewRecorder()
+		RenderHome(rec, Home{Apps: []HomeApp{{Name: "mi", Title: "Myinfo"}}, Mock: mock})
+		body := rec.Body.String()
+		has := strings.Contains(body, "myinfo-test-personas") && strings.Contains(body, "myinfo-business-test-personas")
+		if has != want {
+			t.Errorf("mock=%v: test-account links shown = %v, want %v", mock, has, want)
+		}
+	}
+}
