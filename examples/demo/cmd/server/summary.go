@@ -79,10 +79,19 @@ func summary(id *singpass.Identity) []demoapp.Highlight {
 		}
 	}
 
+	if c := id.Myinfo.CorppassProfile(); c.Email.Available() {
+		value := c.Email.String()
+		if verified, ok := c.EmailVerified.Bool(); ok {
+			value += map[bool]string{true: " (verified)", false: " (not verified)"}[verified]
+		}
+		add("Corppass email", value, "id.Myinfo.CorppassProfile().Email, .EmailVerified.Bool()", myinfo.SourceUnknown)
+	}
+
 	p := id.Myinfo.PersonProfile()
 	if p.Data.Present() {
 		field("Name", p.Name, "p.Name.String()")
 		field("UINFIN", p.UINFIN, "p.UINFIN.String()")
+		field("Masked NRIC / FIN", p.PartialUINFIN, "p.PartialUINFIN.String()")
 		if p.Sex.Available() {
 			add("Sex", codeAndDesc(p.Sex), "p.Sex.Code(), p.Sex.String()", p.Sex.SourceCode())
 		}
@@ -91,6 +100,7 @@ func summary(id *singpass.Identity) []demoapp.Highlight {
 		}
 		field("Nationality", p.Nationality, "p.Nationality.String()")
 		field("Residential status", p.ResidentialStatus, "p.ResidentialStatus.String()")
+		field("Employer", p.Employment, "p.Employment.String()")
 		field("Email", p.Email, "p.Email.String()")
 		if p.MobileNo.Available() {
 			value := p.MobileNo.String()
@@ -102,6 +112,13 @@ func summary(id *singpass.Identity) []demoapp.Highlight {
 		add("Registered address", strings.Join(p.RegAdd.Lines(), " / "), "p.RegAdd.Lines()", p.RegAdd.Data.EffectiveSource())
 		field("Housing type", p.HousingType, "p.HousingType.String()")
 		field("HDB type", p.HDBType, "p.HDBType.String()")
+		if n := len(p.CPFContributions); n > 0 {
+			last := p.CPFContributions[n-1]
+			if x, ok := last.Amount.Float(); ok {
+				add("Latest CPF contribution", fmt.Sprintf("%s for %s, from %s", sgd(x), last.Month.String(), last.Employer.String()),
+					"p.CPFContributions[len-1].Amount.Float(), .Month, .Employer", p.Data.Object("cpfcontributions").EffectiveSource())
+			}
+		}
 		if x, ok := p.NOABasic.Amount.Float(); ok {
 			add("Assessable income (YA "+p.NOABasic.YearOfAssessment.String()+")", sgd(x), "p.NOABasic.Amount.Float()", p.NOABasic.Data.SourceCode())
 		}
