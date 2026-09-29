@@ -59,7 +59,9 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
       `BeginLogin` with backoff on `server_error`, `temporarily_unavailable`
       and `upstream_dependency_error`, as Singpass allows. A failed `Complete`
       can't be retried: restart the login.
-- [ ] **`Dependencies.Debug` off.** It logs the client assertion.
+- [ ] **`Dependencies.Debug` off.** It logs the client assertion, the
+      authorization code and the PKCE verifier; `New` refuses it under
+      `AssuranceProduction`.
 - [ ] **`Dependencies.AllowLoopbackHTTP` off.** It's refused under
       `AssuranceProduction` anyway.
 - [ ] **`HTTPClient` / `HTTPTimeout`** suit your egress: proxy, timeouts, and
@@ -106,7 +108,9 @@ singpass: construct client: client: dependencies: sessions must implement storag
 - [ ] **Login sessions (`web.Config.LoginSessions`, a `web.LoginSessionStore`),**
       if you use the `web` helper. These hold the signed-in identity behind the
       session cookie. The in-memory default is lost on restart and isn't
-      shared, so it's unsuitable for more than one instance.
+      shared, so it's unsuitable for more than one instance. `sqlstore` keeps
+      only a SHA-256 hash of each session id, so a copy of the table can't be
+      used to take over a session.
 
 ## 4. Web and cookies
 
@@ -127,6 +131,14 @@ singpass: construct client: client: dependencies: sessions must implement storag
       Store the state `BeginLogin` returns in an `HttpOnly`, `Secure`,
       `SameSite=Lax` cookie and pass it to `Complete`, which binds the
       callback to that browser.
+- [ ] **Rate-limit logins.** Each visit to `/{app}/login` makes a pushed
+      authorization request to Singpass or Corppass and holds a pending login
+      for several minutes, so an unlimited login route lets anyone flood both
+      (and fill the in-memory session store, locking everyone else out). Set
+      `web.Config.LoginRateLimit`; behind a proxy or load balancer, give it a
+      `Key` that returns the client address the proxy appends (for example the
+      last `X-Forwarded-For` entry), never one the client can set. Not using
+      the `web` helper? Rate-limit the route that calls `BeginLogin`.
 - [ ] **Render logout as a same-origin `<form method="post">`.** `web` rejects
       GET and cross-origin logout requests.
 - [ ] **Keep personal data out of the login session.** By default the `web`

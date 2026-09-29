@@ -5,6 +5,29 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.12.0
+
+Security hardening. No API is removed, but four behaviours tighten:
+
+- **`Dependencies.Debug` is refused under `AssuranceProduction`**, so
+  `New` (and the product constructors with `Environment: Production`) fail
+  with it set. It logs the client assertion, the authorization code and the
+  PKCE verifier: turn it off in production.
+- **`sqlstore` stores login sessions under a hash of the session id.** Rows
+  written by an earlier version aren't found any more, so everyone signed in
+  when you deploy is signed out once. The schema is unchanged.
+- **`web` can limit how fast one client starts logins** (`Config.LoginRateLimit`).
+  It's off unless you set it; set it for any app reachable from the internet,
+  with a `Key` that finds the client's address behind your proxy. A refused
+  login reaches `OnError` as `web.ErrTooManyLogins`, with `Retry-After` set.
+- **Myinfo item values that look like JSON stay strings.** The parser used to
+  unwrap any string beginning with `{` or `[`, including a person's own
+  `value`; now it only unwraps double-encoded blocks and objects.
+
+`web.New` also logs a warning when a `LoginSessions` store is set without
+`SessionIdentity`, and `New` logs one when a production issuer runs without
+`AssuranceProduction`.
+
 ## v0.9.0
 
 ### `Complete` takes the login's state

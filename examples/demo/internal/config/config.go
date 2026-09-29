@@ -50,6 +50,11 @@ type Config struct {
 	// assertion — staging only.
 	Debug bool
 
+	// BehindProxy says the app runs behind a proxy that appends the client's
+	// address to X-Forwarded-For (Cloud Run does), from BEHIND_PROXY=1. The
+	// login rate limit then keys on that address instead of the proxy's.
+	BehindProxy bool
+
 	// Apps are the enabled relying parties, in display order.
 	Apps []AppConfig
 }
@@ -137,6 +142,7 @@ func Load() (Config, error) {
 		Debug:       os.Getenv("SP_DEBUG_HTTP") != "",
 		LogJSON:     os.Getenv("LOG_FORMAT") == "json",
 		Mock:        os.Getenv("DEMO_MOCK") != "",
+		BehindProxy: os.Getenv("BEHIND_PROXY") != "",
 	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 

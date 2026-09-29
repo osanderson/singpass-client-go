@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -90,6 +91,9 @@ func main() {
 		// Mark cookies Secure whenever the app is served over HTTPS, so the
 		// session cookie is never sent in the clear.
 		Cookies: web.CookieConfig{Secure: strings.HasPrefix(cfg.BaseURL, "https://")},
+		// The demo is public: limit how fast one client can start logins, each
+		// of which is a request to Singpass or Corppass.
+		LoginRateLimit: &web.LoginRateLimit{Key: clientKey(cfg.BehindProxy)},
 		OnAuthenticated: func(w http.ResponseWriter, r *http.Request, _ *web.App, _ *singpass.Identity) {
 			// The "/" handler renders the profile from the session cookie the web
 			// helper just set.
@@ -101,6 +105,11 @@ func main() {
 		OnError: func(w http.ResponseWriter, _ *http.Request, app *web.App, err error) {
 			// A stale login (expired, reloaded callback, other browser) isn't a
 			// failure worth alarming the user about: ask them to try again.
+			if errors.Is(err, web.ErrTooManyLogins) {
+				w.WriteHeader(http.StatusTooManyRequests)
+				renderHome(w, "Too many logins started from your address. Please wait a minute and try again.")
+				return
+			}
 			if errors.Is(err, singpass.ErrLoginExpired) {
 				logger.Warn("login expired", "app", app.Name, "err", err)
 				w.WriteHeader(http.StatusBadRequest)
@@ -176,6 +185,30 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown", "err", err)
+	}
+}
+
+// clientKey returns the login rate limit's key: the client's address. Behind
+// a proxy that is the last X-Forwarded-For entry, the one the proxy appended;
+// earlier entries come from the client and can't be trusted.
+func clientKey(behindProxy bool) func(*http.Request) string {
+	return func(r *http.Request) string {
+		if behindProxy {
+			if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+				last := xff[len(xff)-1]
+				if i := strings.LastIndex(last, ","); i >= 0 {
+					last = last[i+1:]
+				}
+				if ip := strings.TrimSpace(last); ip != "" {
+					return ip
+				}
+			}
+		}
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			return r.RemoteAddr
+		}
+		return host
 	}
 }
 
