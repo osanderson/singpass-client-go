@@ -28,7 +28,9 @@
 // Test users are Personas: fictitious people and a company, with Myinfo data
 // in the real envelope shape (see DefaultPersonas). Logins are approved
 // automatically, or — with Config.Interactive — through a sign-in page listing
-// the personas, for use from a browser.
+// the personas, for use from a browser. The sign-in page can also log in as
+// anyone else, from an NRIC or FIN and a name (and, on Corppass, a UEN):
+// UserPersona and EntityPersona build the same users in code.
 //
 // The server listens on plain HTTP on a loopback address, so the client needs
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production
