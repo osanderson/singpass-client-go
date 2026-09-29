@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -69,7 +70,7 @@ func WriteECPrivateKey(path string, key *ecdsa.PrivateKey) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create key directory: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := createExclusive(path)
 	if err != nil {
 		return fmt.Errorf("write key %s: %w", path, err)
 	}
@@ -83,6 +84,12 @@ func WriteECPrivateKey(path string, key *ecdsa.PrivateKey) error {
 		return fmt.Errorf("write key %s: %w", path, err)
 	}
 	return nil
+}
+
+// createExclusive creates path for writing, owner-only, failing if it exists.
+// A variable so tests can make the write fail part-way.
+var createExclusive = func(path string) (io.WriteCloser, error) {
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 }
 
 // LoadOrGenerate returns the key at path, or — when there is no file — a new
