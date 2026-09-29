@@ -122,61 +122,34 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if *onlyPersonas && *personasPath == "" {
 		return errors.New("-only-personas needs -personas")
 	}
-	personas := func(issuer singpasstest.Issuer) ([]singpasstest.Persona, error) {
-		var ps []singpasstest.Persona
-		if !*onlyPersonas {
-			ps = singpasstest.DefaultPersonas(issuer)
-		}
-		if *personasPath == "" {
-			return ps, nil
-		}
-		extra, err := singpasstest.LoadPersonas(*personasPath, issuer)
-		return append(ps, extra...), err
-	}
+	users := testUsers{path: *personasPath, only: *onlyPersonas}
 
 	servers := map[string]*singpasstest.Server{}
-	start := func(name string, issuer singpasstest.Issuer, addr, baseURL string) error {
-		if addr == "" {
-			return nil
-		}
-		ps, err := personas(issuer)
-		if err != nil {
-			return err
-		}
-		if len(ps) == 0 {
-			return fmt.Errorf("the %s server has no test users: add some to %s", name, *personasPath)
-		}
-		srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: issuer, Addr: addr, BaseURL: baseURL, Interactive: !*auto, Personas: ps})
-		if err != nil {
-			return fmt.Errorf("start %s server: %w", name, err)
-		}
-		servers[name] = srv
-		fmt.Fprintf(stdout, "%s issuer: %s\n", name, srv.Issuer())
-		for _, p := range srv.Personas() {
-			fmt.Fprintf(stdout, "  test user: %s (sub %s)\n", p.Name, p.Subject)
-		}
-		return nil
-	}
 	defer func() {
 		for _, srv := range servers {
 			_ = srv.Close()
 		}
 	}()
-	if err := start("Singpass", singpasstest.Singpass, *spAddr, *spURL); err != nil {
-		return err
-	}
-	if err := start("Corppass", singpasstest.Corppass, *cpAddr, *cpURL); err != nil {
-		return err
+	for _, sc := range []struct {
+		name          string
+		issuer        singpasstest.Issuer
+		addr, baseURL string
+	}{
+		{"Singpass", singpasstest.Singpass, *spAddr, *spURL},
+		{"Corppass", singpasstest.Corppass, *cpAddr, *cpURL},
+	} {
+		if sc.addr == "" {
+			continue
+		}
+		srv, err := startServer(sc.name, sc.issuer, sc.addr, sc.baseURL, !*auto, users, stdout)
+		if err != nil {
+			return err
+		}
+		servers[sc.name] = srv
 	}
 
 	for _, c := range cfg.Clients {
-		name, app := "Singpass", singpasstest.Login
-		switch c.Product {
-		case "myinfo":
-			app = singpasstest.Myinfo
-		case "myinfo-business":
-			name, app = "Corppass", singpasstest.Myinfo
-		}
+		name, app := c.server()
 		srv := servers[name]
 		if srv == nil {
 			return fmt.Errorf("client %q is for the %s server, which is disabled", c.ID, name)
@@ -187,6 +160,58 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	<-ctx.Done()
 	fmt.Fprintln(stderr, "shutting down")
 	return nil
+}
+
+// testUsers is where a server's test users come from: the built-in ones,
+// unless only, plus those in the JSON file at path, if any.
+type testUsers struct {
+	path string
+	only bool
+}
+
+func (u testUsers) load(issuer singpasstest.Issuer) ([]singpasstest.Persona, error) {
+	var ps []singpasstest.Persona
+	if !u.only {
+		ps = singpasstest.DefaultPersonas(issuer)
+	}
+	if u.path == "" {
+		return ps, nil
+	}
+	extra, err := singpasstest.LoadPersonas(u.path, issuer)
+	return append(ps, extra...), err
+}
+
+// startServer starts the named fake server on addr and lists its issuer and
+// test users on stdout.
+func startServer(name string, issuer singpasstest.Issuer, addr, baseURL string, interactive bool, users testUsers, stdout io.Writer) (*singpasstest.Server, error) {
+	ps, err := users.load(issuer)
+	if err != nil {
+		return nil, err
+	}
+	if len(ps) == 0 {
+		return nil, fmt.Errorf("the %s server has no test users: add some to %s", name, users.path)
+	}
+	srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: issuer, Addr: addr, BaseURL: baseURL, Interactive: interactive, Personas: ps})
+	if err != nil {
+		return nil, fmt.Errorf("start %s server: %w", name, err)
+	}
+	fmt.Fprintf(stdout, "%s issuer: %s\n", name, srv.Issuer())
+	for _, p := range srv.Personas() {
+		fmt.Fprintf(stdout, "  test user: %s (sub %s)\n", p.Name, p.Subject)
+	}
+	return srv, nil
+}
+
+// server returns which fake server c is registered with, and as which app.
+func (c clientConfig) server() (string, singpasstest.App) {
+	switch c.Product {
+	case "myinfo":
+		return "Singpass", singpasstest.Myinfo
+	case "myinfo-business":
+		return "Corppass", singpasstest.Myinfo
+	default:
+		return "Singpass", singpasstest.Login
+	}
 }
 
 // loadConfig reads and checks the configuration file.
@@ -284,10 +309,7 @@ func clientJWKS(ctx context.Context, c clientConfig) ([]byte, error) {
 // ("use": "enc") EC P-256 keys out of a JWKS.
 func parseJWKS(raw []byte) (singpasstest.Client, error) {
 	var set struct {
-		Keys []struct {
-			Kty, Crv, X, Y, Kid, Use string
-			D                        string `json:"d"`
-		} `json:"keys"`
+		Keys []jwk `json:"keys"`
 	}
 	if err := json.Unmarshal(raw, &set); err != nil {
 		return singpasstest.Client{}, fmt.Errorf("not a JWKS: %w", err)
@@ -297,26 +319,54 @@ func parseJWKS(raw []byte) (singpasstest.Client, error) {
 		if k.D != "" {
 			return singpasstest.Client{}, fmt.Errorf("key %q includes private key material: publish public keys only", k.Kid)
 		}
-		if k.Kty != "EC" || k.Crv != "P-256" || (k.Use != "sig" && k.Use != "enc") {
+		if !k.clientKey() {
 			continue
 		}
-		x, errX := base64.RawURLEncoding.DecodeString(k.X)
-		y, errY := base64.RawURLEncoding.DecodeString(k.Y)
-		if errX != nil || errY != nil || len(x) != 32 || len(y) != 32 {
-			return singpasstest.Client{}, fmt.Errorf("key %q has a malformed x or y", k.Kid)
-		}
-		pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), append(append([]byte{4}, x...), y...))
+		pub, err := k.publicKey()
 		if err != nil {
-			return singpasstest.Client{}, fmt.Errorf("key %q: %w", k.Kid, err)
+			return singpasstest.Client{}, err
 		}
-		if k.Use == "sig" && c.SigningKey == nil {
-			c.SigningKey, c.SigningKID = pub, k.Kid
-		} else if k.Use == "enc" && c.EncryptionKey == nil {
-			c.EncryptionKey, c.EncryptionKID = pub, k.Kid
-		}
+		addKey(&c, k.Use, pub, k.Kid)
 	}
 	if c.SigningKey == nil || c.EncryptionKey == nil {
 		return singpasstest.Client{}, errors.New(`the JWKS needs an EC P-256 key with "use": "sig" and one with "use": "enc"`)
 	}
 	return c, nil
+}
+
+// jwk is the part of a JWK parseJWKS reads.
+type jwk struct {
+	Kty, Crv, X, Y, Kid, Use string
+	D                        string `json:"d"`
+}
+
+// clientKey reports whether k is an EC P-256 signing or encryption key: the
+// kinds a client registers.
+func (k jwk) clientKey() bool {
+	return k.Kty == "EC" && k.Crv == "P-256" && (k.Use == "sig" || k.Use == "enc")
+}
+
+// addKey sets c's signing or encryption key, by use, unless it has one: the
+// first key of each use is the client's current key.
+func addKey(c *singpasstest.Client, use string, pub *ecdsa.PublicKey, kid string) {
+	switch {
+	case use == "sig" && c.SigningKey == nil:
+		c.SigningKey, c.SigningKID = pub, kid
+	case use == "enc" && c.EncryptionKey == nil:
+		c.EncryptionKey, c.EncryptionKID = pub, kid
+	}
+}
+
+// publicKey decodes k's EC P-256 public key.
+func (k jwk) publicKey() (*ecdsa.PublicKey, error) {
+	x, errX := base64.RawURLEncoding.DecodeString(k.X)
+	y, errY := base64.RawURLEncoding.DecodeString(k.Y)
+	if errX != nil || errY != nil || len(x) != 32 || len(y) != 32 {
+		return nil, fmt.Errorf("key %q has a malformed x or y", k.Kid)
+	}
+	pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), append(append([]byte{4}, x...), y...))
+	if err != nil {
+		return nil, fmt.Errorf("key %q: %w", k.Kid, err)
+	}
+	return pub, nil
 }

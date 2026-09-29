@@ -60,39 +60,12 @@ var singpassScopeAttributes = map[string][]string{
 // idTokenClaims builds the Singpass/Corppass-specific id_token claims for p
 // under the granted scopes.
 func (p Persona) idTokenClaims(issuer Issuer, scope []string) (map[string]json.RawMessage, error) {
-	claims := map[string]any{}
-	subType := p.SubjectType
-	if subType == "" {
-		subType = "user"
-		if issuer == Corppass {
-			subType = "entity"
-		}
-	}
-	claims["sub_type"] = subType
-
-	attrs := p.SubAttributes
-	if issuer == Singpass {
-		attrs = map[string]any{}
-		for _, sc := range scope {
-			for _, k := range singpassScopeAttributes[strings.TrimSpace(sc)] {
-				if v, ok := p.SubAttributes[k]; ok {
-					attrs[k] = v
-				}
-			}
-		}
-	}
-	if len(attrs) > 0 {
+	claims := map[string]any{"sub_type": p.subjectType(issuer)}
+	if attrs := p.grantedAttributes(issuer, scope); len(attrs) > 0 {
 		claims["sub_attributes"] = attrs
 	}
 	if p.Act != nil {
-		act := map[string]any{"sub": p.Act.Subject, "sub_type": p.Act.SubjectType}
-		if p.Act.SubjectType == "" {
-			act["sub_type"] = "user"
-		}
-		if len(p.Act.SubAttributes) > 0 {
-			act["sub_attributes"] = p.Act.SubAttributes
-		}
-		claims["act"] = act
+		claims["act"] = p.Act.claim()
 	}
 
 	out := make(map[string]json.RawMessage, len(claims))
@@ -104,6 +77,49 @@ func (p Persona) idTokenClaims(issuer Issuer, scope []string) (map[string]json.R
 		out[k] = raw
 	}
 	return out, nil
+}
+
+// claim is the act claim for a: the acting person, with sub_type "user"
+// unless set.
+func (a *Actor) claim() map[string]any {
+	act := map[string]any{"sub": a.Subject, "sub_type": a.SubjectType}
+	if a.SubjectType == "" {
+		act["sub_type"] = "user"
+	}
+	if len(a.SubAttributes) > 0 {
+		act["sub_attributes"] = a.SubAttributes
+	}
+	return act
+}
+
+// subjectType is p's sub_type: as set, or else "user" on Singpass and
+// "entity" on Corppass.
+func (p Persona) subjectType(issuer Issuer) string {
+	switch {
+	case p.SubjectType != "":
+		return p.SubjectType
+	case issuer == Corppass:
+		return "entity"
+	default:
+		return "user"
+	}
+}
+
+// grantedAttributes are the sub_attributes the id_token carries: on Singpass
+// only those the granted scopes release, on Corppass all of them.
+func (p Persona) grantedAttributes(issuer Issuer, scope []string) map[string]any {
+	if issuer != Singpass {
+		return p.SubAttributes
+	}
+	attrs := map[string]any{}
+	for _, sc := range scope {
+		for _, k := range singpassScopeAttributes[strings.TrimSpace(sc)] {
+			if v, ok := p.SubAttributes[k]; ok {
+				attrs[k] = v
+			}
+		}
+	}
+	return attrs
 }
 
 func (p Persona) acr() string {

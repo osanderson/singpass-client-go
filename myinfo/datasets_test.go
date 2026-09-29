@@ -2,7 +2,6 @@ package myinfo
 
 import (
 	"testing"
-	"time"
 )
 
 // Shaped as Singpass's person_info OpenAPI specification defines each item.
@@ -49,51 +48,44 @@ func datasetsResponse() *Response {
 
 func TestPersonDatasets(t *testing.T) {
 	p := datasetsResponse().PersonProfile()
+	checkAll(t,
+		check{"NOAHistoryBasic", len(p.NOAHistoryBasic), 2},
+		check{"Vehicles", len(p.Vehicles), 1},
+		check{"HDBOwnership", len(p.HDBOwnership), 1},
+		check{"QDL classes", len(p.DrivingLicence.QDL.Classes), 1},
+	)
+	if t.Failed() {
+		return
+	}
+	veh, h, dl := p.Vehicles[0], p.HDBOwnership[0], p.DrivingLicence
+	checkAll(t,
+		check{"NOABasic.Amount", floatOf(p.NOABasic.Amount), 84500.0},
+		check{"NOABasic.YearOfAssessment", p.NOABasic.YearOfAssessment.String(), "2025"},
+		check{"NOA.Category", p.NOA.Category.String(), "ORIGINAL"},
+		check{"NOA.TaxClearance", p.NOA.TaxClearance.String(), "N"},
+		check{"NOA.Rent", floatOf(p.NOA.Rent), 4500.0},
+		check{"NOAHistoryBasic[1].YearOfAssessment", p.NOAHistoryBasic[1].YearOfAssessment.String(), "2024"},
+		check{"NOAHistory", p.NOAHistory == nil, true},
 
-	if x, ok := p.NOABasic.Amount.Float(); !ok || x != 84500 || p.NOABasic.YearOfAssessment.String() != "2025" {
-		t.Errorf("NOABasic = %v, %v", x, p.NOABasic.YearOfAssessment.String())
-	}
-	if p.NOA.Category.String() != "ORIGINAL" || p.NOA.TaxClearance.String() != "N" {
-		t.Errorf("NOA = %+v", p.NOA)
-	}
-	if rent, _ := p.NOA.Rent.Float(); rent != 4500 {
-		t.Errorf("NOA rent = %v", rent)
-	}
-	if len(p.NOAHistoryBasic) != 2 || p.NOAHistoryBasic[1].YearOfAssessment.String() != "2024" || p.NOAHistory != nil {
-		t.Errorf("NOA history = %+v / %+v", p.NOAHistoryBasic, p.NOAHistory)
-	}
+		check{"vehicle VehicleNo", veh.VehicleNo.String(), "SBA1234A"},
+		check{"vehicle Status", veh.Status.Code(), "1"},
+		check{"vehicle COEExpiryDate", dateOf(veh.COEExpiryDate), "2031-05-20"},
+		check{"vehicle EngineCapacity", intOf(veh.EngineCapacity), int64(1598)},
+		check{"vehicle OpenMarketValue", floatOf(veh.OpenMarketValue), 21500.5},
+		check{"vehicle provenance", veh.Data.SourceCode(), SourceGovernmentVerified},
 
-	if len(p.Vehicles) != 1 {
-		t.Fatalf("Vehicles = %d", len(p.Vehicles))
-	}
-	veh := p.Vehicles[0]
-	coe, _ := veh.COEExpiryDate.Date()
-	cc, _ := veh.EngineCapacity.Int()
-	omv, _ := veh.OpenMarketValue.Float()
-	if veh.VehicleNo.String() != "SBA1234A" || veh.Status.Code() != "1" || !coe.Equal(time.Date(2031, 5, 20, 0, 0, 0, 0, time.UTC)) || cc != 1598 || omv != 21500.5 {
-		t.Errorf("vehicle = %+v", veh)
-	}
-	if veh.Data.SourceCode() != SourceGovernmentVerified {
-		t.Error("vehicle provenance lost")
-	}
+		check{"HDB Address", h.Address.String(), "102 BEDOK NORTH AVENUE 4, #09-128, SINGAPORE 460102"},
+		check{"HDB HDBType", h.HDBType.String(), "4-ROOM FLAT (HDB)"},
+		check{"HDB NoOfOwners", intOf(h.NoOfOwners), int64(2)},
+		check{"HDB BalanceLoanRepayment.Years", intOf(h.BalanceLoanRepayment.Years), int64(12)},
 
-	if len(p.HDBOwnership) != 1 {
-		t.Fatalf("HDBOwnership = %d", len(p.HDBOwnership))
-	}
-	h := p.HDBOwnership[0]
-	owners, _ := h.NoOfOwners.Int()
-	years, _ := h.BalanceLoanRepayment.Years.Int()
-	if h.Address.String() != "102 BEDOK NORTH AVENUE 4, #09-128, SINGAPORE 460102" || h.HDBType.String() != "4-ROOM FLAT (HDB)" || owners != 2 || years != 12 {
-		t.Errorf("HDB ownership = %q %q %d %d", h.Address.String(), h.HDBType.String(), owners, years)
-	}
-
-	dl := p.DrivingLicence
-	if dl.QDL.Validity.Code() != "V" || len(dl.QDL.Classes) != 1 || dl.QDL.Classes[0].Class.String() != "3" || dl.COMStatus.Code() != "Y" {
-		t.Errorf("driving licence = %+v", dl)
-	}
-	if dl.Suspension.StartDate.Available() || len(dl.PDL.Classes) != 0 {
-		t.Error("empty suspension / absent PDL should read as empty")
-	}
+		check{"QDL Validity", dl.QDL.Validity.Code(), "V"},
+		check{"QDL class", dl.QDL.Classes[0].Class.String(), "3"},
+		check{"COMStatus", dl.COMStatus.Code(), "Y"},
+		// An empty suspension and an absent PDL read as empty.
+		check{"Suspension.StartDate available", dl.Suspension.StartDate.Available(), false},
+		check{"PDL classes", len(dl.PDL.Classes), 0},
+	)
 }
 
 func TestDatasetsAbsent(t *testing.T) {

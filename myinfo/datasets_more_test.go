@@ -58,48 +58,43 @@ func TestRemainingPersonDatasets(t *testing.T) {
 		"sponsoredchildrenrecords": []any{map[string]any{"name": v("LIM MEI"), "nric": v("S1234567A"), "nationality": c("SG", "SINGAPORE CITIZEN")}},
 	}}).PersonProfile()
 
-	if p.PartialUINFIN.String() != "****381D" || p.Employment.String() != "ACME PTE LTD" || p.CountryOfMarriage.Code() != "SG" {
-		t.Errorf("scalars = %q %q %q", p.PartialUINFIN.String(), p.Employment.String(), p.CountryOfMarriage.Code())
+	checkAll(t,
+		check{"CPFContributions", len(p.CPFContributions), 2},
+		check{"CPFEmployers", len(p.CPFEmployers), 1},
+		check{"CPFHousingWithdrawals", len(p.CPFHousingWithdrawals), 1},
+		check{"Transcripts", len(p.AcademicQualifications.Transcripts), 1},
+		check{"Certificates", len(p.AcademicQualifications.Certificates), 1},
+		check{"ChildrenBirthRecords", len(p.ChildrenBirthRecords), 1},
+		check{"SponsoredChildrenRecords", len(p.SponsoredChildrenRecords), 1},
+	)
+	if t.Failed() {
+		return
 	}
-	if d, ok := p.MarriageDate.Date(); !ok || d.Year() != 2020 {
-		t.Errorf("MarriageDate = %v", d)
-	}
-	if b, ok := p.OwnerPrivate.Bool(); !ok || b {
-		t.Errorf("OwnerPrivate = %v, %v", b, ok)
-	}
-	if b, ok := p.MerdekaGenEligible.Bool(); !ok || !b || p.PioneerGenEligible.Present() {
-		t.Errorf("generation schemes = %v / %v", b, p.PioneerGenEligible.Present())
-	}
-	if p.CHAS.CardType.Code() != "G" || p.CPFInvestmentScheme.AgentBankCode.String() != "DBS" {
-		t.Errorf("CHAS / CPFIS = %+v / %+v", p.CHAS, p.CPFInvestmentScheme)
-	}
-	if n, _ := p.CPFInvestmentScheme.SDSNetShareholdingQty.Int(); n != 500 {
-		t.Errorf("SDS qty = %d", n)
-	}
-	if len(p.CPFContributions) != 2 || p.CPFContributions[1].Month.String() != "2026-08" || len(p.CPFEmployers) != 1 {
-		t.Errorf("CPF history = %+v / %+v", p.CPFContributions, p.CPFEmployers)
-	}
-	if amt, _ := p.CPFContributions[0].Amount.Float(); amt != 1480 {
-		t.Errorf("contribution amount = %v", amt)
-	}
-	if len(p.CPFHousingWithdrawals) != 1 || p.CPFHousingWithdrawals[0].Address.String() != "102 BEDOK NORTH AVENUE 4, SINGAPORE 460102" {
-		t.Errorf("housing withdrawals = %+v", p.CPFHousingWithdrawals)
-	}
-	if p.LTAVocationalLicences.TDVL.Status.Code() != "V" || p.LTAVocationalLicences.PDVL.LicenceName.Present() {
-		t.Errorf("vocational licences = %+v", p.LTAVocationalLicences)
-	}
-	aq := p.AcademicQualifications
-	if len(aq.Transcripts) != 1 || aq.Transcripts[0].Results[0].Grade.String() != "A1" || len(aq.Certificates) != 1 || aq.Certificates[0].OpenCertificateID.String() != "oc-1" {
-		t.Errorf("academic qualifications = %+v", aq)
-	}
-	if len(p.ChildrenBirthRecords) != 1 || p.ChildrenBirthRecords[0].BirthCertNo.String() != "T2012345A" || len(p.ChildrenBirthRecords[0].VaccinationRequirements) != 1 {
-		t.Errorf("children = %+v", p.ChildrenBirthRecords)
-	}
-	if ok, _ := p.ChildrenBirthRecords[0].VaccinationRequirements[0].Fulfilled.Bool(); !ok {
-		t.Error("vaccination fulfilled")
-	}
-	if len(p.SponsoredChildrenRecords) != 1 || p.SponsoredChildrenRecords[0].NRIC.String() != "S1234567A" {
-		t.Errorf("sponsored children = %+v", p.SponsoredChildrenRecords)
+	aq, child := p.AcademicQualifications, p.ChildrenBirthRecords[0]
+	checkAll(t,
+		check{"PartialUINFIN", p.PartialUINFIN.String(), "****381D"},
+		check{"Employment", p.Employment.String(), "ACME PTE LTD"},
+		check{"CountryOfMarriage", p.CountryOfMarriage.Code(), "SG"},
+		check{"MarriageDate", dateOf(p.MarriageDate), "2020-02-20"},
+		check{"OwnerPrivate", boolOf(p.OwnerPrivate), false},
+		check{"MerdekaGenEligible", boolOf(p.MerdekaGenEligible), true},
+		check{"PioneerGenEligible present", p.PioneerGenEligible.Present(), false},
+		check{"CHAS.CardType", p.CHAS.CardType.Code(), "G"},
+		check{"CPFInvestmentScheme.AgentBankCode", p.CPFInvestmentScheme.AgentBankCode.String(), "DBS"},
+		check{"SDSNetShareholdingQty", intOf(p.CPFInvestmentScheme.SDSNetShareholdingQty), int64(500)},
+		check{"CPFContributions[1].Month", p.CPFContributions[1].Month.String(), "2026-08"},
+		check{"CPFContributions[0].Amount", floatOf(p.CPFContributions[0].Amount), 1480.0},
+		check{"CPFHousingWithdrawals[0].Address", p.CPFHousingWithdrawals[0].Address.String(), "102 BEDOK NORTH AVENUE 4, SINGAPORE 460102"},
+		check{"TDVL.Status", p.LTAVocationalLicences.TDVL.Status.Code(), "V"},
+		check{"PDVL present", p.LTAVocationalLicences.PDVL.LicenceName.Present(), false},
+		check{"Transcripts[0].Results[0].Grade", aq.Transcripts[0].Results[0].Grade.String(), "A1"},
+		check{"Certificates[0].OpenCertificateID", aq.Certificates[0].OpenCertificateID.String(), "oc-1"},
+		check{"child BirthCertNo", child.BirthCertNo.String(), "T2012345A"},
+		check{"child VaccinationRequirements", len(child.VaccinationRequirements), 1},
+		check{"SponsoredChildrenRecords[0].NRIC", p.SponsoredChildrenRecords[0].NRIC.String(), "S1234567A"},
+	)
+	if len(child.VaccinationRequirements) == 1 {
+		checkAll(t, check{"vaccination fulfilled", boolOf(child.VaccinationRequirements[0].Fulfilled), true})
 	}
 }
 

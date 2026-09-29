@@ -237,48 +237,24 @@ type Identity struct {
 // Dependencies). Most callers should prefer NewLogin / NewMyinfo /
 // NewMyinfoBusiness.
 func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) {
-	if deps.Keys == nil {
-		return nil, fmt.Errorf("singpass: Dependencies.Keys is required")
-	}
-	if deps.Decryption == nil {
-		return nil, fmt.Errorf("singpass: Dependencies.Decryption is required")
-	}
-	if err := validateOptions(opts, deps.Assurance == AssuranceProduction); err != nil {
+	if err := checkDependencies(opts, deps); err != nil {
 		return nil, err
 	}
-	if deps.BeginLoginRetries < 0 || deps.BeginLoginRetries > maxBeginLoginRetries {
-		return nil, fmt.Errorf("singpass: Dependencies.BeginLoginRetries must be between 0 and %d", maxBeginLoginRetries)
-	}
 	deps = withKeyCustody(deps, deps.KeyCustody)
-
-	httpTimeout := deps.HTTPTimeout
-	if httpTimeout == 0 {
-		httpTimeout = defaultHTTPTimeout
+	if deps.HTTPTimeout == 0 {
+		deps.HTTPTimeout = defaultHTTPTimeout
 	}
-	logger := deps.Logger
-	if logger == nil {
-		logger = slog.Default()
+	if deps.Logger == nil {
+		deps.Logger = slog.Default()
+	}
+	if err := checkAssurance(opts, deps); err != nil {
+		return nil, err
 	}
 
 	var urlOpts []fapi.URLOption
 	if deps.AllowLoopbackHTTP {
-		if deps.Assurance == AssuranceProduction {
-			return nil, fmt.Errorf("singpass: Dependencies.AllowLoopbackHTTP is refused under AssuranceProduction")
-		}
 		urlOpts = append(urlOpts, fapi.AllowLoopbackHTTP())
 	}
-	if deps.Debug && deps.Assurance == AssuranceProduction {
-		return nil, fmt.Errorf("singpass: Dependencies.Debug is refused under AssuranceProduction: it logs the client assertion and authorization code")
-	}
-	if deps.Assurance == AssuranceProduction {
-		if err := checkKeyCustody(deps); err != nil {
-			return nil, err
-		}
-	} else if isProductionIssuer(opts.Issuer) {
-		logger.Warn("singpass: production issuer without AssuranceProduction: the durable-session, key-custody and randomness checks are off",
-			"issuer", opts.Issuer)
-	}
-
 	issuer, err := fapi.ParseIssuerURL(opts.Issuer, urlOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("singpass: parse issuer: %w", err)
@@ -288,30 +264,11 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	// engine's PAR/token/userinfo calls.
 	base := deps.HTTPClient
 	if base == nil {
-		base = &http.Client{Timeout: httpTimeout}
+		base = &http.Client{Timeout: deps.HTTPTimeout}
 	}
-
-	// A hardened fetcher for the GET-only discovery and JWKS documents.
-	fetcher, err := fapihttp.New(base, fapihttp.Config{
-		MaxResponseBytes:  1 << 20,
-		RequestTimeout:    httpTimeout,
-		MaxRedirects:      5,
-		AllowLoopbackHTTP: deps.AllowLoopbackHTTP,
-	})
+	discovered, issuerKeys, err := discover(ctx, base, issuer, deps, urlOpts)
 	if err != nil {
-		return nil, fmt.Errorf("singpass: build fetcher: %w", err)
-	}
-
-	discovered, err := client.Discover(ctx, fetcher, issuer, urlOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("singpass: discover metadata: %w", err)
-	}
-
-	// The issuer's verification keys, resolved straight from the JWKS URI the
-	// discovery document just advertised (cached, auto-refreshing).
-	issuerKeys, err := discovered.IssuerKeySource(fetcher, 10*time.Minute)
-	if err != nil {
-		return nil, fmt.Errorf("singpass: build issuer key source: %w", err)
+		return nil, err
 	}
 
 	// Myinfo needs the UserInfo endpoint. FAPIgo calls it natively
@@ -324,69 +281,12 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		return nil, fmt.Errorf("singpass: issuer advertises no userinfo_endpoint but FetchUserInfo is set")
 	}
 
+	cfg := engineConfig(opts, deps, issuer, discovered)
+
 	// The engine's PAR/token/userinfo HTTP client. A transparent wrapper over
 	// base that logs only when deps.Debug is set (otherwise it just delegates),
 	// so the default behaviour is a plain pass-through.
-	httpClient := newLoggingHTTPClient(base, deps.Debug, logger)
-
-	assurance := deps.Assurance
-	if assurance == 0 {
-		assurance = client.AssuranceDevelopment
-	}
-
-	cfg := client.Config{
-		Issuer:      issuer,
-		ClientID:    fapi.ClientID(opts.ClientID),
-		RedirectURI: opts.RedirectURI,
-		Endpoints:   discovered.Endpoints,
-		// Singpass FAPI pushes plain parameters to PAR (it does not require a
-		// signed request object), authenticated by private_key_jwt — the FAPI
-		// 2.0 Security baseline, not the message-signing profile.
-		Profile: client.ProfileFAPISecurity,
-		// Assurance gates FAPIgo's client-side session-store check (mirroring
-		// server.New): AssuranceProduction rejects a Sessions store that
-		// declares no storage.StoreAssurance / Durable capability, which the
-		// in-memory default does not — so a real deployment must both raise this
-		// to AssuranceProduction and supply a durable SessionStore. The zero
-		// value defaults to AssuranceDevelopment above.
-		Assurance: assurance,
-		// RFC 9207 iss enforcement. The policy has no default and is required, so
-		// set an explicit baseline: tolerate a callback without "iss" for an
-		// issuer that does not advertise the parameter. NewFromDiscovery (below)
-		// upgrades this to RequireAuthorizationResponseIss when discovery's
-		// AuthorizationResponseIssSupported is set (RFC 9207 §2.4 MUST-rejects a
-		// missing "iss" once the issuer is known to always send one) — it only
-		// ever raises the bar, never lowers this baseline.
-		AuthorizationResponseIssPolicy: client.TolerateAbsentAuthorizationResponseIss,
-		// The following four are set to their zero-value defaults purely to
-		// state the flow explicitly (each field's zero value already selects the
-		// same behaviour): PAR commits the code to the DPoP key with an actual
-		// proof (RFC 9449 §10.1), access tokens are DPoP-sender-constrained, the
-		// client authenticates with private_key_jwt, and CIBA is unused (poll).
-		PARDPoPBinding:               client.PARDPoPBindingProof,
-		SenderConstrain:              storage.SenderConstrainDPoP,
-		ClientAuthMethod:             storage.ClientAuthMethodPrivateKeyJWT,
-		BackchannelTokenDeliveryMode: storage.BackchannelTokenDeliveryModePoll,
-		// Opt-in: also accept a /userinfo "sub" equal to the client_id, as
-		// Corppass Myinfo Business used to send (an OIDC Core §5.3.2 deviation).
-		TolerateUserInfoSubjectEqualsClientID: opts.TolerateUserInfoSubjectClientID,
-		Algorithms:                            resolveAlgorithms(deps.Algorithms, opts.FetchUserInfo),
-		Limits:                                resolveLimits(deps.Limits, httpTimeout),
-	}
-
-	clock := deps.Clock
-	if clock == nil {
-		clock = client.SystemClock{}
-	}
-	sessions := deps.Sessions
-	if sessions == nil {
-		// Expire against the same clock FAPIgo stamps ExpiresAt with.
-		sessions = newMemorySessionStore(0, clock.Now)
-	}
-	random := deps.Random
-	if random == nil {
-		random = rand.Reader
-	}
+	httpClient := newLoggingHTTPClient(base, deps.Debug, deps.Logger)
 
 	// NewFromDiscovery is New plus two discovery-only checks: it runs
 	// discovered.SupportsAlgorithms(cfg.Algorithms) — so a declared-but-
@@ -394,18 +294,10 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	// signature/JWE-decrypt failure on the first live response — and it upgrades
 	// cfg.AuthorizationResponseIssPolicy to RequireAuthorizationResponseIss from
 	// discovered.AuthorizationResponseIssSupported (RFC 9207 §2.4), on top of the
-	// TolerateAbsent baseline set above. It does not
+	// TolerateAbsent baseline set in engineConfig. It does not
 	// read or modify cfg.Endpoints, so the UserInfo endpoint-presence fail-fast
 	// above is still ours to make.
-	engine, err := client.NewFromDiscovery(discovered, cfg, client.Dependencies{
-		Sessions:   sessions,
-		Keys:       deps.Keys,
-		IssuerKeys: issuerKeys,
-		Decryption: deps.Decryption,
-		HTTP:       httpClient,
-		Clock:      clock,
-		Random:     random,
-	})
+	engine, err := client.NewFromDiscovery(discovered, cfg, engineDependencies(deps, issuerKeys, httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("singpass: construct client: %w", err)
 	}
@@ -432,6 +324,144 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		retries:       deps.BeginLoginRetries,
 		encAlg:        cfg.Algorithms.IDTokenKeyManagement,
 	}, nil
+}
+
+// checkDependencies checks what New needs before anything else: the two
+// required dependencies, the options, and the retry count.
+func checkDependencies(opts Options, deps Dependencies) error {
+	if deps.Keys == nil {
+		return fmt.Errorf("singpass: Dependencies.Keys is required")
+	}
+	if deps.Decryption == nil {
+		return fmt.Errorf("singpass: Dependencies.Decryption is required")
+	}
+	if err := validateOptions(opts, deps.Assurance == AssuranceProduction); err != nil {
+		return err
+	}
+	if deps.BeginLoginRetries < 0 || deps.BeginLoginRetries > maxBeginLoginRetries {
+		return fmt.Errorf("singpass: Dependencies.BeginLoginRetries must be between 0 and %d", maxBeginLoginRetries)
+	}
+	return nil
+}
+
+// checkAssurance refuses the development-only settings under
+// AssuranceProduction and requires durable keys there. Outside it, it warns
+// when the issuer is a production one.
+func checkAssurance(opts Options, deps Dependencies) error {
+	if deps.Assurance != AssuranceProduction {
+		if isProductionIssuer(opts.Issuer) {
+			deps.Logger.Warn("singpass: production issuer without AssuranceProduction: the durable-session, key-custody and randomness checks are off",
+				"issuer", opts.Issuer)
+		}
+		return nil
+	}
+	if deps.AllowLoopbackHTTP {
+		return fmt.Errorf("singpass: Dependencies.AllowLoopbackHTTP is refused under AssuranceProduction")
+	}
+	if deps.Debug {
+		return fmt.Errorf("singpass: Dependencies.Debug is refused under AssuranceProduction: it logs the client assertion and authorization code")
+	}
+	return checkKeyCustody(deps)
+}
+
+// discover fetches the issuer's discovery document, through a hardened
+// fetcher for the GET-only discovery and JWKS documents, and returns it with
+// the issuer's verification keys: resolved from the JWKS URI it advertises,
+// cached and auto-refreshing.
+func discover(ctx context.Context, base *http.Client, issuer fapi.URL, deps Dependencies, urlOpts []fapi.URLOption) (client.DiscoveredMetadata, keys.IssuerKeySource, error) {
+	fetcher, err := fapihttp.New(base, fapihttp.Config{
+		MaxResponseBytes:  1 << 20,
+		RequestTimeout:    deps.HTTPTimeout,
+		MaxRedirects:      5,
+		AllowLoopbackHTTP: deps.AllowLoopbackHTTP,
+	})
+	if err != nil {
+		return client.DiscoveredMetadata{}, nil, fmt.Errorf("singpass: build fetcher: %w", err)
+	}
+	discovered, err := client.Discover(ctx, fetcher, issuer, urlOpts...)
+	if err != nil {
+		return client.DiscoveredMetadata{}, nil, fmt.Errorf("singpass: discover metadata: %w", err)
+	}
+	issuerKeys, err := discovered.IssuerKeySource(fetcher, 10*time.Minute)
+	if err != nil {
+		return client.DiscoveredMetadata{}, nil, fmt.Errorf("singpass: build issuer key source: %w", err)
+	}
+	return discovered, issuerKeys, nil
+}
+
+// engineConfig is the FAPIgo client configuration for the Singpass/Corppass
+// profile.
+func engineConfig(opts Options, deps Dependencies, issuer fapi.URL, discovered client.DiscoveredMetadata) client.Config {
+	assurance := deps.Assurance
+	if assurance == 0 {
+		assurance = client.AssuranceDevelopment
+	}
+	return client.Config{
+		Issuer:      issuer,
+		ClientID:    fapi.ClientID(opts.ClientID),
+		RedirectURI: opts.RedirectURI,
+		Endpoints:   discovered.Endpoints,
+		// Singpass FAPI pushes plain parameters to PAR (it does not require a
+		// signed request object), authenticated by private_key_jwt — the FAPI
+		// 2.0 Security baseline, not the message-signing profile.
+		Profile: client.ProfileFAPISecurity,
+		// Assurance gates FAPIgo's client-side session-store check (mirroring
+		// server.New): AssuranceProduction rejects a Sessions store that
+		// declares no storage.StoreAssurance / Durable capability, which the
+		// in-memory default does not — so a real deployment must both raise this
+		// to AssuranceProduction and supply a durable SessionStore. The zero
+		// value defaults to AssuranceDevelopment above.
+		Assurance: assurance,
+		// RFC 9207 iss enforcement. The policy has no default and is required, so
+		// set an explicit baseline: tolerate a callback without "iss" for an
+		// issuer that does not advertise the parameter. NewFromDiscovery
+		// upgrades this to RequireAuthorizationResponseIss when discovery's
+		// AuthorizationResponseIssSupported is set (RFC 9207 §2.4 MUST-rejects a
+		// missing "iss" once the issuer is known to always send one) — it only
+		// ever raises the bar, never lowers this baseline.
+		AuthorizationResponseIssPolicy: client.TolerateAbsentAuthorizationResponseIss,
+		// The following four are set to their zero-value defaults purely to
+		// state the flow explicitly (each field's zero value already selects the
+		// same behaviour): PAR commits the code to the DPoP key with an actual
+		// proof (RFC 9449 §10.1), access tokens are DPoP-sender-constrained, the
+		// client authenticates with private_key_jwt, and CIBA is unused (poll).
+		PARDPoPBinding:               client.PARDPoPBindingProof,
+		SenderConstrain:              storage.SenderConstrainDPoP,
+		ClientAuthMethod:             storage.ClientAuthMethodPrivateKeyJWT,
+		BackchannelTokenDeliveryMode: storage.BackchannelTokenDeliveryModePoll,
+		// Opt-in: also accept a /userinfo "sub" equal to the client_id, as
+		// Corppass Myinfo Business used to send (an OIDC Core §5.3.2 deviation).
+		TolerateUserInfoSubjectEqualsClientID: opts.TolerateUserInfoSubjectClientID,
+		Algorithms:                            resolveAlgorithms(deps.Algorithms, opts.FetchUserInfo),
+		Limits:                                resolveLimits(deps.Limits, deps.HTTPTimeout),
+	}
+}
+
+// engineDependencies is the FAPIgo client's dependencies, with the clock,
+// session store and randomness defaults applied.
+func engineDependencies(deps Dependencies, issuerKeys keys.IssuerKeySource, httpClient *loggingHTTPClient) client.Dependencies {
+	clock := deps.Clock
+	if clock == nil {
+		clock = client.SystemClock{}
+	}
+	sessions := deps.Sessions
+	if sessions == nil {
+		// Expire against the same clock FAPIgo stamps ExpiresAt with.
+		sessions = newMemorySessionStore(0, clock.Now)
+	}
+	random := deps.Random
+	if random == nil {
+		random = rand.Reader
+	}
+	return client.Dependencies{
+		Sessions:   sessions,
+		Keys:       deps.Keys,
+		IssuerKeys: issuerKeys,
+		Decryption: deps.Decryption,
+		HTTP:       httpClient,
+		Clock:      clock,
+		Random:     random,
+	}
 }
 
 // isProductionIssuer reports whether issuer is Singpass's or Corppass's
@@ -551,43 +581,55 @@ func (c *Client) BeginLoginWith(ctx context.Context, lc LoginContext) (redirectU
 // the client's login context overridden by lc, and the mobile-app redirect
 // parameters. FAPIgo sends each as a plain top-level PAR parameter.
 func (c *Client) loginExtensions(lc LoginContext) (extension.Values, error) {
-	typ, msg := c.authContext.Type, c.authContext.Message
-	if lc.Type != "" || lc.Message != "" {
-		if typ == "" {
-			return extension.Values{}, errors.New("singpass: a login context is only for Singpass Login clients")
-		}
-		if lc.Type != "" {
-			typ = lc.Type
-		}
-		if lc.Message != "" {
-			if err := validateAuthContextMessage(lc.Message); err != nil {
-				return extension.Values{}, err
-			}
-			msg = lc.Message
-		}
+	ctx, err := c.loginContext(lc)
+	if err != nil {
+		return extension.Values{}, err
+	}
+	redirectType := ""
+	if c.appClaimed {
+		redirectType = "app_claimed_https"
 	}
 	var ext extension.Values
-	set := func(def extension.Definition[string], v string) error {
-		if v == "" {
-			return nil
+	for _, p := range []struct {
+		def   extension.Definition[string]
+		value string
+	}{
+		{authContextTypeExt, ctx.Type},
+		{authContextMessageExt, ctx.Message},
+		{redirectURIHTTPSTypeExt, redirectType},
+		{appLaunchURLExt, c.appLaunchURL},
+	} {
+		if p.value == "" {
+			continue
 		}
-		if err := extension.Set(&ext, def, v); err != nil {
-			return fmt.Errorf("singpass: set %s: %w", def.Name, err)
-		}
-		return nil
-	}
-	if err := set(authContextTypeExt, typ); err != nil {
-		return ext, err
-	}
-	if err := set(authContextMessageExt, msg); err != nil {
-		return ext, err
-	}
-	if c.appClaimed {
-		if err := set(redirectURIHTTPSTypeExt, "app_claimed_https"); err != nil {
-			return ext, err
+		if err := extension.Set(&ext, p.def, p.value); err != nil {
+			return ext, fmt.Errorf("singpass: set %s: %w", p.def.Name, err)
 		}
 	}
-	return ext, set(appLaunchURLExt, c.appLaunchURL)
+	return ext, nil
+}
+
+// loginContext is the client's login context with lc's fields, where set,
+// in place of its own. Only a Login client, which has a context type, takes
+// one.
+func (c *Client) loginContext(lc LoginContext) (LoginContext, error) {
+	ctx := c.authContext
+	if lc.Type == "" && lc.Message == "" {
+		return ctx, nil
+	}
+	if ctx.Type == "" {
+		return LoginContext{}, errors.New("singpass: a login context is only for Singpass Login clients")
+	}
+	if lc.Type != "" {
+		ctx.Type = lc.Type
+	}
+	if lc.Message != "" {
+		if err := validateAuthContextMessage(lc.Message); err != nil {
+			return LoginContext{}, err
+		}
+		ctx.Message = lc.Message
+	}
+	return ctx, nil
 }
 
 // Complete validates the authorization callback (identified by its raw query

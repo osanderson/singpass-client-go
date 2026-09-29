@@ -57,18 +57,14 @@ func TestAuthorisations(t *testing.T) {
 		t.Fatalf("sample: got %d authorisations, want 1: %+v", len(got), got)
 	}
 	a := got[0]
-	if a.ESrvcID != "STG-T09LL1904A-MIBV3-MYINFI-UVBH8S" {
-		t.Errorf("ESrvcID = %q", a.ESrvcID)
-	}
-	if a.StartDate != "2026-08-25" || a.EndDate != "9999-12-31" {
-		t.Errorf("dates = %q..%q", a.StartDate, a.EndDate)
-	}
-	if a.Role != "" || a.Subject != "" {
-		t.Errorf("expected empty Role/Subject, got %q/%q", a.Role, a.Subject)
-	}
-	if len(a.Parameters) != 0 {
-		t.Errorf("expected no parameters, got %+v", a.Parameters)
-	}
+	checkAll(t,
+		check{"ESrvcID", a.ESrvcID, "STG-T09LL1904A-MIBV3-MYINFI-UVBH8S"},
+		check{"StartDate", a.StartDate, "2026-08-25"},
+		check{"EndDate", a.EndDate, "9999-12-31"},
+		check{"Role", a.Role, ""},
+		check{"Subject", a.Subject, ""},
+		check{"Parameters", len(a.Parameters), 0},
+	)
 
 	// Two e-services: the first with two rows, the second with one. Flattened to
 	// three authorisations, each tagged with its parent CPESrvcID.
@@ -87,26 +83,24 @@ func TestAuthorisations(t *testing.T) {
 	if len(ma) != 3 {
 		t.Fatalf("multi: got %d authorisations, want 3: %+v", len(ma), ma)
 	}
-	if ma[0].ESrvcID != "SVC-A" || ma[0].Role != "Admin" || ma[0].Subject != "S1234567D" {
-		t.Errorf("row0 = %+v", ma[0])
-	}
-	if ma[1].ESrvcID != "SVC-A" || ma[1].Role != "Preparer" {
-		t.Errorf("row1 = %+v", ma[1])
-	}
-	if ma[2].ESrvcID != "SVC-B" || ma[2].Role != "Approver" || ma[2].EndDate != "2025-06-01" {
-		t.Errorf("row2 = %+v", ma[2])
-	}
+	checkAll(t,
+		check{"row0 ESrvcID", ma[0].ESrvcID, "SVC-A"},
+		check{"row0 Role", ma[0].Role, "Admin"},
+		check{"row0 Subject", ma[0].Subject, "S1234567D"},
+		check{"row1 ESrvcID", ma[1].ESrvcID, "SVC-A"},
+		check{"row1 Role", ma[1].Role, "Preparer"},
+		check{"row2 ESrvcID", ma[2].ESrvcID, "SVC-B"},
+		check{"row2 Role", ma[2].Role, "Approver"},
+		check{"row2 EndDate", ma[2].EndDate, "2025-06-01"},
+	)
 
-	// Absent block → nil.
-	if got := Parse(map[string]any{"aud": "x"}).Auth.Authorisations(); got != nil {
-		t.Errorf("absent auth_info: got %+v, want nil", got)
-	}
-
-	// Wrong shape (a plain object, not Result_Set/ESrvc_Result) → nil.
+	// An absent block, and one of the wrong shape (a plain object, not
+	// Result_Set/ESrvc_Result), give nil.
 	wrong := Parse(map[string]any{
 		"auth_info": map[string]any{"something": map[string]any{"value": "x"}},
 	})
-	if got := wrong.Auth.Authorisations(); got != nil {
-		t.Errorf("wrong-shape auth_info: got %+v, want nil", got)
-	}
+	checkAll(t,
+		check{"absent auth_info", Parse(map[string]any{"aud": "x"}).Auth.Authorisations() == nil, true},
+		check{"wrong-shape auth_info", wrong.Auth.Authorisations() == nil, true},
+	)
 }

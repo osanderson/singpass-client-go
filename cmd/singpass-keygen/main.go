@@ -98,54 +98,21 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if len(sigs) == 0 && len(encs) == 0 {
 		sigs = keyList{{filepath.Join(*dir, "sig.pem"), *sigKID}}
 		encs = keyList{{filepath.Join(*dir, "enc.pem"), *encKID}}
-	} else {
-		var mixed []string
-		fs.Visit(func(f *flag.Flag) {
-			if f.Name == "dir" || f.Name == "sig-kid" || f.Name == "enc-kid" {
-				mixed = append(mixed, "-"+f.Name)
-			}
-		})
-		switch {
-		case len(mixed) > 0:
-			return fmt.Errorf("%s can't be combined with -sig/-enc: give each key as PATH=KID", strings.Join(mixed, ", "))
-		case len(sigs) == 0 || len(encs) == 0:
-			return errors.New("list at least one -sig and one -enc key: a JWKS needs both")
-		}
+	} else if err := checkKeyLists(fs, sigs, encs); err != nil {
+		return err
 	}
-	seen := map[string]string{}
-	for _, k := range append(append(keyList{}, sigs...), encs...) {
-		if other, ok := seen[filepath.Clean(k.path)]; ok {
-			return fmt.Errorf("%s is listed twice (as %q and %q): use separate keys", k.path, other, k.kid)
-		}
-		seen[filepath.Clean(k.path)] = k.kid
+	if err := checkDistinct(sigs, encs); err != nil {
+		return err
 	}
 
-	load := func(list keyList, what string) ([]singpass.PublishedKey, error) {
-		var out []singpass.PublishedKey
-		for _, k := range list {
-			var key *ecdsa.PrivateKey
-			var err error
-			if *check != "" {
-				key, err = keyfile.LoadECPrivateKey(k.path)
-			} else {
-				var created bool
-				key, created, err = keyfile.LoadOrGenerate(k.path)
-				if err == nil {
-					report(stderr, what, k.path, created)
-				}
-			}
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, singpass.PublishedKey{Key: &key.PublicKey, KID: k.kid})
-		}
-		return out, nil
-	}
-	signing, err := load(sigs, "signing key")
+	// With -check the keys must exist already; otherwise missing ones are
+	// created.
+	loadOnly := *check != ""
+	signing, err := loadKeys(sigs, "signing key", loadOnly, stderr)
 	if err != nil {
 		return err
 	}
-	encryption, err := load(encs, "encryption key")
+	encryption, err := loadKeys(encs, "encryption key", loadOnly, stderr)
 	if err != nil {
 		return err
 	}
@@ -164,6 +131,61 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	_, err = fmt.Fprintln(stdout, string(jwks))
 	return err
+}
+
+// checkKeyLists checks -sig/-enc lists: both given, and not mixed with the
+// -dir form's flags.
+func checkKeyLists(fs *flag.FlagSet, sigs, encs keyList) error {
+	var mixed []string
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "dir" || f.Name == "sig-kid" || f.Name == "enc-kid" {
+			mixed = append(mixed, "-"+f.Name)
+		}
+	})
+	switch {
+	case len(mixed) > 0:
+		return fmt.Errorf("%s can't be combined with -sig/-enc: give each key as PATH=KID", strings.Join(mixed, ", "))
+	case len(sigs) == 0 || len(encs) == 0:
+		return errors.New("list at least one -sig and one -enc key: a JWKS needs both")
+	}
+	return nil
+}
+
+// checkDistinct refuses a key file listed twice.
+func checkDistinct(sigs, encs keyList) error {
+	seen := map[string]string{}
+	for _, k := range append(append(keyList{}, sigs...), encs...) {
+		if other, ok := seen[filepath.Clean(k.path)]; ok {
+			return fmt.Errorf("%s is listed twice (as %q and %q): use separate keys", k.path, other, k.kid)
+		}
+		seen[filepath.Clean(k.path)] = k.kid
+	}
+	return nil
+}
+
+// loadKeys loads each key's public half, creating missing key files unless
+// loadOnly, and reports each one it creates or uses on stderr.
+func loadKeys(list keyList, what string, loadOnly bool, stderr io.Writer) ([]singpass.PublishedKey, error) {
+	var out []singpass.PublishedKey
+	for _, k := range list {
+		key, err := loadKey(k.path, what, loadOnly, stderr)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, singpass.PublishedKey{Key: &key.PublicKey, KID: k.kid})
+	}
+	return out, nil
+}
+
+func loadKey(path, what string, loadOnly bool, stderr io.Writer) (*ecdsa.PrivateKey, error) {
+	if loadOnly {
+		return keyfile.LoadECPrivateKey(path)
+	}
+	key, created, err := keyfile.LoadOrGenerate(path)
+	if err == nil {
+		report(stderr, what, path, created)
+	}
+	return key, err
 }
 
 // kidList formats the keys' kids for a message: "key \"a\"" or "keys \"a\", \"b\"".

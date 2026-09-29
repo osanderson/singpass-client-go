@@ -530,17 +530,7 @@ func unwrapDeep(v any) any { return unwrapValue("", v) }
 func unwrapValue(key string, v any) any {
 	switch t := v.(type) {
 	case string:
-		if leafMembers[key] {
-			return t
-		}
-		s := strings.TrimSpace(t)
-		if strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
-			var inner any
-			if json.Unmarshal([]byte(s), &inner) == nil {
-				return unwrapValue(key, inner)
-			}
-		}
-		return t
+		return unwrapString(key, t)
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
@@ -556,6 +546,23 @@ func unwrapValue(key string, v any) any {
 	default:
 		return v
 	}
+}
+
+// unwrapString returns the object or array a stringified JSON value holds,
+// unwrapped in turn, or the string itself: for a data item's own member,
+// and for any string that isn't JSON.
+func unwrapString(key, s string) any {
+	if leafMembers[key] {
+		return s
+	}
+	trimmed := strings.TrimSpace(s)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		var inner any
+		if json.Unmarshal([]byte(trimmed), &inner) == nil {
+			return unwrapValue(key, inner)
+		}
+	}
+	return s
 }
 
 // leafMembers are the members of a data item's envelope, which hold data
