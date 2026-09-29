@@ -185,3 +185,29 @@ func TestRunEndToEnd(t *testing.T) {
 		t.Errorf("run: %v", err)
 	}
 }
+
+func TestRunPersonaFlags(t *testing.T) {
+	cfg := writeConfig(t, `{"clients": [{"id": "a", "product": "login", "redirect_uris": ["https://app.example/cb"], "jwks": `+string(newKeyPair(t).jwks(t))+`}]}`)
+	if err := run(context.Background(), []string{"-config", cfg, "-only-personas"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "-only-personas needs -personas") {
+		t.Errorf("-only-personas alone: %v", err)
+	}
+	personas := writeConfig(t, `[{"name": "Extra User", "nric": "S1234567D"}]`)
+	ctx, cancel := context.WithCancel(context.Background())
+	var out lockedBuffer
+	done := make(chan error, 1)
+	go func() {
+		done <- run(ctx, []string{"-config", cfg, "-personas", personas, "-only-personas", "-corppass-addr", "", "-singpass-addr", freeAddr(t)}, &out, &bytes.Buffer{})
+	}()
+	deadline := time.Now().Add(3 * time.Second)
+	for !strings.Contains(out.String(), "test user: Extra User") {
+		if time.Now().After(deadline) {
+			t.Fatalf("stdout = %s", out.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if strings.Contains(out.String(), "Tan Xiao Hui") {
+		t.Error("-only-personas kept the built-in users")
+	}
+	cancel()
+	<-done
+}

@@ -238,6 +238,18 @@ singpass-fake-server -config clients.json   # Singpass at http://127.0.0.1:5156/
 See the [command's documentation](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-fake-server)
 for the file format.
 
+**Your own test users.** Add them from a JSON file — to the standalone server
+with `-personas users.json`, to the demo's mock mode with
+`DEMO_MOCK_PERSONAS=users.json`, or to a test with
+[`singpasstest.LoadPersonas`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest#LoadPersonas).
+Each user is an NRIC (or, for Corppass, a UEN and the acting person's NRIC)
+with optional `/userinfo` data in Myinfo's shape, so a real staging response —
+like the demo's "Raw /userinfo response" — can be pasted in as-is:
+
+```json
+[{"nric": "S1234567D", "userinfo": {"person_info": {"name": {"value": "TAN AH KOW"}}}}]
+```
+
 ## Going to production
 
 The defaults target **staging**. For production, set
