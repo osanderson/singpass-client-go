@@ -210,6 +210,7 @@ named fields (`IdentityNumber`, `AccountType`, `Name`, … for a person;
 | [`…/singpasstest`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest) | Fake Singpass / Corppass server for tests and demos |
 | [`…/sqlstore`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/sqlstore) | Durable session stores on Postgres, MySQL or SQLite (`database/sql`, no dependencies) |
 | [`…/cmd/singpass-keygen`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-keygen) | Command: create a client's keys and print the JWKS to register |
+| [`…/cmd/singpass-fake-server`](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-fake-server) | Command: run the fake Singpass and Corppass servers standalone, for apps in any language |
 
 ## Testing your integration
 
@@ -220,6 +221,17 @@ Singpass/Corppass quirks. Register your client with it, point the client at
 `srv.Issuer()` with `Dependencies{AllowLoopbackHTTP: true}`, and drive a full
 login in a test — see the
 [example](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest#example-package).
+
+To use the fake servers from an app in any language, or by hand in a
+browser, run them standalone and register your clients in a JSON file:
+
+```sh
+go install github.com/osanderson/singpass-client-go/cmd/singpass-fake-server@latest
+singpass-fake-server -config clients.json   # Singpass at http://127.0.0.1:5156/fapi, Corppass at http://127.0.0.1:5157
+```
+
+See the [command's documentation](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-fake-server)
+for the file format.
 
 ## Going to production
 
