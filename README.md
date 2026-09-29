@@ -28,8 +28,9 @@ Singpass pieces.
 - **Optional `net/http` helper** — login, callback, logout and JWKS routes; you
   render the pages.
 - **Test without onboarding** — `singpasstest` runs a fake Singpass/Corppass
-  server in-process for integration tests, and the demo runs against it with
-  one environment variable.
+  server in-process for integration tests, `singpass-fake-server` runs it
+  standalone for apps in any language, and the demo runs against it with one
+  environment variable.
 - **Production pieces included** — `Environment: singpass.Production`, durable
   session stores (`sqlstore`), key rotation without downtime, a published-JWKS
   check, retries for temporary Singpass errors, browser security headers
@@ -144,7 +145,8 @@ and [Myinfo Business test personas](https://docs.corppass.gov.sg/testing/myinfo-
 Log in with the persona's UINFIN and the password given on those pages. The
 Myinfo personas also sign in to staging Singpass Login apps, but Singpass
 doesn't support that use. Persona data changes without notice, so don't
-hard-code it. No staging client yet? Try the demo with `DEMO_MOCK=1`.
+hard-code it. No staging client yet? Try the demo with `DEMO_MOCK=1`, or run
+your own app against [`singpass-fake-server`](#testing-your-integration).
 
 ## Myinfo person data
 

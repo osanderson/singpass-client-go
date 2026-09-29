@@ -62,5 +62,6 @@ Turn on `Dependencies.Debug` against **staging only** — it logs the PAR,
 token and `/userinfo` requests and responses, including the client
 assertion — and compare them with the
 [Singpass integration guide](https://docs.developer.singpass.gov.sg/docs/technical-specifications/integration-guide).
-To rule out your environment, run the same flow against `singpasstest`, or
-the demo with `DEMO_MOCK=1`.
+To rule out your environment, run the same flow against `singpasstest` (or,
+from an app in another language, `singpass-fake-server`), or the demo with
+`DEMO_MOCK=1`.

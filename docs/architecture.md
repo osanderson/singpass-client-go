@@ -96,7 +96,9 @@ configuration, encoded in `NewMyinfoBusiness`:
   `person_info`, `corppass_info`, `auth_info`, `tp_auth_info`, each a nested object.
   `Identity.Myinfo` exposes each one as its own `Data` block (`Person`, `Entity`,
   `Corppass`, `Auth`, `TPAuth`; see [`myinfo/myinfo.go`](../myinfo/myinfo.go)) — personal Myinfo fills only
-  `Person`. Corppass also double-encodes some blocks (and nested objects) as
+  `Person`. The typed views read them: `PersonProfile()`, `EntityProfile()`
+  and `CorppassProfile()` model every item Singpass's and Corppass's
+  specifications define, and `Auth.Authorisations()` flattens `auth_info`. Corppass also double-encodes some blocks (and nested objects) as
   stringified JSON; these are unwrapped recursively, so every block reads as real
   nested JSON.
 - **`/userinfo` `sub`** — Corppass used to set it to the `client_id` (an OIDC
