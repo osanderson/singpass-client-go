@@ -24,6 +24,15 @@ import (
 	"github.com/idfoundry/fapigo/storage/memstore"
 )
 
+// The endpoint paths, under the issuer.
+const (
+	pathAuth     = "/auth"
+	pathToken    = "/token"
+	pathPAR      = "/par"
+	pathJWKS     = "/jwks"
+	pathUserInfo = "/userinfo"
+)
+
 // Issuer selects which authorization server the fake imitates.
 type Issuer int
 
@@ -169,10 +178,10 @@ func (s *Server) build() error {
 		dst  *fapi.URL
 		path string
 	}{
-		{&endpoints.Authorization, "/auth"},
-		{&endpoints.Token, "/token"},
-		{&endpoints.PushedAuthorizationRequest, "/par"},
-		{&endpoints.JWKS, "/jwks"},
+		{&endpoints.Authorization, pathAuth},
+		{&endpoints.Token, pathToken},
+		{&endpoints.PushedAuthorizationRequest, pathPAR},
+		{&endpoints.JWKS, pathJWKS},
 	} {
 		if *e.dst, err = ep(e.path); err != nil {
 			return err
@@ -336,12 +345,12 @@ func (s *Server) routes() http.Handler {
 	prefix := strings.TrimPrefix(s.issuer, s.base)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+prefix+"/.well-known/openid-configuration", s.handleMetadata)
-	mux.HandleFunc("GET "+prefix+"/jwks", s.handleJWKS)
-	mux.HandleFunc("POST "+prefix+"/par", s.handlePAR)
-	mux.HandleFunc("GET "+prefix+"/auth", s.handleAuthorize)
+	mux.HandleFunc("GET "+prefix+pathJWKS, s.handleJWKS)
+	mux.HandleFunc("POST "+prefix+pathPAR, s.handlePAR)
+	mux.HandleFunc("GET "+prefix+pathAuth, s.handleAuthorize)
 	mux.HandleFunc("POST "+prefix+"/auth/decision", s.handleDecision)
-	mux.HandleFunc("POST "+prefix+"/token", s.handleToken)
-	mux.HandleFunc("GET "+prefix+"/userinfo", s.handleUserInfo)
+	mux.HandleFunc("POST "+prefix+pathToken, s.handleToken)
+	mux.HandleFunc("GET "+prefix+pathUserInfo, s.handleUserInfo)
 	return mux
 }
 
@@ -349,11 +358,11 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	md := s.srv.Metadata(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                           s.issuer,
-		"authorization_endpoint":                           s.endpoint("/auth"),
-		"pushed_authorization_request_endpoint":            s.endpoint("/par"),
-		"token_endpoint":                                   s.endpoint("/token"),
-		"jwks_uri":                                         s.endpoint("/jwks"),
-		"userinfo_endpoint":                                s.endpoint("/userinfo"),
+		"authorization_endpoint":                           s.endpoint(pathAuth),
+		"pushed_authorization_request_endpoint":            s.endpoint(pathPAR),
+		"token_endpoint":                                   s.endpoint(pathToken),
+		"jwks_uri":                                         s.endpoint(pathJWKS),
+		"userinfo_endpoint":                                s.endpoint(pathUserInfo),
 		"response_types_supported":                         md.ResponseTypesSupported,
 		"response_modes_supported":                         md.ResponseModesSupported,
 		"grant_types_supported":                            []string{"authorization_code"},
@@ -543,7 +552,7 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	if gt := formValue(form, "grant_type"); gt != "authorization_code" {
+	if formValue(form, "grant_type") != "authorization_code" {
 		writeOAuthError(w, http.StatusBadRequest, "unsupported_grant_type", "only authorization_code is supported")
 		return
 	}
