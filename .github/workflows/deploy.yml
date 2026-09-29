@@ -48,6 +48,8 @@ jobs:
   # exact commit being deployed.
   ci:
     uses: ./.github/workflows/ci.yml
+    # SONAR_TOKEN, for the SonarQube analysis of main.
+    secrets: inherit
 
   deploy:
     needs: [commit-lint, ci]
