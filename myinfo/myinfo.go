@@ -1,20 +1,22 @@
 // Package myinfo is the data model for a Myinfo / Myinfo Business /userinfo
 // response.
 //
-// Start with the typed profiles: Response.PersonProfile and
-// Response.EntityProfile name the common items (UINFIN, name, date of birth,
+// Start with the typed profiles: Response.PersonProfile,
+// Response.EntityProfile and Response.CorppassProfile model every item
+// Singpass's and Corppass's specifications define, e.g. the common items (UINFIN, name, date of birth,
 // registered address, mobile number, CPF balances, NOA, vehicles, HDB
 // ownership, driving licence; an entity's basic profile, address,
 // appointments, shareholders, capital, financials, licences, grants and
 // history), with Address and Phone formatting and
-// Field.Date / Int / Float parsing values. Scopes turns data items into the
+// Field.Date / Int / Float / Bool parsing values. Scopes turns data items into the
 // scopes to request: the Item constants for Myinfo, and the Entity, User and
 // Corppass constants for Myinfo Business.
 //
 // Underneath, Response groups the data blocks, and Data and Field read each
 // item's Myinfo envelope (value or code+desc, source, classification,
-// lastupdated, unavailable) by key — for items the profiles don't model, or to
-// walk a whole block with Data.Leaves. Authorisation flattens Corppass
+// lastupdated, unavailable) by key — for anything the profiles don't model, such as
+// fields a newer Myinfo release adds, or to walk a whole block with
+// Data.Leaves. Authorisation flattens Corppass
 // auth_info.
 //
 // It depends only on the standard library. The singpass package fills
@@ -373,6 +375,14 @@ func (f Field) Date() (t time.Time, ok bool) {
 func (f Field) Int() (n int64, ok bool) {
 	n, err := strconv.ParseInt(f.Value(), 10, 64)
 	return n, err == nil
+}
+
+// Bool parses the field's value as a boolean, e.g. ownerprivate or a
+// scheme's eligibility. ok is false when the field has no value or it isn't
+// true or false.
+func (f Field) Bool() (b bool, ok bool) {
+	b, err := strconv.ParseBool(f.Value())
+	return b, err == nil
 }
 
 // Float parses the field's value as a number, e.g. a CPF balance or a

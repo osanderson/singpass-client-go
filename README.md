@@ -166,7 +166,8 @@ p.RegAdd.Lines()                         // ["102 BEDOK NORTH AVENUE 4", "#09-12
 p.MobileNo.E164()                        // "+6597399245"
 p.CPFBalances.OA.Float()                 // 1581.48, true
 p.NOABasic.Amount.Float()                // latest assessable income; .NOA for the breakdown
-p.Vehicles[0].COEExpiryDate.Date()       // also HDBOwnership, DrivingLicence, NOAHistory
+p.Vehicles[0].COEExpiryDate.Date()       // also HDBOwnership, DrivingLicence, NOAHistory, CPFContributions, …
+p.PartialUINFIN.String()                 // "****381D": masked NRIC, for display without the full number
 p.Email.Available()                      // false when Myinfo has no value
 p.Name.SourceCode()                      // myinfo.SourceGovernmentVerified
 
@@ -174,6 +175,7 @@ e := id.Myinfo.EntityProfile()           // Myinfo Business
 e.Name.String(); e.RegistrationNumber.String(); e.UENStatus.Code(); e.Address.String()
 e.Appointments; e.Shareholders           // person or entity party, flattened
 e.Financials[0].Company.Revenue.Float()  // also Capitals, Licences, Grants, History, …
+id.Myinfo.CorppassProfile().Email        // the acting user's Corppass account
 id.Myinfo.Auth.Authorisations()          // Corppass auth_info, flattened
 ```
 
