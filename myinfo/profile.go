@@ -12,6 +12,7 @@ package myinfo
 // Scopes("openid", ItemName, ItemVehicles).
 type PersonProfile struct {
 	UINFIN               Field // uinfin: NRIC or FIN
+	PartialUINFIN        Field // partialuinfin: masked NRIC or FIN, e.g. ****381D, for display without the full number
 	Name                 Field // name
 	AliasName            Field // aliasname
 	HanyuPinyinName      Field // hanyupinyinname
@@ -26,13 +27,18 @@ type PersonProfile struct {
 	BirthCountry         Field // birthcountry (coded)
 	ResidentialStatus    Field // residentialstatus (coded)
 	Marital              Field // marital: marital status (coded)
+	MarriageDate         Field // marriagedate
+	DivorceDate          Field // divorcedate
+	CountryOfMarriage    Field // countryofmarriage (coded)
+	MarriageCertNo       Field // marriagecertno
 
 	Email    Field   // email
 	MobileNo Phone   // mobileno
 	RegAdd   Address // regadd: registered address
 
-	HousingType Field // housingtype (coded)
-	HDBType     Field // hdbtype (coded)
+	HousingType  Field // housingtype (coded)
+	HDBType      Field // hdbtype (coded)
+	OwnerPrivate Field // ownerprivate: owns private residential property (Field.Bool)
 
 	PassportNumber     Field // passportnumber
 	PassportExpiryDate Field // passportexpirydate
@@ -41,6 +47,7 @@ type PersonProfile struct {
 	PassExpiryDate     Field // passexpirydate
 
 	Occupation       Field // occupation (coded)
+	Employment       Field // employment: employer's name
 	EmploymentSector Field // employmentsector
 
 	CPFBalances CPFBalances // cpfbalances
@@ -54,6 +61,19 @@ type PersonProfile struct {
 	Vehicles        []Vehicle      // vehicles
 	HDBOwnership    []HDBOwnership // hdbownership
 	DrivingLicence  DrivingLicence // drivinglicence
+
+	// CPF records, schemes, licences, education and children.
+	CPFContributions         []CPFContribution      // cpfcontributions: up to 15 months
+	CPFEmployers             []CPFEmployer          // cpfemployers
+	CPFHousingWithdrawals    []CPFHousingWithdrawal // cpfhousingwithdrawal
+	CPFInvestmentScheme      CPFInvestmentScheme    // cpfinvestmentscheme
+	CHAS                     CHAS                   // chas
+	MerdekaGenEligible       Field                  // merdekagen.eligibility (Field.Bool)
+	PioneerGenEligible       Field                  // pioneergen.eligibility (Field.Bool)
+	LTAVocationalLicences    LTAVocationalLicences  // ltavocationallicences
+	AcademicQualifications   AcademicQualifications // academicqualifications
+	ChildrenBirthRecords     []ChildRecord          // childrenbirthrecords
+	SponsoredChildrenRecords []ChildRecord          // sponsoredchildrenrecords
 
 	// Data is the whole person_info block.
 	Data Data
@@ -82,6 +102,7 @@ func (m *Response) PersonProfile() PersonProfile {
 	cpf := p.Object("cpfbalances")
 	return PersonProfile{
 		UINFIN:               p.Field("uinfin"),
+		PartialUINFIN:        p.Field("partialuinfin"),
 		Name:                 p.Field("name"),
 		AliasName:            p.Field("aliasname"),
 		HanyuPinyinName:      p.Field("hanyupinyinname"),
@@ -96,17 +117,23 @@ func (m *Response) PersonProfile() PersonProfile {
 		BirthCountry:         p.Field("birthcountry"),
 		ResidentialStatus:    p.Field("residentialstatus"),
 		Marital:              p.Field("marital"),
+		MarriageDate:         p.Field("marriagedate"),
+		DivorceDate:          p.Field("divorcedate"),
+		CountryOfMarriage:    p.Field("countryofmarriage"),
+		MarriageCertNo:       p.Field("marriagecertno"),
 		Email:                p.Field("email"),
 		MobileNo:             p.Phone("mobileno"),
 		RegAdd:               p.Address("regadd"),
 		HousingType:          p.Field("housingtype"),
 		HDBType:              p.Field("hdbtype"),
+		OwnerPrivate:         p.Field("ownerprivate"),
 		PassportNumber:       p.Field("passportnumber"),
 		PassportExpiryDate:   p.Field("passportexpirydate"),
 		PassType:             p.Field("passtype"),
 		PassStatus:           p.Field("passstatus"),
 		PassExpiryDate:       p.Field("passexpirydate"),
 		Occupation:           p.Field("occupation"),
+		Employment:           p.Field("employment"),
 		EmploymentSector:     p.Field("employmentsector"),
 		CPFBalances: CPFBalances{
 			OA: cpf.Field("oa"), SA: cpf.Field("sa"), MA: cpf.Field("ma"), RA: cpf.Field("ra"),
@@ -119,7 +146,19 @@ func (m *Response) PersonProfile() PersonProfile {
 		Vehicles:        vehicles(p),
 		HDBOwnership:    hdbOwnerships(p),
 		DrivingLicence:  drivingLicenceFrom(p.Object("drivinglicence")),
-		Data:            p,
+
+		CPFContributions:         cpfContributions(p.Object("cpfcontributions")),
+		CPFEmployers:             cpfEmployers(p.Object("cpfemployers")),
+		CPFHousingWithdrawals:    cpfHousingWithdrawals(p.Object("cpfhousingwithdrawal")),
+		CPFInvestmentScheme:      cpfInvestmentSchemeFrom(p.Object("cpfinvestmentscheme")),
+		CHAS:                     chasFrom(p.Object("chas")),
+		MerdekaGenEligible:       p.Object("merdekagen").Field("eligibility"),
+		PioneerGenEligible:       p.Object("pioneergen").Field("eligibility"),
+		LTAVocationalLicences:    ltaVocationalLicencesFrom(p.Object("ltavocationallicences")),
+		AcademicQualifications:   academicQualificationsFrom(p.Object("academicqualifications")),
+		ChildrenBirthRecords:     childRecords(p, "childrenbirthrecords"),
+		SponsoredChildrenRecords: childRecords(p, "sponsoredchildrenrecords"),
+		Data:                     p,
 	}
 }
 
