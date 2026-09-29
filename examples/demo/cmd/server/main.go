@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -34,14 +35,59 @@ func main() {
 		slog.Error("load config", "err", err)
 		os.Exit(1)
 	}
-	logger := newLogger(cfg.LogJSON)
+	logger := newLogger(os.Stderr, cfg.LogJSON)
 	slog.SetDefault(logger)
 
 	// Cancelled on SIGTERM (Cloud Run's shutdown signal) or Ctrl-C, which
-	// triggers a graceful shutdown below.
+	// triggers a graceful shutdown in serve.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer stop()
+	if err := serve(ctx, &cfg, logger); err != nil {
+		logger.Error("server", "err", err)
+		os.Exit(1)
+	}
+}
 
+// serve runs the demo until ctx is cancelled, then shuts down gracefully.
+func serve(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
+	handler, closeApp, err := newApp(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+	defer closeApp()
+
+	logger.Info("listening", "addr", cfg.Addr, "base_url", cfg.BaseURL, "apps", len(cfg.Apps))
+	// Bound how long a client may take to send headers/body or sit idle, so
+	// slow or stalled connections (Slowloris) cannot pin the server open. No
+	// WriteTimeout: Myinfo callbacks wait on several outbound calls, each
+	// already bounded by cfg.HTTPTimeout.
+	srv := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	errc := make(chan error, 1)
+	go func() { errc <- srv.ListenAndServe() }()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
+	// Cloud Run allows 10s between SIGTERM and SIGKILL; let in-flight
+	// callbacks finish within that.
+	logger.Info("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx)
+}
+
+// newApp builds the demo's HTTP handler: a relying party per configured app,
+// the web helper's routes, and the home / profile page, all behind the
+// security headers. In mock mode it first starts the fake servers, which the
+// returned close function stops.
+func newApp(ctx context.Context, cfg *config.Config, logger *slog.Logger) (http.Handler, func(), error) {
 	// Shared dependencies for every relying party: the demo defaults (in-memory
 	// sessions, staging assurance) plus the HTTP timeout and debug flag from the
 	// environment. A production deployment would set Assurance and a durable
@@ -51,14 +97,13 @@ func main() {
 		Debug:       cfg.Debug,
 		Logger:      logger,
 	}
-
+	closeApp := func() {}
 	if cfg.Mock {
-		closeMock, err := startMock(&cfg, logger)
+		closeMock, err := startMock(cfg, logger)
 		if err != nil {
-			logger.Error("start mock servers", "err", err)
-			os.Exit(1)
+			return nil, nil, fmt.Errorf("start mock servers: %w", err)
 		}
-		defer closeMock()
+		closeApp = closeMock
 		deps.AllowLoopbackHTTP = true
 	}
 
@@ -66,21 +111,20 @@ func main() {
 	for _, ac := range cfg.Apps {
 		client, jwks, err := buildApp(ctx, ac, deps)
 		if err != nil {
-			logger.Error("build relying party", "app", ac.Name, "err", err)
-			os.Exit(1)
+			closeApp()
+			return nil, nil, fmt.Errorf("build relying party %s: %w", ac.Name, err)
 		}
-		apps = append(apps, &web.App{
-			Name:  ac.Name,
-			Title: ac.Title,
-			Auth:  client,
-			JWKS:  jwks,
-		})
+		apps = append(apps, &web.App{Name: ac.Name, Title: ac.Title, Auth: client, JWKS: jwks})
 		logger.Info("relying party ready",
 			"app", ac.Name, "issuer", ac.Issuer, "client_id", ac.ClientID,
 			"redirect_uri", ac.RedirectURI, "fetch_userinfo", ac.FetchUserInfo,
 			"acr_values", ac.AcrValues)
 	}
+	return web.SecureHeaders(routes(cfg, apps, logger)), closeApp, nil // CSP, anti-framing, nosniff, HSTS, …
+}
 
+// routes mounts the web helper's per-app routes and the home / profile page.
+func routes(cfg *config.Config, apps []*web.App, logger *slog.Logger) *http.ServeMux {
 	renderHome := func(w http.ResponseWriter, message string) {
 		demoapp.RenderHome(w, demoapp.Home{Apps: homeApps(apps), Message: message, Mock: cfg.Mock})
 	}
@@ -103,22 +147,14 @@ func main() {
 			renderHome(w, "Login with "+app.Title+" was declined: "+denied.Code)
 		},
 		OnError: func(w http.ResponseWriter, _ *http.Request, app *web.App, err error) {
-			// A stale login (expired, reloaded callback, other browser) isn't a
-			// failure worth alarming the user about: ask them to try again.
-			if errors.Is(err, web.ErrTooManyLogins) {
-				w.WriteHeader(http.StatusTooManyRequests)
-				renderHome(w, "Too many logins started from your address. Please wait a minute and try again.")
-				return
+			status, message := loginErrorPage(app, err)
+			if status == http.StatusInternalServerError {
+				logger.Error("login error", "app", app.Name, "err", err)
+			} else {
+				logger.Warn("login refused", "app", app.Name, "err", err)
 			}
-			if errors.Is(err, singpass.ErrLoginExpired) {
-				logger.Warn("login expired", "app", app.Name, "err", err)
-				w.WriteHeader(http.StatusBadRequest)
-				renderHome(w, "Your "+app.Title+" login expired. Please try again.")
-				return
-			}
-			logger.Error("login error", "app", app.Name, "err", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			renderHome(w, "Login with "+app.Title+" failed. See server logs.")
+			w.WriteHeader(status)
+			renderHome(w, message)
 		},
 	})
 
@@ -130,62 +166,54 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
-		if id, ok := handlers.CurrentIdentity(r); ok {
-			app := handlers.App(id.App)
-			title := id.App
-			if app != nil {
-				title = app.Title
-			}
-			pd := demoapp.ProfileData{
-				Mock:            cfg.Mock,
-				App:             id.App,
-				Title:           title,
-				Subject:         id.Subject,
-				Scope:           id.Scope,
-				ScopeList:       strings.Fields(id.Scope),
-				TokenHighlights: idTokenHighlights(id),
-				ClaimsPre:       demoapp.PrettyJSON(id.Claims),
-			}
-			if id.Myinfo != nil {
-				pd.Blocks = strings.Join(id.Myinfo.Blocks(), ", ")
-				pd.Sections = typedSections(id)
-				pd.Untyped, pd.ItemCount = untypedItems(id.Myinfo)
-				pd.PersonInfoPre = demoapp.PrettyJSON(id.Myinfo.Raw())
-			}
-			demoapp.RenderProfile(w, pd)
+		id, ok := handlers.CurrentIdentity(r)
+		if !ok {
+			renderHome(w, "")
 			return
 		}
-		renderHome(w, "")
+		demoapp.RenderProfile(w, profileData(cfg, handlers.App(id.App), id))
 	})))
+	return mux
+}
 
-	logger.Info("listening", "addr", cfg.Addr, "base_url", cfg.BaseURL, "apps", len(apps))
-	// Bound how long a client may take to send headers/body or sit idle, so
-	// slow or stalled connections (Slowloris) cannot pin the server open. No
-	// WriteTimeout: Myinfo callbacks wait on several outbound calls, each
-	// already bounded by cfg.HTTPTimeout.
-	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           web.SecureHeaders(mux), // CSP, anti-framing, nosniff, HSTS, …
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+// loginErrorPage is the status and message for a failed login: a rate-limited
+// or stale login (expired, reloaded callback, other browser) isn't a failure
+// worth alarming the user about, so they are asked to wait or try again.
+func loginErrorPage(app *web.App, err error) (int, string) {
+	switch {
+	case errors.Is(err, web.ErrTooManyLogins):
+		return http.StatusTooManyRequests, "Too many logins started from your address. Please wait a minute and try again."
+	case errors.Is(err, singpass.ErrLoginExpired):
+		return http.StatusBadRequest, "Your " + app.Title + " login expired. Please try again."
+	default:
+		return http.StatusInternalServerError, "Login with " + app.Title + " failed. See server logs."
 	}
-	errc := make(chan error, 1)
-	go func() { errc <- srv.ListenAndServe() }()
-	select {
-	case err := <-errc:
-		logger.Error("server", "err", err)
-		os.Exit(1)
-	case <-ctx.Done():
+}
+
+// profileData is the signed-in page's view of id, from app (nil if the app is
+// no longer configured).
+func profileData(cfg *config.Config, app *web.App, id *singpass.Identity) demoapp.ProfileData {
+	title := id.App
+	if app != nil {
+		title = app.Title
 	}
-	// Cloud Run allows 10s between SIGTERM and SIGKILL; let in-flight
-	// callbacks finish within that.
-	logger.Info("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("shutdown", "err", err)
+	pd := demoapp.ProfileData{
+		Mock:            cfg.Mock,
+		App:             id.App,
+		Title:           title,
+		Subject:         id.Subject,
+		Scope:           id.Scope,
+		ScopeList:       strings.Fields(id.Scope),
+		TokenHighlights: idTokenHighlights(id),
+		ClaimsPre:       demoapp.PrettyJSON(id.Claims),
 	}
+	if id.Myinfo != nil {
+		pd.Blocks = strings.Join(id.Myinfo.Blocks(), ", ")
+		pd.Sections = typedSections(id)
+		pd.Untyped, pd.ItemCount = untypedItems(id.Myinfo)
+		pd.PersonInfoPre = demoapp.PrettyJSON(id.Myinfo.Raw())
+	}
+	return pd
 }
 
 // clientKey returns the login rate limit's key: the client's address. Behind
@@ -212,13 +240,13 @@ func clientKey(behindProxy bool) func(*http.Request) string {
 	}
 }
 
-// newLogger returns the demo's logger: human-readable text by default, or JSON
+// newLogger returns the demo's logger, writing to w: human-readable text by default, or JSON
 // lines whose "severity" and "message" keys Cloud Logging maps to a log entry's
 // level and summary (so errors show as errors in the Cloud Run console).
-func newLogger(jsonFormat bool) *slog.Logger {
+func newLogger(w io.Writer, jsonFormat bool) *slog.Logger {
 	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
 	if !jsonFormat {
-		return slog.New(slog.NewTextHandler(os.Stderr, opts))
+		return slog.New(slog.NewTextHandler(w, opts))
 	}
 	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 		if len(groups) > 0 {
@@ -235,7 +263,7 @@ func newLogger(jsonFormat bool) *slog.Logger {
 		}
 		return a
 	}
-	return slog.New(slog.NewJSONHandler(os.Stderr, opts))
+	return slog.New(slog.NewJSONHandler(w, opts))
 }
 
 // buildApp constructs the singpass.Client and public JWKS for one configured relying
