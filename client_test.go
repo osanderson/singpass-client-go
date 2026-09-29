@@ -168,7 +168,11 @@ func TestNewLoginConfiguresClient(t *testing.T) {
 	if c.fetchUserInfo {
 		t.Error("Login client would call /userinfo")
 	}
-	if got, ok := extension.Get(c.extensions, authContextTypeExt); !ok || got != DefaultAuthContextType {
+	ext, err := c.loginExtensions(LoginContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := extension.Get(ext, authContextTypeExt); !ok || got != DefaultAuthContextType {
 		t.Errorf("authentication_context_type = %q, %v; want %q", got, ok, DefaultAuthContextType)
 	}
 	if want := []string{"urn:a", "urn:b"}; !reflect.DeepEqual(c.acrValues, want) {
@@ -206,7 +210,11 @@ func TestNewMyinfoConfiguresClient(t *testing.T) {
 	if !c.fetchUserInfo {
 		t.Error("Myinfo client would not call /userinfo")
 	}
-	if _, ok := extension.Get(c.extensions, authContextTypeExt); ok {
+	ext, err := c.loginExtensions(LoginContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := extension.Get(ext, authContextTypeExt); ok {
 		t.Error("Myinfo client sends authentication_context_type (Singpass rejects it)")
 	}
 	if c.acrValues != nil {

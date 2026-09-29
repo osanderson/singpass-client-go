@@ -52,6 +52,17 @@
   constructors handle this: `singpass.NewLogin` sends it (defaulting to
   `APP_AUTHENTICATION_DEFAULT`), while `singpass.NewMyinfo` and `singpass.NewMyinfoBusiness`
   never do.
+- **`authentication_context_message` is optional, Login-only, and shown to the
+  user** while they authenticate: at most 100 printable ASCII characters,
+  excluding `<`, `>`, `\` and `` ` ``, and subject to Singpass's audit. Both it
+  and the context type describe the *transaction*, so they can differ per
+  login: set defaults in `LoginOptions.AuthContextMessage` / `AuthContextType`,
+  or pass `singpass.LoginContext` to `Client.BeginLoginWith`. The library
+  checks the message's length and characters before sending it.
+- **Mobile apps** redirect through an App Link / Universal Link: send
+  `redirect_uri_https_type=app_claimed_https` (`AppClaimedHTTPS`), and for a
+  journey that starts and ends in an iOS app, `app_launch_url` (`AppLaunchURL`),
+  the App Link that returns the user from the Singpass app.
 - **PAR requires `client_id` in the body** even with `private_key_jwt`
   authentication (strict AS).
 - **The DPoP binding must be committed at PAR**, not only at the token endpoint.

@@ -64,3 +64,20 @@ func TestErrorHelpersWithoutServerResponse(t *testing.T) {
 		}
 	}
 }
+
+// A Login with an authentication context message completes against the fake
+// server, which checks the message as Singpass does.
+func TestLoginWithContextMessageEndToEnd(t *testing.T) {
+	srv, c := newLoginClient(t, singpass.Dependencies{}, nil)
+	redirect, state, err := c.BeginLoginWith(context.Background(), singpass.LoginContext{Message: "Log in to Example Bank"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback, err := srv.Authorize(context.Background(), redirect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Complete(context.Background(), callback, state); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+}

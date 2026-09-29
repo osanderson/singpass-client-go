@@ -79,8 +79,20 @@ type LoginOptions struct {
 	Scopes      []string    // must include "openid"
 
 	// AuthContextType is the Login authentication_context_type; defaults to
-	// DefaultAuthContextType.
-	AuthContextType string
+	// DefaultAuthContextType. AuthContextMessage is the optional
+	// authentication_context_message shown to the user while they
+	// authenticate: up to 100 printable ASCII characters, excluding < > \ and
+	// `. Both describe the transaction and can be set per login with
+	// Client.BeginLoginWith.
+	AuthContextType    string
+	AuthContextMessage string
+
+	// AppClaimedHTTPS marks RedirectURI as a mobile app's App Link /
+	// Universal Link (redirect_uri_https_type=app_claimed_https), for a login
+	// started from a native app. AppLaunchURL is the optional iOS App Link
+	// that returns the user to your app from the Singpass app.
+	AppClaimedHTTPS bool
+	AppLaunchURL    string
 	// AcrValues is the optional requested level of assurance; "" to omit
 	// (Singpass rejects it unless the client is whitelisted for it).
 	AcrValues string
@@ -121,6 +133,13 @@ type MyinfoOptions struct {
 	RedirectURI string      // must match what is registered with the server
 	Scopes      []string    // person-data scopes; must include "openid"
 	AcrValues   string      // optional requested level of assurance; "" to omit
+
+	// AppClaimedHTTPS marks RedirectURI as a mobile app's App Link /
+	// Universal Link (redirect_uri_https_type=app_claimed_https), for a login
+	// started from a native app. AppLaunchURL is the optional iOS App Link
+	// that returns the user to your app from the Singpass app.
+	AppClaimedHTTPS bool
+	AppLaunchURL    string
 
 	SigningKey    crypto.Signer     // ES256 / P-256 client-assertion + DPoP signer
 	SigningKID    string            // kid of the registered signing key
@@ -206,13 +225,16 @@ func NewLogin(ctx context.Context, o LoginOptions, deps Dependencies) (*Client, 
 		return nil, err
 	}
 	return New(ctx, Options{
-		Name:            o.Name,
-		Issuer:          o.Issuer,
-		ClientID:        o.ClientID,
-		RedirectURI:     o.RedirectURI,
-		Scopes:          o.Scopes,
-		AuthContextType: o.AuthContextType,
-		AcrValues:       o.AcrValues,
+		Name:               o.Name,
+		Issuer:             o.Issuer,
+		ClientID:           o.ClientID,
+		RedirectURI:        o.RedirectURI,
+		Scopes:             o.Scopes,
+		AuthContextType:    o.AuthContextType,
+		AuthContextMessage: o.AuthContextMessage,
+		AcrValues:          o.AcrValues,
+		AppClaimedHTTPS:    o.AppClaimedHTTPS,
+		AppLaunchURL:       o.AppLaunchURL,
 	}, deps)
 }
 
@@ -231,13 +253,15 @@ func NewMyinfo(ctx context.Context, o MyinfoOptions, deps Dependencies) (*Client
 		return nil, err
 	}
 	return New(ctx, Options{
-		Name:          o.Name,
-		Issuer:        o.Issuer,
-		ClientID:      o.ClientID,
-		RedirectURI:   o.RedirectURI,
-		Scopes:        o.Scopes,
-		AcrValues:     o.AcrValues,
-		FetchUserInfo: true,
+		Name:            o.Name,
+		Issuer:          o.Issuer,
+		ClientID:        o.ClientID,
+		RedirectURI:     o.RedirectURI,
+		Scopes:          o.Scopes,
+		AcrValues:       o.AcrValues,
+		FetchUserInfo:   true,
+		AppClaimedHTTPS: o.AppClaimedHTTPS,
+		AppLaunchURL:    o.AppLaunchURL,
 	}, deps)
 }
 

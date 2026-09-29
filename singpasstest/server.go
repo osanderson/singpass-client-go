@@ -382,8 +382,17 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 	// clients and rejected for Myinfo ones.
 	if c, ok := s.clients.get(fapi.ClientID(formValue(form, "client_id"))); ok {
 		act := formValue(form, "authentication_context_type")
+		msg := formValue(form, "authentication_context_message")
+		switch https := formValue(form, "redirect_uri_https_type"); {
+		case https != "" && https != "app_claimed_https" && https != "standard_https":
+			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "redirect_uri_https_type must be app_claimed_https or standard_https")
+			return
+		case len(msg) > 100 || strings.ContainsAny(msg, "<>\\`") || !isPrintableASCII(msg):
+			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "authentication_context_message must be at most 100 printable ASCII characters, excluding < > \\ and `")
+			return
+		}
 		switch {
-		case c.cfg.App == Myinfo && act != "":
+		case c.cfg.App == Myinfo && (act != "" || msg != ""):
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request",
 				"authentication_context_type and authentication_context_message can only be provided for Login apps. Please remove these fields from your request body.")
 			return
@@ -693,4 +702,13 @@ func formValue(form server.FormRequest, name string) string {
 		}
 	}
 	return ""
+}
+
+func isPrintableASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }

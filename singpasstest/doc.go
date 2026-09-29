@@ -10,8 +10,9 @@
 // behaviours this library handles:
 //
 //   - Singpass issuers end in "/fapi"; Corppass issuers don't.
-//   - authentication_context_type is required for Login clients and rejected
-//     for Myinfo clients.
+//   - authentication_context_type is required for Login clients, and it and
+//     authentication_context_message are rejected for Myinfo ones; the message
+//     must be at most 100 printable ASCII characters, excluding < > \ and `.
 //   - Singpass omits "scope" from the token response; Corppass echoes it.
 //   - Singpass /userinfo returns only the person_info items the granted scopes
 //     cover.
