@@ -117,6 +117,8 @@ go install github.com/osanderson/singpass-client-go/cmd/singpass-keygen@latest
 singpass-keygen -dir keys/login -sig-kid login-sig-1 -enc-kid login-enc-1 > login.jwks.json
 ```
 
+To publish several keys, as in a key rotation, list each one with
+`-sig PATH=KID` / `-enc PATH=KID` instead of `-dir`.
 In code, `keyfile.LoadOrGenerate` and `singpass.OfflineClientJWKS` do the same
 ([example](https://pkg.go.dev/github.com/osanderson/singpass-client-go#example-OfflineClientJWKS)).
 
