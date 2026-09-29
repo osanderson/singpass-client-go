@@ -222,14 +222,26 @@ covers [rotating keys](docs/production.md#7-rotating-keys) without downtime.
 - [Troubleshooting](docs/troubleshooting.md) — error codes and symptoms, with their causes and fixes
 - [Configuration](docs/configuration.md) — options, dependencies, keys, staging vs production
 - [Going to production](docs/production.md) — the go-live checklist
+- [Upgrading](UPGRADING.md) — what to change for each breaking release
 - [How it works](docs/architecture.md) — what Singpass needs and where each piece is handled
 - [Singpass quirks](docs/singpass-quirks.md) and [Corppass quirks](docs/corppass-quirks.md) — non-obvious server behaviour
 - [Examples](examples) — [`minimal`](examples/minimal) (one product, ~75 lines) and [`demo`](examples/demo) (all three, [live on staging](https://rp-demo-1090410730433.asia-southeast1.run.app))
 
 ## Stability
 
-The project is pre-1.0: minor versions may change the API, and every change is
-listed in the [CHANGELOG](CHANGELOG.md). Releases follow semantic versioning.
+The project is pre-1.0 and follows semantic versioning:
+
+- **Patch releases** (`0.9.x`) never break the API.
+- **Minor releases** (`0.x.0`) may. Each breaking change is marked in the
+  [CHANGELOG](CHANGELOG.md) and explained, with before/after code, in
+  [UPGRADING.md](UPGRADING.md).
+- **1.0** will follow once the API has held through real integrations of all
+  three products and a release cycle without breaking changes; from then on,
+  breaking changes wait for a major version.
+
+Much of the churn so far has come from tracking [FAPIgo](https://github.com/idfoundry/fapigo),
+which is also pre-1.0; this library absorbs its changes where it can, so most
+FAPIgo upgrades need nothing from you.
 
 ## Contributing and security
 
