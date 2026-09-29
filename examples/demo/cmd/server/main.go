@@ -435,23 +435,16 @@ func anchorize(title string) string {
 	return b.String()
 }
 
-// personSection builds the person_info block, leading with the headline identity
-// leaves in a readable order, then folding in every remaining field verbatim. No
-// values are synthesised: nested objects such as mobileno / regadd surface as their
-// own sub-headed groups with each raw component ("Nbr", "Postal", …) shown as-is, so
-// the structured view faithfully mirrors the raw /userinfo envelope.
+// personSection builds the person_info block generically: every item, in key
+// order, with its provenance — including items the typed profile doesn't
+// model. The key facts are shown first, typed, in the Summary card (see
+// summary), so they aren't repeated here. Nested objects such as mobileno /
+// regadd surface as their own sub-headed groups with each raw component
+// ("Nbr", "Postal", …) shown as-is, so this view mirrors the raw /userinfo
+// envelope.
 func personSection(p myinfo.Data) demoapp.Section {
 	sec := demoapp.Section{Title: "Person"}
 	shown := map[string]bool{}
-	for _, h := range []struct{ label, key string }{
-		{"Name", "name"}, {"UINFIN", "uinfin"}, {"Sex", "sex"},
-		{"Nationality", "nationality"}, {"Date of birth", "dob"}, {"Email", "email"},
-	} {
-		shown[h.key] = true
-		if f := p.Field(h.key); f.Available() {
-			sec.Rows = append(sec.Rows, demoapp.Highlight{Label: h.label, Value: f.String(), Note: sourceNote(f), NoteKind: sourceKind(f.SourceCode()), Updated: f.LastUpdated(), Confidential: f.ClassificationCode().Confidential()})
-		}
-	}
 	fillBlock(&sec, p, shown)
 	if s := p.EffectiveSource(); s != myinfo.SourceUnknown {
 		sec.Badge = s.String()
