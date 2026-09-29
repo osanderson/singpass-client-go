@@ -2,6 +2,10 @@
 // server in-process, so an integration can be tested — or demoed — without
 // onboarding, network access or real accounts.
 //
+// It is a community test tool, not Singpass or Corppass: it is not affiliated
+// with or endorsed by GovTech, Singpass or Corppass, holds no real accounts or
+// personal data, and its sign-in page says it is a test server.
+//
 // It is built on FAPIgo's own authorization-server engine, so the protocol is
 // genuine: pushed authorization requests with DPoP, private_key_jwt client
 // authentication, PKCE, an ES256-signed id_token encrypted to the client
