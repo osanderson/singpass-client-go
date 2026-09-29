@@ -31,6 +31,11 @@
 // URL is fetched until the app serving it is up, so the two can start in any
 // order.
 //
+// Extra test users — for example with Myinfo data copied from a real staging
+// /userinfo response — come from a JSON file with -personas; see
+// singpasstest.LoadPersonas for the format. -only-personas drops the built-in
+// users.
+//
 // The servers use plain HTTP on loopback, which a client must be configured
 // to accept; for this library, singpass.Dependencies.AllowLoopbackHTTP.
 package main
@@ -94,6 +99,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	spURL := fs.String("singpass-url", "", "URL clients reach the Singpass server at, if not http://<singpass-addr> (e.g. in a container)")
 	cpURL := fs.String("corppass-url", "", "URL clients reach the Corppass server at, if not http://<corppass-addr>")
 	auto := fs.Bool("auto", false, "approve every login straight away as the first test user, without the sign-in page")
+	personasPath := fs.String("personas", "", "JSON file of extra test users (see singpasstest.LoadPersonas), added to the built-in ones")
+	onlyPersonas := fs.Bool("only-personas", false, "use only the -personas test users, not the built-in ones")
 	fs.Usage = func() {
 		fmt.Fprintln(stderr, "usage: singpass-fake-server -config clients.json [flags]")
 		fs.PrintDefaults()
@@ -109,13 +116,34 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if *onlyPersonas && *personasPath == "" {
+		return errors.New("-only-personas needs -personas")
+	}
+	personas := func(issuer singpasstest.Issuer) ([]singpasstest.Persona, error) {
+		var ps []singpasstest.Persona
+		if !*onlyPersonas {
+			ps = singpasstest.DefaultPersonas(issuer)
+		}
+		if *personasPath == "" {
+			return ps, nil
+		}
+		extra, err := singpasstest.LoadPersonas(*personasPath, issuer)
+		return append(ps, extra...), err
+	}
 
 	servers := map[string]*singpasstest.Server{}
 	start := func(name string, issuer singpasstest.Issuer, addr, baseURL string) error {
 		if addr == "" {
 			return nil
 		}
-		srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: issuer, Addr: addr, BaseURL: baseURL, Interactive: !*auto})
+		ps, err := personas(issuer)
+		if err != nil {
+			return err
+		}
+		if len(ps) == 0 {
+			return fmt.Errorf("the %s server has no test users: add some to %s", name, *personasPath)
+		}
+		srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: issuer, Addr: addr, BaseURL: baseURL, Interactive: !*auto, Personas: ps})
 		if err != nil {
 			return fmt.Errorf("start %s server: %w", name, err)
 		}

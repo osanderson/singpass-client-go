@@ -30,7 +30,9 @@
 // automatically, or — with Config.Interactive — through a sign-in page listing
 // the personas, for use from a browser. The sign-in page can also log in as
 // anyone else, from an NRIC or FIN and a name (and, on Corppass, a UEN):
-// UserPersona and EntityPersona build the same users in code.
+// UserPersona and EntityPersona build the same users in code, Value and
+// Coded write their Myinfo data, and LoadPersonas reads users from a JSON
+// file — into which a real staging /userinfo response can be pasted.
 //
 // The server listens on plain HTTP on a loopback address, so the client needs
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/osanderson/singpass-client-go/examples/demo/internal/config"
 	"github.com/osanderson/singpass-client-go/keyfile"
@@ -14,11 +15,30 @@ import (
 // app with its fake server, exactly as onboarding would, then fills in the
 // app's issuer and keys. The fakes show a persona picker in the browser.
 func startMock(cfg *config.Config, logger *slog.Logger) (closeFn func(), err error) {
-	singpassFake, err := singpasstest.NewServer(singpasstest.Config{Issuer: singpasstest.Singpass, Interactive: true})
+	// DEMO_MOCK_PERSONAS adds test users from a JSON file (see
+	// singpasstest.LoadPersonas) to the built-in ones.
+	personas := func(issuer singpasstest.Issuer) ([]singpasstest.Persona, error) {
+		ps := singpasstest.DefaultPersonas(issuer)
+		path := os.Getenv("DEMO_MOCK_PERSONAS")
+		if path == "" {
+			return ps, nil
+		}
+		extra, err := singpasstest.LoadPersonas(path, issuer)
+		return append(ps, extra...), err
+	}
+	spPersonas, err := personas(singpasstest.Singpass)
 	if err != nil {
 		return nil, err
 	}
-	corppassFake, err := singpasstest.NewServer(singpasstest.Config{Issuer: singpasstest.Corppass, Interactive: true})
+	cpPersonas, err := personas(singpasstest.Corppass)
+	if err != nil {
+		return nil, err
+	}
+	singpassFake, err := singpasstest.NewServer(singpasstest.Config{Issuer: singpasstest.Singpass, Interactive: true, Personas: spPersonas})
+	if err != nil {
+		return nil, err
+	}
+	corppassFake, err := singpasstest.NewServer(singpasstest.Config{Issuer: singpasstest.Corppass, Interactive: true, Personas: cpPersonas})
 	if err != nil {
 		singpassFake.Close()
 		return nil, err
