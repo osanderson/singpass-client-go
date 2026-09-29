@@ -66,7 +66,8 @@ func TestBusinessScopes(t *testing.T) {
 	for s, want := range map[string]bool{
 		"entity.basic_profile.name": true, "entity.appointments.individual_appointment.id_number": true,
 		"user.name": true, "user.hdbownership.address": true, "corppass.email": true,
-		"entity.basic_profile": false, "user.chas": false, "entity.nope": false,
+		"entity.identity": true, "entity.grants.last_updated_date": true,
+		"entity.basic_profile": false, "user.chas": false, "entity.nope": false, "entity.grants.last_update_date": false,
 	} {
 		if IsScope(s) != want {
 			t.Errorf("IsScope(%q) = %v", s, !want)
@@ -74,12 +75,13 @@ func TestBusinessScopes(t *testing.T) {
 	}
 }
 
-// The Myinfo Business catalogue comes from Corppass's scope pages: 45 items
-// and 113 scopes. Every user.* scope is a person-data scope with the user.
+// The Myinfo Business catalogue comes from Corppass's scope pages (45 items
+// and 113 scopes) plus entity.identity, which they don't list but Corppass
+// accepts. Every user.* scope is a person-data scope with the user.
 // prefix.
 func TestBusinessCatalogue(t *testing.T) {
-	if len(businessCatalogue) != 45 || len(AllBusinessScopes()) != 113 {
-		t.Errorf("business catalogue has %d items and %d scopes, want 45 and 113", len(businessCatalogue), len(AllBusinessScopes()))
+	if len(businessCatalogue) != 46 || len(AllBusinessScopes()) != 114 {
+		t.Errorf("business catalogue has %d items and %d scopes, want 46 and 114", len(businessCatalogue), len(AllBusinessScopes()))
 	}
 	for item, scopes := range businessCatalogue {
 		for _, s := range scopes {

@@ -41,6 +41,11 @@
   here `entity.*` + `entity.identity` + `authinfo` + `tpauthinfo` + `openid`, and
   **no** `user.*` / `corppass.*`; the returned blocks are `entity_info` + `auth_info`
   accordingly.
+- **The scope pages aren't the whole list.** Corppass accepts `entity.identity`,
+  which its scope pages don't list, and the grants scope it accepts is
+  `entity.grants.last_updated_date` (matching the `entity_info` field), not the
+  `last_update_date` the scope pages show. `myinfo.AllBusinessScopes` and
+  `myinfo.IsScope` follow what Corppass accepts.
 
 ## Authorization / PAR request
 
