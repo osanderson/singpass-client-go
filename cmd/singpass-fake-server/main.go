@@ -6,6 +6,9 @@
 //	go install github.com/osanderson/singpass-client-go/cmd/singpass-fake-server@latest
 //	singpass-fake-server -config clients.json
 //
+// It is a community test tool, not Singpass or Corppass, and is not
+// affiliated with or endorsed by GovTech, Singpass or Corppass.
+//
 // It serves the Singpass issuer at http://127.0.0.1:5156/fapi and the Corppass
 // issuer at http://127.0.0.1:5157, each with a sign-in page listing test
 // users (with Myinfo data) and a form to log in as any NRIC, FIN or UEN.

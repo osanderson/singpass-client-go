@@ -7,6 +7,9 @@
 // party can integrate Singpass Login, Myinfo, and Myinfo Business without
 // rediscovering them.
 //
+// Unofficial: this is a community library, not affiliated with or endorsed by
+// GovTech, Singpass or Corppass.
+//
 // Most callers should use the per-product constructors NewLogin, NewMyinfo, and
 // NewMyinfoBusiness (see products.go), which take just key material and a
 // client_id. New is the lower-level constructor for full control or a
