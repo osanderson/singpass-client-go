@@ -2,10 +2,13 @@
 
 A runnable web app wiring all three products — Singpass Login, Myinfo and
 Myinfo Business (Corppass) — through the `singpass` and `web` packages. It
-renders the validated id_token claims; for Myinfo, a Summary card read with the
-typed `PersonProfile()` / `EntityProfile()` (each row shows the call that
-produced it — parsed dates, formatted address and phone, CPF amounts), then
-every item as grouped sections, with the raw `/userinfo` JSON alongside.
+renders the validated id_token claims and, for Myinfo, the data the way an
+integrator should read it: through the typed `PersonProfile()`,
+`EntityProfile()` and `CorppassProfile()`, grouped by topic (identity, CPF,
+income tax, property, entity financials, …). Every value shows its provenance
+and the accessor path that reads it, e.g. `p.CPFBalances.OA`. A coverage line
+confirms every returned item is typed — or lists any that aren't, such as
+fields a newer Myinfo release adds — and the raw `/userinfo` JSON is alongside.
 
 Live (staging): https://rp-demo-1090410730433.asia-southeast1.run.app
 

@@ -39,12 +39,13 @@ type ProfileData struct {
 	Scope           string
 	ScopeList       []string    // Scope split into individual scope strings (chips)
 	TokenHighlights []Highlight // selected id_token claims, interpreted
-	Summary         []Highlight // key facts read with the typed PersonProfile / EntityProfile
 	ClaimsPre       string
-	Blocks          string    // recognised /userinfo blocks present (e.g. "person_info")
-	Sections        []Section // person data grouped by block, read via the myinfo.Response accessor
-	PersonInfoPre   string    // raw /userinfo response, pretty-printed
-	Mock            bool      // signed in against the built-in fake servers
+	Blocks          string      // recognised /userinfo blocks present (e.g. "person_info")
+	Sections        []Section   // Myinfo data read through the typed profiles, by topic
+	Untyped         []Highlight // returned items the typed profiles don't read (normally none)
+	ItemCount       int         // top-level items returned, for the coverage line
+	PersonInfoPre   string      // raw /userinfo response, pretty-printed
+	Mock            bool        // signed in against the built-in fake servers
 }
 
 // Highlight is one accessor-read field shown on the profile, demonstrating the
@@ -93,6 +94,7 @@ type Section struct {
 // Badge marks a uniform Myinfo source across the group's leaves.
 type Group struct {
 	Title     string
+	Hint      string // the accessor path, e.g. p.CPFBalances
 	Badge     string
 	BadgeKind string // provenance CSS class for Badge ("gov" / "userv" / "user" / "na")
 	// Updated / Confidential are the container object's own lastupdated date and
@@ -113,6 +115,7 @@ type Group struct {
 // source), colour-coded by BadgeKind.
 type Table struct {
 	Title     string
+	Hint      string // the accessor path, e.g. p.Vehicles[i]
 	Badge     string
 	BadgeKind string // provenance CSS class for Badge ("gov" / "userv" / "user" / "na")
 	Columns   []string
@@ -265,33 +268,35 @@ var profileTmpl = template.Must(template.New("profile").Parse(`<!DOCTYPE html>
 <details><summary>Raw id_token claims (JSON)</summary><pre>{{.ClaimsPre}}</pre></details>
 </section>
 
-{{if .Summary}}<section class="card">
-<h2>Summary <span class="note">read with the typed <code>id.Myinfo.PersonProfile()</code> / <code>EntityProfile()</code></span></h2>
-<dl>
-{{range .Summary}}  <dt>{{.Label}}</dt><dd><code>{{.Value}}</code>{{if .Note}} <span class="badge {{.NoteKind}}">{{.Note}}</span>{{end}}{{if .Hint}}<br><span class="note"><code>{{.Hint}}</code></span>{{end}}</dd>
-{{end}}</dl>
-</section>{{end}}
+
 
 {{if or .Sections .PersonInfoPre}}<section class="card">
-<h2>Person data <span class="note">read via the myinfo.Response accessor{{if .Blocks}} · blocks: {{.Blocks}}{{end}}</span></h2>
-{{if .Sections}}<div class="legend"><span class="badge gov">government-verified</span> <span class="badge userv">user-provided (verified)</span> <span class="badge user">user-provided</span> <span class="badge na">not-applicable</span> <span class="legkey"><span class="lock" aria-hidden="true">🔒</span> confidential</span></div>{{end}}
+<h2>Myinfo data <span class="note">read with the typed <code>id.Myinfo.PersonProfile()</code>, <code>EntityProfile()</code> and <code>CorppassProfile()</code>{{if .Blocks}} · blocks: {{.Blocks}}{{end}}</span></h2>
+{{if .Sections}}<div class="legend"><span class="badge gov">government-verified</span> <span class="badge userv">user-provided (verified)</span> <span class="badge user">user-provided</span> <span class="badge na">not-applicable</span> <span class="legkey"><span class="lock" aria-hidden="true">🔒</span> confidential</span> <span class="legkey"><code>p.Name</code> the accessor that reads it</span></div>{{end}}
 {{if gt (len .Sections) 1}}<nav class="toc"><span>Jump to:</span> {{range .Sections}}<a href="#{{.Anchor}}">{{.Title}}</a>{{end}}</nav>{{end}}
 {{range .Sections}}<h3 id="{{.Anchor}}">{{.Title}}{{if .Badge}} <span class="badge {{.BadgeKind}}">{{.Badge}}</span>{{end}}</h3>
 {{if .Rows}}<dl>
-{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}</dd>
+{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}{{if .Hint}}<br><span class="note"><code>{{.Hint}}</code></span>{{end}}</dd>
 {{end}}</dl>{{end}}
 {{range .Groups}}<h4 class="group"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Title}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Badge}} <span class="badge {{.BadgeKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Badge}}</span>{{end}}</h4>
+{{if .Hint}}<p class="note"><code>{{.Hint}}</code></p>{{end}}
 {{if .Rows}}<dl>
-{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}</dd>
+{{range .Rows}}  <dt{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Label}}</dt><dd>{{if .Value}}<code>{{.Value}}</code>{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}{{if .Confidential}} <span class="lock" role="img" aria-label="Confidential" title="Confidential">🔒</span>{{end}}{{if .Note}} {{if .NoteKind}}<span class="badge {{.NoteKind}}"{{if .Updated}} title="Updated {{.Updated}}"{{end}}>{{.Note}}</span>{{else}}<span class="note">{{.Note}}</span>{{end}}{{end}}{{if .Hint}}<br><span class="note"><code>{{.Hint}}</code></span>{{end}}</dd>
 {{end}}</dl>{{end}}
 {{range .Tables}}<h4>{{.Title}}{{if .Badge}} <span class="badge {{.BadgeKind}}">{{.Badge}}</span>{{end}}</h4>
+{{if .Hint}}<p class="note"><code>{{.Hint}}</code></p>{{end}}
 <div class="tablewrap"><table><thead><tr>{{range .Columns}}<th scope="col">{{.}}</th>{{end}}</tr></thead>
 <tbody>{{range .Rows}}<tr>{{range .Cells}}<td>{{if .}}{{.}}{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}</td>{{end}}</tr>{{end}}</tbody></table></div>
 {{end}}{{end}}
 {{range .Tables}}<h4>{{.Title}}{{if .Badge}} <span class="badge {{.BadgeKind}}">{{.Badge}}</span>{{end}}</h4>
+{{if .Hint}}<p class="note"><code>{{.Hint}}</code></p>{{end}}
 <div class="tablewrap"><table><thead><tr>{{range .Columns}}<th scope="col">{{.}}</th>{{end}}</tr></thead>
 <tbody>{{range .Rows}}<tr>{{range .Cells}}<td>{{if .}}{{.}}{{else}}<span class="empty" aria-hidden="true">—</span><span class="sr-only">no value</span>{{end}}</td>{{end}}</tr>{{end}}</tbody></table></div>
 {{end}}{{end}}
+{{if .ItemCount}}<details{{if .Untyped}} open{{end}}><summary>{{if .Untyped}}Returned but not modelled ({{len .Untyped}} of {{.ItemCount}} items){{else}}All {{.ItemCount}} returned items are typed{{end}}</summary>
+{{if .Untyped}}<p class="note">Items the typed profiles don't read yet, e.g. added by a newer Myinfo release — read them by key with <code>id.Myinfo.Person.Field(…)</code>.</p>
+<dl>{{range .Untyped}}<dt>{{.Label}}</dt><dd><code>{{.Value}}</code></dd>{{end}}</dl>{{else}}<p class="note">Every item Myinfo returned is read through the typed profiles above.</p>{{end}}
+</details>{{end}}
 {{if .PersonInfoPre}}<details><summary>Raw /userinfo response (JSON)</summary><pre>{{.PersonInfoPre}}</pre></details>{{end}}
 </section>{{end}}
 

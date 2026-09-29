@@ -13,6 +13,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/osanderson/singpass-client-go/myinfo"
 )
 
 // Config is the fully-resolved configuration for one running instance. It
@@ -218,9 +220,12 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-const (
-	mockMyinfoScopes    = "openid uinfin partialuinfin name sex race nationality residentialstatus dob email mobileno regadd employment cpfcontributions vehicles.vehicleno vehicles.make vehicles.model"
-	mockMyinfoBizScopes = "openid entity.basic_profile.name entity.basic_profile.registration_number entity.basic_profile.uen_status entity.basic_profile.company_type entity.address entity.appointments corppass.email authinfo"
+// The mock scopes request everything the fake servers' test users carry —
+// every Myinfo and Myinfo Business scope in the data catalogues — so mock
+// mode shows the whole typed profile.
+var (
+	mockMyinfoScopes    = strings.Join(append([]string{"openid"}, myinfo.AllScopes()...), " ")
+	mockMyinfoBizScopes = strings.Join(append([]string{"openid", "authinfo"}, myinfo.AllBusinessScopes()...), " ")
 )
 
 func env(key, def string) string {
