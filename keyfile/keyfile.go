@@ -33,24 +33,48 @@ func MarshalECPrivateKeyPEM(key *ecdsa.PrivateKey) ([]byte, error) {
 	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), nil
 }
 
-// LoadECPrivateKey reads a PKCS#8 PEM EC private key from path.
+// LoadECPrivateKey reads an EC P-256 private key from a PEM file at path,
+// in PKCS#8 ("PRIVATE KEY", what this package writes) or SEC1 ("EC PRIVATE
+// KEY", what openssl ecparam -genkey writes) form. Other blocks before the key,
+// such as openssl's "EC PARAMETERS", are skipped. An encrypted key must be
+// decrypted first.
 func LoadECPrivateKey(path string) (*ecdsa.PrivateKey, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read key %s: %w", path, err)
 	}
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, fmt.Errorf("%s: no PEM block found", path)
+	for rest := data; ; {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			return nil, fmt.Errorf("%s: no private key PEM block found (want \"PRIVATE KEY\" or \"EC PRIVATE KEY\")", path)
+		}
+		switch block.Type {
+		case "PRIVATE KEY":
+			parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("%s: parse PKCS#8: %w", path, err)
+			}
+			key, ok := parsed.(*ecdsa.PrivateKey)
+			if !ok {
+				return nil, fmt.Errorf("%s: not an EC private key (%T)", path, parsed)
+			}
+			return checkP256(path, key)
+		case "EC PRIVATE KEY":
+			key, err := x509.ParseECPrivateKey(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("%s: parse SEC1 EC key: %w", path, err)
+			}
+			return checkP256(path, key)
+		case "ENCRYPTED PRIVATE KEY":
+			return nil, fmt.Errorf("%s: the key is encrypted; decrypt it first, e.g. openssl pkcs8 -in %s -out key.pem", path, path)
+		case "RSA PRIVATE KEY":
+			return nil, fmt.Errorf("%s: an RSA key; Singpass keys must be EC P-256", path)
+		}
 	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("%s: parse PKCS#8: %w", path, err)
-	}
-	key, ok := parsed.(*ecdsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("%s: not an EC private key (%T)", path, parsed)
-	}
+}
+
+func checkP256(path string, key *ecdsa.PrivateKey) (*ecdsa.PrivateKey, error) {
 	if key.Curve != elliptic.P256() {
 		return nil, fmt.Errorf("%s: key must be EC P-256", path)
 	}

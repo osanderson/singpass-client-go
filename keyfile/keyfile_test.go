@@ -74,16 +74,22 @@ func TestLoadECPrivateKeyRejects(t *testing.T) {
 	rsaDER, _ := x509.MarshalPKCS8PrivateKey(rsaKey)
 	p384, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	p384DER, _ := x509.MarshalPKCS8PrivateKey(p384)
+	p384SEC1, _ := x509.MarshalECPrivateKey(p384)
 	noPEM := filepath.Join(t.TempDir(), "key.pem")
 	if err := os.WriteFile(noPEM, []byte("not a PEM file"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for name, tc := range map[string]struct{ path, want string }{
-		"missing file": {filepath.Join(t.TempDir(), "absent.pem"), "read key"},
-		"no PEM block": {noPEM, "no PEM block"},
-		"not PKCS#8":   {writePEM(t, "PRIVATE KEY", []byte("junk")), "parse PKCS#8"},
-		"RSA key":      {writePEM(t, "PRIVATE KEY", rsaDER), "not an EC private key"},
-		"P-384 key":    {writePEM(t, "PRIVATE KEY", p384DER), "must be EC P-256"},
+		"missing file":       {filepath.Join(t.TempDir(), "absent.pem"), "read key"},
+		"no PEM block":       {noPEM, "no private key PEM block"},
+		"only a certificate": {writePEM(t, "CERTIFICATE", []byte("x")), "no private key PEM block"},
+		"encrypted":          {writePEM(t, "ENCRYPTED PRIVATE KEY", []byte("x")), "decrypt it first"},
+		"PKCS#1 RSA":         {writePEM(t, "RSA PRIVATE KEY", []byte("x")), "an RSA key"},
+		"bad SEC1":           {writePEM(t, "EC PRIVATE KEY", []byte("junk")), "parse SEC1"},
+		"SEC1 P-384":         {writePEM(t, "EC PRIVATE KEY", p384SEC1), "must be EC P-256"},
+		"not PKCS#8":         {writePEM(t, "PRIVATE KEY", []byte("junk")), "parse PKCS#8"},
+		"RSA key":            {writePEM(t, "PRIVATE KEY", rsaDER), "not an EC private key"},
+		"P-384 key":          {writePEM(t, "PRIVATE KEY", p384DER), "must be EC P-256"},
 	} {
 		if _, err := LoadECPrivateKey(tc.path); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
@@ -194,5 +200,24 @@ func TestWriteECPrivateKeyRemovesPartialFile(t *testing.T) {
 		if _, err := os.Stat(p); !errors.Is(err, fs.ErrNotExist) {
 			t.Errorf("%s: partial key file left behind (%v)", name, err)
 		}
+	}
+}
+
+// A SEC1 key as openssl ecparam -genkey writes it — an "EC PARAMETERS" block,
+// then "EC PRIVATE KEY" — loads, as does a PKCS#8 one.
+func TestLoadECPrivateKeySEC1(t *testing.T) {
+	key, _ := GenerateECKey()
+	sec1, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(t.TempDir(), "openssl.pem")
+	params := pem.EncodeToMemory(&pem.Block{Type: "EC PARAMETERS", Bytes: []byte{0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07}})
+	if err := os.WriteFile(p, append(params, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: sec1})...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadECPrivateKey(p)
+	if err != nil || !got.Equal(key) {
+		t.Fatalf("LoadECPrivateKey(SEC1) = %v, %v", got, err)
 	}
 }

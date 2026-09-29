@@ -87,7 +87,9 @@ process: the signing key is any `crypto.Signer` (passed as `SigningKey`), and
 the encryption key can be a `singpass.ECDHAgreer` (passed as `EncryptionAgreer`,
 which wins over the in-memory `EncryptionKey`) — its `AgreeSharedSecret` maps to
 an HSM's `CKM_ECDH1_DERIVE` or a KMS's `DeriveSharedSecret`, while FAPIgo still
-owns the Concat-KDF + key-unwrap. `keyfile` generates and loads them;
+owns the Concat-KDF + key-unwrap. `keyfile` generates and loads them — as
+PKCS#8 or SEC1 PEM, so keys made with `openssl ecparam -name prime256v1
+-genkey` load as they are;
 `singpass.OfflineClientJWKS` produces
 the public JWKS to register during onboarding from the keys' public halves only
 (so HSM/KMS-held keys work too) — before any `client_id` or
