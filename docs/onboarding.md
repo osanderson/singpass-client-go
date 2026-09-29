@@ -58,8 +58,8 @@ the domain and path. With the `web` helper the callback is
 - **JWKS object** — paste the JWKS itself (`login.jwks.json` from step 2) into
   the portal. Nothing to host, but every key change — including each step of a
   [key rotation](production.md#7-rotating-keys) — is an edit to the app in the
-  portal. `singpass.OfflineJWKS` builds the set to paste when it lists several
-  keys.
+  portal. `singpass-keygen -sig PATH=KID … -enc PATH=KID …` prints the set to
+  paste when it lists several keys.
 
 The endpoint is easier to operate once live; the object is quicker to start
 with. Either way the JWKS holds public keys only — never paste a private key.

@@ -207,12 +207,27 @@ header, and the client decrypts with the key it names.
 3. Deploy without E1.
 
 With a JWKS object rather than an endpoint, make each JWKS change by editing
-the app in the portal, pasting the set `singpass.OfflineJWKS` builds for that
-step.
+the app in the portal, pasting the set for that step. `singpass-keygen` prints
+it: list every key to publish with `-sig` / `-enc` (`PATH=KID`), and missing
+key files are created.
+
+```sh
+# Signing key, step 1: publish S1 and S2 (creates sig-2.pem)
+singpass-keygen -sig keys/login/sig.pem=login-sig-1 -sig keys/login/sig-2.pem=login-sig-2 \
+    -enc keys/login/enc.pem=login-enc-1
+# Signing key, step 3: S2 only
+singpass-keygen -sig keys/login/sig-2.pem=login-sig-2 -enc keys/login/enc.pem=login-enc-1
+
+# Encryption key, step 1: E2 in place of E1 (creates enc-2.pem;
+# the app keeps E1 as DecryptOnly)
+singpass-keygen -sig keys/login/sig.pem=login-sig-1 -enc keys/login/enc-2.pem=login-enc-2
+```
+
+Add `-check <url>` to confirm a JWKS endpoint serves exactly those keys.
 
 Every key needs a new `kid`, never one used before. With HSM/KMS keys, use `PublishedKey` with the
 key's public half, and `DecryptionKey.Agreer` in place of `Key`; if you inject
 `Dependencies.Keys` or `Dependencies.Decryption` yourself, build them with
 `singpass.NewRotatingKeyManager` and `singpass.NewRotatingDecrypter`. For a JWKS
-published as a static file, `singpass.OfflineJWKS` builds it from the public
-keys, listing every published key.
+published as a static file, the `singpass-keygen` commands above print it, and
+`singpass.OfflineJWKS` builds it in code from public keys.

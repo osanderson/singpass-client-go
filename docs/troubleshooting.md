@@ -54,7 +54,7 @@ Corppass uses the same codes.
 | Symptom | Cause | Fix |
 |---|---|---|
 | The redirect URL is refused | It contains "singpass", "corppass" or "myinfo" ("Invalid redirect URL…"), or uses an IP address | Rename the host or path; use `localhost`, not `127.0.0.1`, for local development ([onboarding.md](onboarding.md#3-create-a-staging-app)). |
-| A pasted JWKS object is refused | Singpass requires at least one signing (`use: sig`) and one encryption (`use: enc`) EC key, each with a unique `kid` | Paste the output of `singpass-keygen` or `singpass.OfflineJWKS`. Never include private key members such as `d`. |
+| A pasted JWKS object is refused | Singpass requires at least one signing (`use: sig`) and one encryption (`use: enc`) EC key, each with a unique `kid` | Paste the output of `singpass-keygen` (with `-sig`/`-enc` for several keys) or `singpass.OfflineJWKS`. Never include private key members such as `d`. |
 
 ## Still stuck
 
