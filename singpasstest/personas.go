@@ -130,9 +130,13 @@ func coded(code, desc string) map[string]any {
 	return map[string]any{"code": code, "desc": desc, "source": "1", "classification": "C", "lastupdated": "2026-01-15"}
 }
 
-// DefaultPersonas returns the built-in test users for issuer: two Singpass
-// citizens (one with a vehicle, one whose email Myinfo can't provide), or one
-// Corppass user acting for a company.
+// DefaultPersonas returns the built-in test users for issuer. On Singpass:
+// Tan Xiao Hui, a citizen with a vehicle and CPF contribution history;
+// Muhammad Hafiz, a citizen whose email Myinfo can't provide, with CPF
+// balances, income tax (NOA), an HDB flat, a driving licence and a child; and
+// Priya Raman, a foreigner on an Employment Pass, with no CPF account. On
+// Corppass: one user acting for a company, with its profile, capital and
+// financials.
 func DefaultPersonas(issuer Issuer) []Persona {
 	if issuer == Corppass {
 		return []Persona{{
@@ -271,6 +275,56 @@ func DefaultPersonas(issuer Issuer) []Persona {
 				"residentialstatus": coded("C", "CITIZEN"),
 				"dob":               field("1980-11-23"),
 				"email":             map[string]any{"unavailable": true, "source": "2", "classification": "C", "lastupdated": "2026-01-15"},
+				"marital":           coded("2", "MARRIED"),
+				"marriagedate":      field("2008-06-14"),
+				"hdbtype":           coded("114", "4-ROOM FLAT (HDB)"),
+				"occupation":        coded("2512", "SOFTWARE DEVELOPER"),
+				"employment":        field("JURONG LOGISTICS PTE LTD"),
+				"cpfbalances": map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-09-01",
+					"oa": field(48210.55), "sa": field(61890.2), "ma": field(52004.9), "ra": field(0),
+				},
+				"noa-basic": map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-05-01",
+					"yearofassessment": field("2026"), "amount": field(96500),
+				},
+				"noa": map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-05-01",
+					"yearofassessment": field("2026"), "amount": field(96500), "category": field("ORIGINAL"),
+					"employment": field(96500), "trade": field(0), "rent": field(0), "interest": field(0), "taxclearance": field("N"),
+				},
+				"noahistory-basic": map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-05-01",
+					"noas": []any{
+						map[string]any{"yearofassessment": field("2026"), "amount": field(96500)},
+						map[string]any{"yearofassessment": field("2025"), "amount": field(91200)},
+					},
+				},
+				"hdbownership": []any{map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+					"address": map[string]any{
+						"type": "SG", "block": field("55"), "street": field("JURONG WEST STREET 42"),
+						"floor": field("12"), "unit": field("305"), "postal": field("640055"), "country": coded("SG", "SINGAPORE"),
+					},
+					"hdbtype": coded("114", "4-ROOM FLAT (HDB)"), "noofowners": field(2),
+					"dateofpurchase": field("2009-03-01"), "leasecommencementdate": field("2008-11-01"), "termoflease": field(99),
+					"purchaseprice": field(318000), "loangranted": field(250000), "outstandingloanbalance": field(61240.8),
+					"monthlyloaninstalment": field(1120), "balanceloanrepayment": map[string]any{"years": field(4), "months": field(8)},
+				}},
+				"drivinglicence": map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+					"totaldemeritpoints": field(0), "comstatus": coded("Y", "ELIGIBLE"),
+					"qdl": map[string]any{
+						"validity": coded("V", "VALID"), "expirydate": field("2045-11-23"),
+						"classes": []any{map[string]any{"class": field("3"), "issuedate": field("2001-04-10")}},
+					},
+				},
+				"childrenbirthrecords": []any{map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+					"name": field("NUR AISYAH BINTE MUHAMMAD HAFIZ"), "birthcertno": field("T1012345B"), "dob": field("2010-02-18"),
+					"sex": coded("F", "FEMALE"), "race": coded("MY", "MALAY"), "lifestatus": coded("A", "ALIVE"),
+					"sgcitizenatbirthind": field("Y"),
+				}},
 				"regadd": map[string]any{
 					"type": "SG", "source": "1", "classification": "C", "lastupdated": "2026-01-15",
 					"block": map[string]any{"value": "55"}, "street": map[string]any{"value": "JURONG WEST STREET 42"},
@@ -278,6 +332,38 @@ func DefaultPersonas(issuer Issuer) []Persona {
 					"postal":  map[string]any{"value": "640055"},
 					"country": map[string]any{"code": "SG", "desc": "SINGAPORE"},
 				},
+			}},
+		},
+		{
+			Name:    "Priya Raman (Employment Pass holder)",
+			Subject: "c3e8a1d2-6f47-4b0c-9e35-2a7d8b1f4c90",
+			SubAttributes: map[string]any{
+				"account_type": "standard", "identity_number": "G1234567X", "identity_coi": "IN",
+				"name": "PRIYA RAMAN",
+			},
+			UserInfo: map[string]any{"person_info": map[string]any{
+				"uinfin":             field("G1234567X"),
+				"partialuinfin":      field("****567X"),
+				"name":               field("PRIYA RAMAN"),
+				"sex":                coded("F", "FEMALE"),
+				"race":               coded("IN", "INDIAN"),
+				"nationality":        coded("IN", "INDIAN"),
+				"birthcountry":       coded("IN", "INDIA"),
+				"dob":                field("1992-08-30"),
+				"passtype":           coded("EP", "EMPLOYMENT PASS"),
+				"passstatus":         field("LIVE"),
+				"passexpirydate":     field("2028-04-30"),
+				"passportnumber":     field("Z1234567"),
+				"passportexpirydate": field("2031-01-15"),
+				"employment":         field("MARINA ANALYTICS PTE LTD"),
+				"email":              map[string]any{"value": "priya.raman@example.com", "source": "2", "classification": "C", "lastupdated": "2026-01-15"},
+				"regadd": map[string]any{
+					"type": "SG", "source": "1", "classification": "C", "lastupdated": "2026-01-15",
+					"block": field("8"), "street": field("MARINA BOULEVARD"), "building": field("MARINA ONE RESIDENCES"),
+					"floor": field("21"), "unit": field("04"), "postal": field("018981"), "country": coded("SG", "SINGAPORE"),
+				},
+				// A foreigner has no CPF account: Myinfo marks it unavailable.
+				"cpfbalances": map[string]any{"unavailable": true, "source": "3", "classification": "C", "lastupdated": "2026-01-15"},
 			}},
 		},
 	}
