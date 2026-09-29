@@ -23,6 +23,23 @@ require passing checks — `commit-lint` plus [`ci.yml`](.github/workflows/ci.ym
 (`gofmt`, `go mod tidy`, `go vet`, staticcheck, build, `go test -race`,
 govulncheck for both modules; a no-push build of the demo image; actionlint).
 
+## Fuzzing
+
+Code that parses untrusted input has fuzz tests: the Myinfo parser and typed
+profiles, the callback state check, option validation, the published-JWKS
+comparison, and the test-user and JWKS files the fake server reads. Their seeds
+run with every `go test`. [`fuzz.yml`](.github/workflows/fuzz.yml) fuzzes each
+target daily, keeping the generated corpus in the Actions cache so each run
+builds on the last; a failure uploads the failing input as an artifact. To
+fuzz locally:
+
+```sh
+go test ./myinfo -run '^$' -fuzz '^FuzzParse$' -fuzztime 1m
+```
+
+Commit a failing input Go writes to `testdata/fuzz/<Target>/` with the fix, so
+it stays as a regression test.
+
 ## Commit messages
 
 Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/):
