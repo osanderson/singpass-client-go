@@ -56,6 +56,12 @@ type Config struct {
 	Issuer Issuer
 	// Addr is the listen address. Empty means "127.0.0.1:0" (a free port).
 	Addr string
+	// BaseURL is the URL clients reach the server at, when it differs from
+	// Addr — e.g. listening on 0.0.0.0:5156 in a container published as
+	// http://localhost:5156. The issuer and endpoints are built from it. It
+	// must be https, or http on a loopback host. Empty means
+	// http://<the listen address>.
+	BaseURL string
 	// Personas are the test users. Nil means DefaultPersonas(Issuer).
 	Personas []Persona
 	// CorppassUserInfoSubClientID reproduces Corppass's former /userinfo
@@ -124,6 +130,9 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 	s := &Server{cfg: cfg, clients: newRegistry(), ln: ln}
 	s.base = "http://" + ln.Addr().String()
+	if cfg.BaseURL != "" {
+		s.base = strings.TrimRight(cfg.BaseURL, "/")
+	}
 	s.issuer = s.base
 	if cfg.Issuer == Singpass {
 		s.issuer += "/fapi"
