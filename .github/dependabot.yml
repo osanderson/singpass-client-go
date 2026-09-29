@@ -5,6 +5,9 @@
 #   chore(deps): the demo, GitHub Actions and Docker images — no library release
 # Security updates (enabled in repo settings) follow the same commit-message
 # rules.
+#
+# Actions are pinned to commit SHAs (with the version in a comment) and the
+# demo's base images to digests; Dependabot updates both forms.
 
 version: 2
 updates:
