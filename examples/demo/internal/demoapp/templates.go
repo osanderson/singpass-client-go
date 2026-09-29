@@ -153,6 +153,11 @@ var homeTmpl = template.Must(template.New("home").Parse(`<!DOCTYPE html>
   .intro { color: #444; }
   .mock { background: #eef4ff; border: 1px solid #b9cdf5; padding: .75rem 1rem; border-radius: .5rem; margin: 1rem 0; }
   a { color: #d1350f; }
+  .accounts { margin-top: 2rem; border-top: 1px solid #e5e5e5; padding-top: .5rem; }
+  .accounts h2 { font-size: 1.05rem; }
+  .accounts ul { list-style: disc; padding-left: 1.25rem; }
+  .accounts li { margin: .25rem 0; }
+  .fine { color: #666; font-size: .85rem; }
   footer { margin-top: 3rem; color: #666; font-size: .85rem; }
   footer p { margin: .3rem 0; }
 </style>
@@ -171,6 +176,15 @@ servers (<code>singpasstest</code>) with test personas — no real accounts or p
 <ul>
 {{range .Apps}}<li><a class="btn" href="/{{.Name}}/login">Sign in with {{.Title}}</a></li>{{end}}
 </ul>
+{{if not .Mock}}<section class="accounts">
+<h2>Test accounts</h2>
+<p>Log in with a published staging test persona, using its NRIC/FIN and the password on these pages:</p>
+<ul>
+<li><a href="https://docs.developer.singpass.gov.sg/docs/testing/myinfo-test-personas">Myinfo test personas</a> — also sign in to the Singpass Login app</li>
+<li><a href="https://docs.corppass.gov.sg/testing/myinfo-business-test-personas">Myinfo Business test personas</a></li>
+</ul>
+<p class="fine">Persona data changes without notice, and not every persona has every dataset — a foreign-account persona, for example, has no Myinfo data, so its login may fail at <code>/userinfo</code>.</p>
+</section>{{end}}
 </main>
 ` + footerHTML + `
 </body>
