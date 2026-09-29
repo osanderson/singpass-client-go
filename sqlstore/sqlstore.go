@@ -18,13 +18,21 @@
 //
 // Expired rows are ignored when read but not deleted automatically; call
 // DeleteExpired periodically (e.g. every few minutes) to keep the tables small.
+//
+// Login sessions are stored under a SHA-256 hash of the session id, so the
+// table alone can't be used to take over a session. They hold the identity
+// web.Config.SessionIdentity chooses to keep: by default all of it, Myinfo
+// data included, unencrypted, so set it (e.g. to web.MinimalIdentity) to keep
+// personal data out of the database.
 package sqlstore
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -132,6 +140,7 @@ func (s *Store) CreateTables(ctx context.Context) error {
 			expected_redirect_uri VARCHAR(2048) NOT NULL,
 			expected_response_mode VARCHAR(64) NOT NULL,
 			expires_at BIGINT NOT NULL`}, // Unix nanoseconds
+		// sid is the session id's SHA-256, in hex (sidHash).
 		{s.login, `sid VARCHAR(64) NOT NULL PRIMARY KEY,
 			identity ` + blob + ` NOT NULL,
 			expires_at BIGINT NOT NULL`},
@@ -245,7 +254,7 @@ func (l loginSessions) Create(ctx context.Context, id *singpass.Identity, ttl ti
 	}
 	sid := base64.RawURLEncoding.EncodeToString(b[:])
 	if _, err := l.s.db.ExecContext(ctx, l.s.q(`INSERT INTO `+l.s.login+` (sid, identity, expires_at) VALUES (?, ?, ?)`),
-		sid, string(data), l.s.now().Add(ttl).UnixNano()); err != nil {
+		sidHash(sid), string(data), l.s.now().Add(ttl).UnixNano()); err != nil {
 		return "", fmt.Errorf("sqlstore: create login session: %w", err)
 	}
 	return sid, nil
@@ -254,7 +263,7 @@ func (l loginSessions) Create(ctx context.Context, id *singpass.Identity, ttl ti
 func (l loginSessions) Get(ctx context.Context, sid string) (*singpass.Identity, bool, error) {
 	var data string
 	err := l.s.db.QueryRowContext(ctx, l.s.q(`SELECT identity FROM `+l.s.login+` WHERE sid = ? AND expires_at > ?`),
-		sid, l.s.now().UnixNano()).Scan(&data)
+		sidHash(sid), l.s.now().UnixNano()).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}
@@ -269,8 +278,16 @@ func (l loginSessions) Get(ctx context.Context, sid string) (*singpass.Identity,
 }
 
 func (l loginSessions) Delete(ctx context.Context, sid string) error {
-	if _, err := l.s.db.ExecContext(ctx, l.s.q(`DELETE FROM `+l.s.login+` WHERE sid = ?`), sid); err != nil {
+	if _, err := l.s.db.ExecContext(ctx, l.s.q(`DELETE FROM `+l.s.login+` WHERE sid = ?`), sidHash(sid)); err != nil {
 		return fmt.Errorf("sqlstore: delete login session: %w", err)
 	}
 	return nil
+}
+
+// sidHash is the key a session id is stored under: its SHA-256, in hex. The
+// id is 32 random bytes, so an unsalted hash is enough to keep a copy of the
+// table from yielding usable session ids.
+func sidHash(sid string) string {
+	h := sha256.Sum256([]byte(sid))
+	return hex.EncodeToString(h[:])
 }

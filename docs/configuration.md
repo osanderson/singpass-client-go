@@ -76,7 +76,9 @@ unapproved scopes still fail at login.
   server such as `singpasstest`'s. It is development-only: `New` refuses it
   together with `AssuranceProduction`.
 - **`Debug` dumps secrets.** `Dependencies.Debug` logs outbound PAR/token/userinfo
-  requests including the `client_assertion` — enable it only against staging.
+  requests including the `client_assertion`, the authorization code and the
+  PKCE verifier — enable it only against staging. `New` refuses it under
+  `AssuranceProduction`.
 
 ## Keys
 

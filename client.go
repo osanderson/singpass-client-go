@@ -160,7 +160,8 @@ type Dependencies struct {
 
 	// Debug, when true, logs outbound PAR/token/userinfo requests and responses
 	// (method, URL, form body, sizes) via Logger. The request dump includes the
-	// client_assertion — enable it only against staging.
+	// client_assertion, the authorization code and the PKCE verifier, so New
+	// refuses it under AssuranceProduction: enable it only against staging.
 	Debug bool
 
 	// Logger receives Debug output and internal warnings. Nil means
@@ -266,10 +267,16 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		}
 		urlOpts = append(urlOpts, fapi.AllowLoopbackHTTP())
 	}
+	if deps.Debug && deps.Assurance == AssuranceProduction {
+		return nil, fmt.Errorf("singpass: Dependencies.Debug is refused under AssuranceProduction: it logs the client assertion and authorization code")
+	}
 	if deps.Assurance == AssuranceProduction {
 		if err := checkKeyCustody(deps); err != nil {
 			return nil, err
 		}
+	} else if isProductionIssuer(opts.Issuer) {
+		logger.Warn("singpass: production issuer without AssuranceProduction: the durable-session, key-custody and randomness checks are off",
+			"issuer", opts.Issuer)
 	}
 
 	issuer, err := fapi.ParseIssuerURL(opts.Issuer, urlOpts...)
@@ -425,6 +432,13 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		retries:       deps.BeginLoginRetries,
 		encAlg:        cfg.Algorithms.IDTokenKeyManagement,
 	}, nil
+}
+
+// isProductionIssuer reports whether issuer is Singpass's or Corppass's
+// production issuer.
+func isProductionIssuer(issuer string) bool {
+	issuer = strings.TrimSuffix(issuer, "/")
+	return issuer == ProductionSingpassIssuer || issuer == ProductionCorppassIssuer
 }
 
 // resolveAlgorithms returns the caller's Algorithms verbatim when supplied,

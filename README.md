@@ -77,6 +77,7 @@ jwks, _ := client.PublicJWKS(ctx)
 h := web.New(web.Config{
     Apps:            []*web.App{{Name: "login", Title: "Singpass", Auth: client, JWKS: jwks}},
     SessionIdentity: web.MinimalIdentity, // keep personal data out of the login session
+    LoginRateLimit:  &web.LoginRateLimit{}, // 10 logins at once per IP, then 10 a minute
     // Behind HTTPS, also set Cookies: web.DefaultCookieConfig(true) (Secure, __Host- names).
 })
 mux := h.Mux() // /login/login, /login/callback, /login/logout, /login/jwks.json

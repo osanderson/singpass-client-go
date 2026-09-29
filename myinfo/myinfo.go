@@ -519,35 +519,50 @@ func blockData(all map[string]any, key string) Data {
 // /userinfo data blocks (and some nested objects) arrive double-encoded: the
 // value is a JSON string whose contents are themselves a JSON object or array. A
 // string that parses as an object/array is replaced by the parsed value (and its
-// contents unwrapped in turn); every other value — a decoded object/array is
-// recursed into, a plain scalar (including a leaf "value" string, which never
-// begins with '{' or '[') is returned unchanged.
-func unwrapDeep(v any) any {
+// contents unwrapped in turn); a decoded object/array is recursed into; any
+// other value is returned unchanged.
+//
+// A data item's own members (value, code, desc, …) are never unwrapped: they
+// are data, and some are typed in by the person (an email address, say), so
+// one that happens to look like JSON stays the string it is.
+func unwrapDeep(v any) any { return unwrapValue("", v) }
+
+func unwrapValue(key string, v any) any {
 	switch t := v.(type) {
 	case string:
+		if leafMembers[key] {
+			return t
+		}
 		s := strings.TrimSpace(t)
 		if strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
 			var inner any
 			if json.Unmarshal([]byte(s), &inner) == nil {
-				return unwrapDeep(inner)
+				return unwrapValue(key, inner)
 			}
 		}
 		return t
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = unwrapDeep(val)
+			out[k] = unwrapValue(k, val)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i, e := range t {
-			out[i] = unwrapDeep(e)
+			out[i] = unwrapValue(key, e)
 		}
 		return out
 	default:
 		return v
 	}
+}
+
+// leafMembers are the members of a data item's envelope, which hold data
+// rather than nested structure.
+var leafMembers = map[string]bool{
+	"value": true, "code": true, "desc": true, "source": true,
+	"classification": true, "lastupdated": true, "unavailable": true,
 }
 
 // asString coerces a decoded JSON scalar to a string for display: strings pass
