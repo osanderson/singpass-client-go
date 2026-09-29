@@ -52,6 +52,9 @@ version, `fix` the patch, and breaking changes (`!` / `BREAKING CHANGE:`) the
 minor. Changes only under `examples/` don't trigger a library release. To force
 a version, add a `Release-As: X.Y.Z` footer to a commit.
 
+A breaking PR also adds a section to [UPGRADING.md](UPGRADING.md) with
+before/after code.
+
 Squash merges can drop the commit body, so for a breaking PR end the PR
 description with a release-please override, putting every migration note in a
 single `BREAKING CHANGE:` footer (release-please keeps only one):
