@@ -107,7 +107,8 @@ type Server struct {
 	ln       net.Listener
 
 	mu      sync.Mutex
-	current int // index into personas for non-interactive approval
+	current int                // index into personas for non-interactive approval
+	custom  map[string]Persona // custom-login users, by subject
 }
 
 const (
@@ -457,8 +458,30 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scope := strings.Fields(r.PostFormValue("scope"))
-	if r.PostFormValue("decision") == "cancel" {
+	switch r.PostFormValue("decision") {
+	case "cancel":
 		s.complete(w, r, handle, scope, nil)
+		return
+	case "custom":
+		nric, uen := r.PostFormValue("nric"), r.PostFormValue("uen")
+		corppass := s.cfg.Issuer == Corppass
+		if err := checkCustom(nric, uen, corppass); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			renderSignInPage(w, s, r.PostFormValue("client_id"), r.PostFormValue("scope"), r.PostFormValue("handle"), err.Error())
+			return
+		}
+		p := UserPersona(nric, r.PostFormValue("name"))
+		if corppass {
+			p = EntityPersona(uen, r.PostFormValue("entity"), nric, r.PostFormValue("name"))
+		}
+		// Remember the custom user, so /userinfo can find its data.
+		s.mu.Lock()
+		if s.custom == nil {
+			s.custom = map[string]Persona{}
+		}
+		s.custom[p.Subject] = p
+		s.mu.Unlock()
+		s.complete(w, r, handle, scope, &p)
 		return
 	}
 	for _, p := range s.personas {
@@ -571,8 +594,13 @@ func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var persona *Persona
+	s.mu.Lock()
+	if p, ok := s.custom[authz.Subject]; ok {
+		persona = &p
+	}
+	s.mu.Unlock()
 	for i := range s.personas {
-		if s.personas[i].Subject == authz.Subject {
+		if persona == nil && s.personas[i].Subject == authz.Subject {
 			persona = &s.personas[i]
 		}
 	}

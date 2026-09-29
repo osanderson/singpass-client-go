@@ -25,6 +25,12 @@ var signInPage = template.Must(template.New("signin").Parse(`<!doctype html>
   button:hover { border-color: var(--accent); }
   button small { display: block; color: GrayText; font-size: .8rem; }
   button.cancel { text-align: center; color: GrayText; }
+  details { margin: .75rem 0; }
+  summary { cursor: pointer; color: GrayText; }
+  label { display: block; font-size: .85rem; margin: .5rem 0 .15rem; }
+  input[type=text] { width: 100%; box-sizing: border-box; font: inherit; padding: .5rem; border-radius: 6px;
+                     border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); background: Canvas; color: CanvasText; }
+  .error { color: var(--accent); font-size: .9rem; }
 </style>
 </head>
 <body>
@@ -39,10 +45,33 @@ var signInPage = template.Must(template.New("signin").Parse(`<!doctype html>
   {{end}}
   <button class="cancel" name="decision" value="cancel">Cancel</button>
 </form>
+<details{{if .Error}} open{{end}}>
+<summary>Log in as someone else</summary>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<form method="post" action="{{.Action}}">
+  <input type="hidden" name="handle" value="{{.Handle}}">
+  <input type="hidden" name="scope" value="{{.Scope}}">
+  <input type="hidden" name="decision" value="custom">
+  <input type="hidden" name="client_id" value="{{.ClientID}}">
+  {{if .Corppass}}
+  <label for="uen">Entity UEN</label><input type="text" id="uen" name="uen" required placeholder="201912345K">
+  <label for="entity">Entity name</label><input type="text" id="entity" name="entity" placeholder="ACME PTE. LTD.">
+  {{end}}
+  <label for="nric">NRIC / FIN</label><input type="text" id="nric" name="nric" required placeholder="S1234567D">
+  <label for="name">Name</label><input type="text" id="name" name="name" placeholder="TAN AH KOW">
+  <button type="submit">Log in</button>
+</form>
+</details>
 </body>
 </html>`))
 
 func renderSignIn(w http.ResponseWriter, s *Server, interaction server.InteractionRequired) {
+	renderSignInPage(w, s, string(interaction.Interaction.ClientID), strings.Join(interaction.Interaction.Scope, " "), interaction.Handle.String(), "")
+}
+
+// renderSignInPage renders the sign-in page, with errMsg shown on the
+// custom login form when it was rejected.
+func renderSignInPage(w http.ResponseWriter, s *Server, clientID, scope, handle, errMsg string) {
 	title := "Singpass"
 	if s.cfg.Issuer == Corppass {
 		title = "Corppass"
@@ -51,10 +80,12 @@ func renderSignIn(w http.ResponseWriter, s *Server, interaction server.Interacti
 	w.Header().Set("Cache-Control", "no-store")
 	_ = signInPage.Execute(w, map[string]any{
 		"Title":    title,
-		"ClientID": string(interaction.Interaction.ClientID),
-		"Scope":    strings.Join(interaction.Interaction.Scope, " "),
-		"Handle":   interaction.Handle.String(),
+		"ClientID": clientID,
+		"Scope":    scope,
+		"Handle":   handle,
 		"Action":   s.endpoint("/auth/decision"),
 		"Personas": s.personas,
+		"Corppass": s.cfg.Issuer == Corppass,
+		"Error":    errMsg,
 	})
 }

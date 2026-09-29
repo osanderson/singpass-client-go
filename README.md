@@ -219,7 +219,10 @@ built on FAPIgo's real server engine: PAR, DPoP, `private_key_jwt`, PKCE,
 encrypted id_tokens and signed, encrypted `/userinfo`, plus the
 Singpass/Corppass quirks. Register your client with it, point the client at
 `srv.Issuer()` with `Dependencies{AllowLoopbackHTTP: true}`, and drive a full
-login in a test — see the
+login in a test. Its built-in test users carry Myinfo data across the typed
+datasets (CPF, income tax, HDB, vehicles, driving licence, children, a
+foreigner's pass), and its sign-in page — or `singpasstest.UserPersona` /
+`EntityPersona` in code — logs in as any NRIC, FIN or UEN you choose. See the
 [example](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest#example-package).
 
 To use the fake servers from an app in any language, or by hand in a
