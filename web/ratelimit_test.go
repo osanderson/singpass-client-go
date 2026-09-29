@@ -118,3 +118,21 @@ func TestSessionIdentityWarning(t *testing.T) {
 		t.Errorf("warned with SessionIdentity set: %s", logs.String())
 	}
 }
+
+func TestAppsAndLifetimeLog(t *testing.T) {
+	a, b := &App{Name: "a"}, &App{Name: "b"}
+	var logs bytes.Buffer
+	h := New(Config{Apps: []*App{a, b}, Logger: slog.New(slog.NewTextHandler(&logs, nil))})
+	if len(h.Apps()) != 2 || h.App("b") != b || h.App("c") != nil {
+		t.Errorf("Apps() = %v, App(b) = %v, App(c) = %v", h.Apps(), h.App("b"), h.App("c"))
+	}
+	h.logIDTokenLifetime(a, &singpass.Identity{})
+	if logs.Len() != 0 {
+		t.Errorf("logged a lifetime without iat and exp: %s", logs.String())
+	}
+	iat := time.Unix(1_700_000_000, 0)
+	h.logIDTokenLifetime(a, &singpass.Identity{IDTokenIssuedAt: iat, IDTokenExpiry: iat.Add(10 * time.Minute)})
+	if !strings.Contains(logs.String(), "lifetime=10m0s") {
+		t.Errorf("lifetime log = %s", logs.String())
+	}
+}

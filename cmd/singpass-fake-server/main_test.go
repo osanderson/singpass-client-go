@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -210,4 +211,81 @@ func TestRunPersonaFlags(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+// run refuses bad flags and configuration before serving anything.
+func TestRunErrors(t *testing.T) {
+	jwks := string(newKeyPair(t).jwks(t))
+	login := writeConfig(t, `{"clients": [{"id": "a", "product": "login", "redirect_uris": ["https://app.example/cb"], "jwks": `+jwks+`}]}`)
+	business := writeConfig(t, `{"clients": [{"id": "b", "product": "myinfo-business", "redirect_uris": ["https://app.example/cb"], "jwks": `+jwks+`}]}`)
+	noUsers := writeConfig(t, `[]`)
+	for name, tc := range map[string]struct {
+		args []string
+		want string
+	}{
+		"unknown flag":          {[]string{"-nope"}, "flag provided but not defined"},
+		"no -config":            {nil, "-config is required"},
+		"missing config":        {[]string{"-config", filepath.Join(t.TempDir(), "absent.json")}, "no such file"},
+		"config not JSON":       {[]string{"-config", writeConfig(t, `{`)}, "unexpected end"},
+		"client without an id":  {[]string{"-config", writeConfig(t, `{"clients": [{"product": "login"}]}`)}, "a client has no id"},
+		"client's server off":   {[]string{"-config", business, "-corppass-addr", "", "-singpass-addr", freeAddr(t)}, "which is disabled"},
+		"missing personas file": {[]string{"-config", login, "-personas", filepath.Join(t.TempDir(), "absent.json"), "-corppass-addr", ""}, "no such file"},
+		"no test users":         {[]string{"-config", login, "-personas", noUsers, "-only-personas", "-corppass-addr", ""}, "has no test users"},
+		"bad listen address":    {[]string{"-config", login, "-singpass-addr", "not an address", "-corppass-addr", ""}, "start Singpass server"},
+	} {
+		err := run(context.Background(), tc.args, &bytes.Buffer{}, &bytes.Buffer{})
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
+// A client whose keys can't be read or used isn't registered, and the reason
+// is reported; a jwks_url that doesn't answer yet is waited for.
+func TestRunReportsClientKeyProblems(t *testing.T) {
+	notFound := httptest.NewServer(http.NotFoundHandler())
+	defer notFound.Close()
+	cfg := writeConfig(t, `{"clients": [
+		{"id": "unreadable", "product": "login", "redirect_uris": ["https://app.example/cb"], "jwks_file": "`+filepath.Join(t.TempDir(), "absent.json")+`"},
+		{"id": "keyless", "product": "login", "redirect_uris": ["https://app.example/cb"], "jwks": {"keys": []}},
+		{"id": "pending", "product": "login", "redirect_uris": ["https://app.example/cb"], "jwks_url": "`+notFound.URL+`"}
+	]}`)
+	ctx, cancel := context.WithCancel(context.Background())
+	var out, log lockedBuffer
+	done := make(chan error, 1)
+	go func() {
+		done <- run(ctx, []string{"-config", cfg, "-corppass-addr", "", "-singpass-addr", freeAddr(t)}, &out, &log)
+	}()
+	want := []string{`client "unreadable":`, `client "keyless": the JWKS needs`, `client "pending": waiting for its JWKS`, "HTTP 404"}
+	deadline := time.Now().Add(3 * time.Second)
+	for !containsAll(log.String(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("stderr lacks one of %q:\n%s", want, log.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("run = %v", err)
+	}
+}
+
+func containsAll(s string, subs []string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
+}
+
+func TestJWKPublicKeyErrors(t *testing.T) {
+	for name, k := range map[string]jwk{
+		"short x":      {Kid: "k", X: "AA", Y: "AA"},
+		"not on curve": {Kid: "k", X: strings.Repeat("A", 43), Y: strings.Repeat("A", 43)},
+	} {
+		if _, err := k.publicKey(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
 }
