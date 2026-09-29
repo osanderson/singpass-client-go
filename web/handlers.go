@@ -245,52 +245,69 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 		// The state cookie binds the callback to this browser (RFC 9700 §4.7).
 		id, err := a.Auth.Complete(r.Context(), r.URL.RawQuery, c.Value)
 		if err != nil {
-			var denied *singpass.DeniedError
-			if errors.As(err, &denied) {
-				h.log.Info("login denied", "app", a.Name, "code", denied.Code)
-				h.onDenied(w, r, a, denied)
-				return
-			}
-			h.log.Error("complete login", "app", a.Name, "err", err)
+			h.loginFailed(w, r, a, err)
+			return
+		}
+		h.logIDTokenLifetime(a, id)
+		if err := h.startSession(w, r, a, id); err != nil {
 			h.onError(w, r, a, err)
 			return
 		}
-
-		// Report the id_token's exact lifetime (exp − iat, both validated by
-		// FAPIgo) for comparison across products. Login/Myinfo run ~minutes;
-		// Corppass Myinfo Business is longer.
-		if !id.IDTokenExpiry.IsZero() && !id.IDTokenIssuedAt.IsZero() {
-			h.log.Info("id_token lifetime",
-				"app", a.Name,
-				"exp", id.IDTokenExpiry.UTC().Format(time.RFC3339),
-				"lifetime", id.IDTokenExpiry.Sub(id.IDTokenIssuedAt).Round(time.Second).String(),
-			)
-		}
-
-		// Replace, rather than add to, any session this browser already holds, so
-		// re-logging in (or switching apps) does not leave the old entry live.
-		if c, err := r.Cookie(h.cookies.SessionName); err == nil && c.Value != "" {
-			if err := h.sessions.Delete(r.Context(), c.Value); err != nil {
-				h.log.Warn("drop previous session", "app", a.Name, "err", err)
-			}
-		}
-		stored := id
-		if h.sessionIdentity != nil {
-			if stored = h.sessionIdentity(id); stored == nil {
-				h.log.Error("create session", "app", a.Name, "err", "SessionIdentity returned nil")
-				h.onError(w, r, a, errors.New("web: Config.SessionIdentity returned nil"))
-				return
-			}
-		}
-		sid, err := h.sessions.Create(r.Context(), stored, h.cookies.SessionTTL)
-		if err != nil {
-			h.log.Error("create session", "app", a.Name, "err", err)
-			h.onError(w, r, a, fmt.Errorf("web: create session: %w", err))
-			return
-		}
-		http.SetCookie(w, h.cookies.set(h.cookies.SessionName, sid, h.cookies.SessionTTL))
 		h.onAuthenticated(w, r, a, id)
 	}
+}
+
+// loginFailed routes a failed Complete to OnDenied, when the user or server
+// declined, or else OnError.
+func (h *Handlers) loginFailed(w http.ResponseWriter, r *http.Request, a *App, err error) {
+	var denied *singpass.DeniedError
+	if errors.As(err, &denied) {
+		h.log.Info("login denied", "app", a.Name, "code", denied.Code)
+		h.onDenied(w, r, a, denied)
+		return
+	}
+	h.log.Error("complete login", "app", a.Name, "err", err)
+	h.onError(w, r, a, err)
+}
+
+// logIDTokenLifetime reports the id_token's exact lifetime (exp − iat, both
+// validated by FAPIgo) for comparison across products. Login/Myinfo run
+// ~minutes; Corppass Myinfo Business is longer.
+func (h *Handlers) logIDTokenLifetime(a *App, id *singpass.Identity) {
+	if id.IDTokenExpiry.IsZero() || id.IDTokenIssuedAt.IsZero() {
+		return
+	}
+	h.log.Info("id_token lifetime",
+		"app", a.Name,
+		"exp", id.IDTokenExpiry.UTC().Format(time.RFC3339),
+		"lifetime", id.IDTokenExpiry.Sub(id.IDTokenIssuedAt).Round(time.Second).String(),
+	)
+}
+
+// startSession stores what SessionIdentity keeps of id as a new login
+// session and sets its cookie. It replaces, rather than adds to, any session
+// this browser already holds, so re-logging in (or switching apps) does not
+// leave the old entry live.
+func (h *Handlers) startSession(w http.ResponseWriter, r *http.Request, a *App, id *singpass.Identity) error {
+	if c, err := r.Cookie(h.cookies.SessionName); err == nil && c.Value != "" {
+		if err := h.sessions.Delete(r.Context(), c.Value); err != nil {
+			h.log.Warn("drop previous session", "app", a.Name, "err", err)
+		}
+	}
+	stored := id
+	if h.sessionIdentity != nil {
+		if stored = h.sessionIdentity(id); stored == nil {
+			h.log.Error("create session", "app", a.Name, "err", "SessionIdentity returned nil")
+			return errors.New("web: Config.SessionIdentity returned nil")
+		}
+	}
+	sid, err := h.sessions.Create(r.Context(), stored, h.cookies.SessionTTL)
+	if err != nil {
+		h.log.Error("create session", "app", a.Name, "err", err)
+		return fmt.Errorf("web: create session: %w", err)
+	}
+	http.SetCookie(w, h.cookies.set(h.cookies.SessionName, sid, h.cookies.SessionTTL))
+	return nil
 }
 
 // Logout drops the server-side session and its cookie, then redirects to "/".

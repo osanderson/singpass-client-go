@@ -118,35 +118,50 @@ func compareJWKS(jwksURL string, want, served jwkSet) error {
 	byKID := map[string]map[string]any{}
 	for _, k := range served.Keys {
 		kid, _ := k["kid"].(string)
-		for _, m := range privateJWKMembers {
-			if _, ok := k[m]; ok {
-				errs = append(errs, fmt.Errorf("singpass: %s publishes private key material (%q) in key %q: take it down and replace the key now", jwksURL, m, kid))
-				break
-			}
+		if m := privateMember(k); m != "" {
+			errs = append(errs, fmt.Errorf("singpass: %s publishes private key material (%q) in key %q: take it down and replace the key now", jwksURL, m, kid))
 		}
 		if kid != "" {
 			byKID[kid] = k
 		}
 	}
 	for _, w := range want.Keys {
-		kid, _ := w["kid"].(string)
-		use, _ := w["use"].(string)
-		got, ok := byKID[kid]
-		if !ok {
-			errs = append(errs, fmt.Errorf("singpass: %s is missing the %s key %q: publish this client's current JWKS there", jwksURL, useName(use), kid))
-			continue
-		}
-		for _, m := range publicJWKMembers {
-			if fmt.Sprint(w[m]) != fmt.Sprint(got[m]) {
-				errs = append(errs, fmt.Errorf("singpass: %s publishes a different %s key under kid %q than the one this client holds: publish the current JWKS, or load the key that matches it", jwksURL, useName(use), kid))
-				break
-			}
-		}
-		if gotUse, _ := got["use"].(string); gotUse != "" && use != "" && gotUse != use {
-			errs = append(errs, fmt.Errorf("singpass: %s publishes key %q with use %q, want %q", jwksURL, kid, gotUse, use))
-		}
+		errs = append(errs, compareKey(jwksURL, w, byKID)...)
 	}
 	return errors.Join(errs...)
+}
+
+// privateMember returns the first member of k that carries private key
+// material, or "" if there is none.
+func privateMember(k map[string]any) string {
+	for _, m := range privateJWKMembers {
+		if _, ok := k[m]; ok {
+			return m
+		}
+	}
+	return ""
+}
+
+// compareKey checks that the served keys, by kid, include the wanted key w
+// with the same public key and use.
+func compareKey(jwksURL string, w map[string]any, served map[string]map[string]any) []error {
+	kid, _ := w["kid"].(string)
+	use, _ := w["use"].(string)
+	got, ok := served[kid]
+	if !ok {
+		return []error{fmt.Errorf("singpass: %s is missing the %s key %q: publish this client's current JWKS there", jwksURL, useName(use), kid)}
+	}
+	var errs []error
+	for _, m := range publicJWKMembers {
+		if fmt.Sprint(w[m]) != fmt.Sprint(got[m]) {
+			errs = append(errs, fmt.Errorf("singpass: %s publishes a different %s key under kid %q than the one this client holds: publish the current JWKS, or load the key that matches it", jwksURL, useName(use), kid))
+			break
+		}
+	}
+	if gotUse, _ := got["use"].(string); gotUse != "" && use != "" && gotUse != use {
+		errs = append(errs, fmt.Errorf("singpass: %s publishes key %q with use %q, want %q", jwksURL, kid, gotUse, use))
+	}
+	return errs
 }
 
 func useName(use string) string {

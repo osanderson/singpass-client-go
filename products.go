@@ -319,21 +319,9 @@ func ensureKeyDeps(ctx context.Context, deps Dependencies, k keyMaterial) (Depen
 		return deps, errors.New("singpass: AdditionalSigningKeys can't be combined with Dependencies.Keys: build it with NewRotatingKeyManager")
 	}
 	if deps.Decryption == nil {
-		agreer := k.agreer
-		if agreer == nil {
-			if k.enc == nil {
-				return deps, errors.New("singpass: encryption key is required")
-			}
-			if k.encKID == "" {
-				return deps, errors.New("singpass: the encryption key's kid is required: it's how Singpass finds the key in your JWKS")
-			}
-			encECDH, err := k.enc.ECDH()
-			if err != nil {
-				return deps, fmt.Errorf("singpass: convert encryption key to ECDH form: %w", err)
-			}
-			if agreer, err = keys.NewInMemoryECDH(encECDH, k.encKID); err != nil {
-				return deps, fmt.Errorf("singpass: build encryption key backend: %w", err)
-			}
+		agreer, err := k.encryptionAgreer()
+		if err != nil {
+			return deps, err
 		}
 		dec, err := NewRotatingDecrypter(ctx, agreer, k.addEnc...)
 		if err != nil {
@@ -344,4 +332,27 @@ func ensureKeyDeps(ctx context.Context, deps Dependencies, k keyMaterial) (Depen
 		return deps, errors.New("singpass: AdditionalEncryptionKeys can't be combined with Dependencies.Decryption: build it with NewRotatingDecrypter")
 	}
 	return deps, nil
+}
+
+// encryptionAgreer returns the caller's agreer (HSM/KMS) or, without one, an
+// in-memory one over the encryption key.
+func (k keyMaterial) encryptionAgreer() (keys.ECDHAgreer, error) {
+	if k.agreer != nil {
+		return k.agreer, nil
+	}
+	if k.enc == nil {
+		return nil, errors.New("singpass: encryption key is required")
+	}
+	if k.encKID == "" {
+		return nil, errors.New("singpass: the encryption key's kid is required: it's how Singpass finds the key in your JWKS")
+	}
+	encECDH, err := k.enc.ECDH()
+	if err != nil {
+		return nil, fmt.Errorf("singpass: convert encryption key to ECDH form: %w", err)
+	}
+	agreer, err := keys.NewInMemoryECDH(encECDH, k.encKID)
+	if err != nil {
+		return nil, fmt.Errorf("singpass: build encryption key backend: %w", err)
+	}
+	return agreer, nil
 }

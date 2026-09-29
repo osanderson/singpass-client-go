@@ -105,35 +105,8 @@ func NewRotatingDecrypter(ctx context.Context, current ECDHAgreer, others ...Dec
 	}
 	d := &rotatingDecrypter{byKID: map[string]keys.ECDHAgreer{cur.KeyID: current}, current: current}
 	for _, o := range others {
-		a := o.Agreer
-		if a == nil {
-			if o.Key == nil {
-				return nil, fmt.Errorf("singpass: additional encryption key %q has neither Key nor Agreer", o.KID)
-			}
-			if o.KID == "" {
-				return nil, errors.New("singpass: an additional encryption key has no kid")
-			}
-			ecdhKey, err := o.Key.ECDH()
-			if err != nil {
-				return nil, fmt.Errorf("singpass: additional encryption key %q: %w", o.KID, err)
-			}
-			if a, err = keys.NewInMemoryECDH(ecdhKey, o.KID); err != nil {
-				return nil, fmt.Errorf("singpass: additional encryption key %q: %w", o.KID, err)
-			}
-		}
-		info, err := a.PublicKey(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("singpass: additional encryption key: %w", err)
-		}
-		switch {
-		case info.KeyID == "":
-			return nil, errors.New("singpass: an additional encryption key has no kid")
-		case d.byKID[info.KeyID] != nil:
-			return nil, fmt.Errorf("singpass: encryption key kid %q is used more than once", info.KeyID)
-		}
-		d.byKID[info.KeyID] = a
-		if !o.DecryptOnly {
-			d.published = append(d.published, a)
+		if err := d.add(ctx, o); err != nil {
+			return nil, err
 		}
 	}
 	d.Decrypter, err = keys.NewSingleKeyDecrypter(kidAgreer{d})
@@ -141,6 +114,51 @@ func NewRotatingDecrypter(ctx context.Context, current ECDHAgreer, others ...Dec
 		return nil, fmt.Errorf("singpass: build decrypter: %w", err)
 	}
 	return d, nil
+}
+
+// add adds an additional decryption key, published unless DecryptOnly.
+func (d *rotatingDecrypter) add(ctx context.Context, o DecryptionKey) error {
+	a, err := o.agreer()
+	if err != nil {
+		return err
+	}
+	info, err := a.PublicKey(ctx)
+	if err != nil {
+		return fmt.Errorf("singpass: additional encryption key: %w", err)
+	}
+	switch {
+	case info.KeyID == "":
+		return errors.New("singpass: an additional encryption key has no kid")
+	case d.byKID[info.KeyID] != nil:
+		return fmt.Errorf("singpass: encryption key kid %q is used more than once", info.KeyID)
+	}
+	d.byKID[info.KeyID] = a
+	if !o.DecryptOnly {
+		d.published = append(d.published, a)
+	}
+	return nil
+}
+
+// agreer returns the key's Agreer, or one over its in-memory Key.
+func (o DecryptionKey) agreer() (keys.ECDHAgreer, error) {
+	if o.Agreer != nil {
+		return o.Agreer, nil
+	}
+	if o.Key == nil {
+		return nil, fmt.Errorf("singpass: additional encryption key %q has neither Key nor Agreer", o.KID)
+	}
+	if o.KID == "" {
+		return nil, errors.New("singpass: an additional encryption key has no kid")
+	}
+	ecdhKey, err := o.Key.ECDH()
+	if err != nil {
+		return nil, fmt.Errorf("singpass: additional encryption key %q: %w", o.KID, err)
+	}
+	a, err := keys.NewInMemoryECDH(ecdhKey, o.KID)
+	if err != nil {
+		return nil, fmt.Errorf("singpass: additional encryption key %q: %w", o.KID, err)
+	}
+	return a, nil
 }
 
 // rotatingDecrypter is a keys.Decrypter over several encryption keys. It
