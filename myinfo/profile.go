@@ -7,7 +7,9 @@ package myinfo
 // Anything not modelled here is still reachable through Data.
 //
 // Read coded items (Sex, Race, Nationality, …) with Field.Code for the code
-// and Field.String for its description, and dates (DOB, …) with Field.Date.
+// and Field.String for its description, dates (DOB, …) with Field.Date and
+// amounts with Field.Float. Request the matching scopes with Scopes, e.g.
+// Scopes("openid", ItemName, ItemVehicles).
 type PersonProfile struct {
 	UINFIN               Field // uinfin: NRIC or FIN
 	Name                 Field // name
@@ -42,6 +44,16 @@ type PersonProfile struct {
 	EmploymentSector Field // employmentsector
 
 	CPFBalances CPFBalances // cpfbalances
+
+	// Income tax, vehicles, property and driving: each read from its own
+	// dataset, empty when its scopes weren't requested.
+	NOABasic        NOA            // noa-basic: latest NOA, amount only
+	NOA             NOA            // noa: latest NOA, detailed
+	NOAHistoryBasic []NOA          // noahistory-basic: last two NOAs, amounts only
+	NOAHistory      []NOA          // noahistory: last two NOAs, detailed
+	Vehicles        []Vehicle      // vehicles
+	HDBOwnership    []HDBOwnership // hdbownership
+	DrivingLicence  DrivingLicence // drivinglicence
 
 	// Data is the whole person_info block.
 	Data Data
@@ -100,8 +112,35 @@ func (m *Response) PersonProfile() PersonProfile {
 			OA: cpf.Field("oa"), SA: cpf.Field("sa"), MA: cpf.Field("ma"), RA: cpf.Field("ra"),
 			Data: cpf,
 		},
-		Data: p,
+		NOABasic:        noaFrom(p.Object("noa-basic")),
+		NOA:             noaFrom(p.Object("noa")),
+		NOAHistoryBasic: noaList(p.Object("noahistory-basic")),
+		NOAHistory:      noaList(p.Object("noahistory")),
+		Vehicles:        vehicles(p),
+		HDBOwnership:    hdbOwnerships(p),
+		DrivingLicence:  drivingLicenceFrom(p.Object("drivinglicence")),
+		Data:            p,
 	}
+}
+
+func vehicles(p Data) []Vehicle {
+	var out []Vehicle
+	for _, r := range p.List("vehicles") {
+		if r.Present() {
+			out = append(out, vehicleFrom(r))
+		}
+	}
+	return out
+}
+
+func hdbOwnerships(p Data) []HDBOwnership {
+	var out []HDBOwnership
+	for _, r := range p.List("hdbownership") {
+		if r.Present() {
+			out = append(out, hdbOwnershipFrom(r))
+		}
+	}
+	return out
 }
 
 // EntityProfile is a typed view of a Myinfo Business entity_info block: the

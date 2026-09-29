@@ -116,3 +116,13 @@ func ExampleResponse_PersonProfile() {
 	// OA 1581.48
 	// email available: false
 }
+
+// Scopes expands data items into the scopes to request.
+func ExampleScopes() {
+	scopes := myinfo.Scopes("openid", myinfo.ItemName, myinfo.ItemCPFBalances, "vehicles.make")
+	fmt.Println(scopes)
+	fmt.Println(myinfo.IsScope("vehicles.make"), myinfo.IsScope("vehicles"))
+	// Output:
+	// [openid name cpfbalances.oa cpfbalances.ma cpfbalances.ra cpfbalances.sa vehicles.make]
+	// true false
+}

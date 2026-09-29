@@ -146,7 +146,10 @@ hard-code it. No staging client yet? Try the demo with `DEMO_MOCK=1`.
 
 ## Myinfo person data
 
-`NewMyinfo` and `NewMyinfoBusiness` take options shaped like `NewLogin`'s;
+`NewMyinfo` and `NewMyinfoBusiness` take options shaped like `NewLogin`'s.
+Myinfo scopes are per data item; `myinfo.Scopes` expands items to the scopes
+Singpass's data catalogue lists for them (`vehicles` alone is 37):
+`Scopes: myinfo.Scopes("openid", myinfo.ItemName, myinfo.ItemVehicles)`.
 `Complete` then also calls `/userinfo` and fills `Identity.Myinfo`. The typed
 profiles name the common items, so there are no keys to look up:
 
@@ -158,6 +161,8 @@ dob, ok := p.DOB.Date()                  // time.Time
 p.RegAdd.Lines()                         // ["102 BEDOK NORTH AVENUE 4", "#09-128", "SINGAPORE 460102"]
 p.MobileNo.E164()                        // "+6597399245"
 p.CPFBalances.OA.Float()                 // 1581.48, true
+p.NOABasic.Amount.Float()                // latest assessable income; .NOA for the breakdown
+p.Vehicles[0].COEExpiryDate.Date()       // also HDBOwnership, DrivingLicence, NOAHistory
 p.Email.Available()                      // false when Myinfo has no value
 p.Name.SourceCode()                      // myinfo.SourceGovernmentVerified
 

@@ -76,6 +76,22 @@ func summary(id *singpass.Identity) []demoapp.Highlight {
 		add("Registered address", strings.Join(p.RegAdd.Lines(), " / "), "p.RegAdd.Lines()", p.RegAdd.Data.EffectiveSource())
 		field("Housing type", p.HousingType, "p.HousingType.String()")
 		field("HDB type", p.HDBType, "p.HDBType.String()")
+		if x, ok := p.NOABasic.Amount.Float(); ok {
+			add("Assessable income (YA "+p.NOABasic.YearOfAssessment.String()+")", sgd(x), "p.NOABasic.Amount.Float()", p.NOABasic.Data.SourceCode())
+		}
+		for i, v := range p.Vehicles {
+			if i == 3 {
+				break
+			}
+			value := strings.TrimSpace(v.VehicleNo.String() + " " + v.Make.String() + " " + v.Model.String())
+			if coe, ok := v.COEExpiryDate.Date(); ok {
+				value += ", COE to " + coe.Format("2 Jan 2006")
+			}
+			add("Vehicle", value, "p.Vehicles[i].VehicleNo, .Make, .Model, .COEExpiryDate.Date()", v.Data.SourceCode())
+		}
+		for _, h := range p.HDBOwnership {
+			add("HDB flat owned", strings.TrimSpace(h.HDBType.String()+", "+h.Address.String()), "p.HDBOwnership[i].HDBType, .Address", h.Data.SourceCode())
+		}
 		for _, acct := range []struct {
 			label string
 			f     myinfo.Field
