@@ -217,3 +217,40 @@ func TestLoginSessionsStoreHashedIDs(t *testing.T) {
 		t.Error("session still there after Delete")
 	}
 }
+
+// MySQL and SQLite keep ? placeholders.
+func TestQuestionMarkPlaceholders(t *testing.T) {
+	for _, d := range []Dialect{MySQL, SQLite} {
+		if got := New(nil, Config{Dialect: d}).q("x = ? AND y = ?"); got != "x = ? AND y = ?" {
+			t.Errorf("dialect %d: q = %q", d, got)
+		}
+	}
+}
+
+// A store over a database that fails reports the failure from every call,
+// rather than a missing session.
+func TestStoreErrorsWhenTheDatabaseFails(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t, Config{})
+	if err := s.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sessions, logins := s.Sessions(), s.LoginSessions()
+	_, getErr := func() (bool, error) { _, ok, err := logins.Get(ctx, "sid"); return ok, err }()
+	_, consumeErr := sessions.Consume(ctx, storage.SessionConsumption{State: "st"})
+	_, createErr := logins.Create(ctx, &singpass.Identity{}, time.Hour)
+	_, expiredErr := s.DeleteExpired(ctx)
+	for name, err := range map[string]error{
+		"CreateTables":         s.CreateTables(ctx),
+		"DeleteExpired":        expiredErr,
+		"Sessions.Create":      sessions.Create(ctx, storage.NewSession{State: "st", ExpiresAt: time.Now().Add(time.Minute)}),
+		"Sessions.Consume":     consumeErr,
+		"LoginSessions.Create": createErr,
+		"LoginSessions.Get":    getErr,
+		"LoginSessions.Delete": logins.Delete(ctx, "sid"),
+	} {
+		if err == nil || errors.Is(err, singpass.ErrLoginExpired) {
+			t.Errorf("%s = %v, want a database error", name, err)
+		}
+	}
+}
