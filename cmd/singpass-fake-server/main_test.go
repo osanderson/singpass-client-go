@@ -193,10 +193,10 @@ func TestRunPersonaFlags(t *testing.T) {
 	}
 	personas := writeConfig(t, `[{"name": "Extra User", "nric": "S1234567D"}]`)
 	ctx, cancel := context.WithCancel(context.Background())
-	var out lockedBuffer
+	var out, log lockedBuffer // the command writes stderr from several goroutines
 	done := make(chan error, 1)
 	go func() {
-		done <- run(ctx, []string{"-config", cfg, "-personas", personas, "-only-personas", "-corppass-addr", "", "-singpass-addr", freeAddr(t)}, &out, &bytes.Buffer{})
+		done <- run(ctx, []string{"-config", cfg, "-personas", personas, "-only-personas", "-corppass-addr", "", "-singpass-addr", freeAddr(t)}, &out, &log)
 	}()
 	deadline := time.Now().Add(3 * time.Second)
 	for !strings.Contains(out.String(), "test user: Extra User") {
