@@ -189,6 +189,7 @@ func DefaultPersonas(issuer Issuer) []Persona {
 						"individual_appointment": map[string]any{"name": field("LIM WEI MING")},
 					}},
 				},
+				"corppass_info": map[string]any{"email": "lim.weiming@harbourfront.example", "email_verified": true},
 				"auth_info": map[string]any{
 					"Result_Set": map[string]any{
 						"ESrvc_Row_Count": 1,
@@ -217,8 +218,17 @@ func DefaultPersonas(issuer Issuer) []Persona {
 				"name": "TAN XIAO HUI", "email": "tan.xiaohui@example.com", "mobileno": "97399245",
 			},
 			UserInfo: map[string]any{"person_info": map[string]any{
-				"uinfin":            field("S9812381D"),
-				"name":              field("TAN XIAO HUI"),
+				"uinfin":        field("S9812381D"),
+				"partialuinfin": field("****381D"),
+				"name":          field("TAN XIAO HUI"),
+				"employment":    map[string]any{"value": "ACME ENGINEERING PTE LTD", "source": "2", "classification": "C", "lastupdated": "2026-01-15"},
+				"cpfcontributions": map[string]any{
+					"source": "1", "classification": "C", "lastupdated": "2026-09-10",
+					"history": []any{
+						map[string]any{"month": map[string]any{"value": "2026-07"}, "date": map[string]any{"value": "2026-08-12"}, "amount": map[string]any{"value": 1554}, "employer": map[string]any{"value": "ACME ENGINEERING PTE LTD"}},
+						map[string]any{"month": map[string]any{"value": "2026-08"}, "date": map[string]any{"value": "2026-09-10"}, "amount": map[string]any{"value": 1554}, "employer": map[string]any{"value": "ACME ENGINEERING PTE LTD"}},
+					},
+				},
 				"sex":               coded("F", "FEMALE"),
 				"race":              coded("CN", "CHINESE"),
 				"nationality":       coded("SG", "SINGAPORE CITIZEN"),

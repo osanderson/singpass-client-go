@@ -219,8 +219,8 @@ func Load() (Config, error) {
 }
 
 const (
-	mockMyinfoScopes    = "openid uinfin name sex race nationality residentialstatus dob email mobileno regadd vehicles.vehicleno vehicles.make vehicles.model"
-	mockMyinfoBizScopes = "openid entity.basic_profile.name entity.basic_profile.registration_number entity.basic_profile.uen_status entity.basic_profile.company_type entity.address entity.appointments authinfo"
+	mockMyinfoScopes    = "openid uinfin partialuinfin name sex race nationality residentialstatus dob email mobileno regadd employment cpfcontributions vehicles.vehicleno vehicles.make vehicles.model"
+	mockMyinfoBizScopes = "openid entity.basic_profile.name entity.basic_profile.registration_number entity.basic_profile.uen_status entity.basic_profile.company_type entity.address entity.appointments corppass.email authinfo"
 )
 
 func env(key, def string) string {
