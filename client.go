@@ -581,43 +581,55 @@ func (c *Client) BeginLoginWith(ctx context.Context, lc LoginContext) (redirectU
 // the client's login context overridden by lc, and the mobile-app redirect
 // parameters. FAPIgo sends each as a plain top-level PAR parameter.
 func (c *Client) loginExtensions(lc LoginContext) (extension.Values, error) {
-	typ, msg := c.authContext.Type, c.authContext.Message
-	if lc.Type != "" || lc.Message != "" {
-		if typ == "" {
-			return extension.Values{}, errors.New("singpass: a login context is only for Singpass Login clients")
-		}
-		if lc.Type != "" {
-			typ = lc.Type
-		}
-		if lc.Message != "" {
-			if err := validateAuthContextMessage(lc.Message); err != nil {
-				return extension.Values{}, err
-			}
-			msg = lc.Message
-		}
+	ctx, err := c.loginContext(lc)
+	if err != nil {
+		return extension.Values{}, err
+	}
+	redirectType := ""
+	if c.appClaimed {
+		redirectType = "app_claimed_https"
 	}
 	var ext extension.Values
-	set := func(def extension.Definition[string], v string) error {
-		if v == "" {
-			return nil
+	for _, p := range []struct {
+		def   extension.Definition[string]
+		value string
+	}{
+		{authContextTypeExt, ctx.Type},
+		{authContextMessageExt, ctx.Message},
+		{redirectURIHTTPSTypeExt, redirectType},
+		{appLaunchURLExt, c.appLaunchURL},
+	} {
+		if p.value == "" {
+			continue
 		}
-		if err := extension.Set(&ext, def, v); err != nil {
-			return fmt.Errorf("singpass: set %s: %w", def.Name, err)
-		}
-		return nil
-	}
-	if err := set(authContextTypeExt, typ); err != nil {
-		return ext, err
-	}
-	if err := set(authContextMessageExt, msg); err != nil {
-		return ext, err
-	}
-	if c.appClaimed {
-		if err := set(redirectURIHTTPSTypeExt, "app_claimed_https"); err != nil {
-			return ext, err
+		if err := extension.Set(&ext, p.def, p.value); err != nil {
+			return ext, fmt.Errorf("singpass: set %s: %w", p.def.Name, err)
 		}
 	}
-	return ext, set(appLaunchURLExt, c.appLaunchURL)
+	return ext, nil
+}
+
+// loginContext is the client's login context with lc's fields, where set,
+// in place of its own. Only a Login client, which has a context type, takes
+// one.
+func (c *Client) loginContext(lc LoginContext) (LoginContext, error) {
+	ctx := c.authContext
+	if lc.Type == "" && lc.Message == "" {
+		return ctx, nil
+	}
+	if ctx.Type == "" {
+		return LoginContext{}, errors.New("singpass: a login context is only for Singpass Login clients")
+	}
+	if lc.Type != "" {
+		ctx.Type = lc.Type
+	}
+	if lc.Message != "" {
+		if err := validateAuthContextMessage(lc.Message); err != nil {
+			return LoginContext{}, err
+		}
+		ctx.Message = lc.Message
+	}
+	return ctx, nil
 }
 
 // Complete validates the authorization callback (identified by its raw query
