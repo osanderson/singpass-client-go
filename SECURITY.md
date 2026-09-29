@@ -21,7 +21,7 @@ The project is pre-1.0: only the **latest release** receives security fixes.
 ## Scope
 
 In scope: this library (`singpass`, `myinfo`, `web`, `keyfile`, `sqlstore`,
-`singpasstest`, `cmd/singpass-keygen`) and the demo's handling of keys and
+`singpasstest`, `cmd/singpass-keygen`, `cmd/singpass-fake-server`) and the demo's handling of keys and
 sessions. Vulnerabilities in [FAPIgo](https://github.com/idfoundry/fapigo)
 itself should be reported to that project; issues in Singpass or Corppass
 themselves to GovTech through its vulnerability disclosure programme.

@@ -19,8 +19,8 @@ DEMO_MOCK=1 go run ./cmd/server   # http://localhost:8088
 
 Mock mode starts fake Singpass and Corppass servers in-process
 ([`singpasstest`](../../singpasstest)), generates throwaway keys and registers
-all three apps with them. Logging in shows a sign-in page listing test personas
-(or Cancel, to see a declined login). No client IDs, keys or network access are
+all three apps with them. Logging in shows a sign-in page listing test personas,
+a form to log in as any NRIC, FIN or UEN, and Cancel, to see a declined login. No client IDs, keys or network access are
 needed, and no real accounts or personal data are involved.
 
 ## Run locally against Singpass staging

@@ -36,6 +36,11 @@
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production
 // assurance.
 //
+// To run the servers outside a Go test — for an app in another language, or
+// by hand in a browser — use the singpass-fake-server command
+// (cmd/singpass-fake-server). Config.BaseURL sets the URL clients reach a
+// server at, e.g. when it runs in a container.
+//
 // Not reproduced: acr_values, refresh tokens, and Singpass's full error
 // vocabulary.
 package singpasstest

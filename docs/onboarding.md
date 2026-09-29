@@ -4,8 +4,9 @@ From nothing to a working staging login, and on to production. Each step
 names the portal setting and the library option it corresponds to.
 
 No staging client yet? Try the library first with the fake server:
-`DEMO_MOCK=1` in [`examples/demo`](../examples/demo), or `singpasstest` in
-your own tests.
+`DEMO_MOCK=1` in [`examples/demo`](../examples/demo), `singpasstest` in your
+own tests, or `singpass-fake-server` to run your app against it
+([README](../README.md#testing-your-integration)).
 
 ## 1. Get portal access
 
@@ -68,6 +69,9 @@ with. Either way the JWKS holds public keys only — never paste a private key.
 see the [Myinfo data catalogue](https://docs.developer.singpass.gov.sg/docs/data-catalog-myinfo/catalog)
 and the [Myinfo Business scopes](https://docs.corppass.gov.sg/technical-specifications/corppass-authorization-api-fapi-2.0/scopes/myinfo-business-scopes).
 Request only scopes the app is allowed; others fail at login.
+`myinfo.Scopes` expands data items into their scopes, e.g.
+`myinfo.Scopes("openid", myinfo.ItemName, myinfo.ItemVehicles)` or, for
+Myinfo Business, `myinfo.Scopes("openid", myinfo.EntityBasicProfile)`.
 
 ## 4. Connect and log in
 
