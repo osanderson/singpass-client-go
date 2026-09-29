@@ -3,9 +3,11 @@
 //
 // Start with the typed profiles: Response.PersonProfile and
 // Response.EntityProfile name the common items (UINFIN, name, date of birth,
-// registered address, mobile number, CPF balances; an entity's name, status,
-// address, appointments and shareholders), with Address and Phone formatting
-// and Field.Date / Int / Float parsing values.
+// registered address, mobile number, CPF balances, NOA, vehicles, HDB
+// ownership, driving licence; an entity's name, status, address,
+// appointments and shareholders), with Address and Phone formatting and
+// Field.Date / Int / Float parsing values. Scopes turns data items (the Item
+// constants) into the scopes to request.
 //
 // Underneath, Response groups the data blocks, and Data and Field read each
 // item's Myinfo envelope (value or code+desc, source, classification,
