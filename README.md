@@ -169,8 +169,9 @@ p.Email.Available()                      // false when Myinfo has no value
 p.Name.SourceCode()                      // myinfo.SourceGovernmentVerified
 
 e := id.Myinfo.EntityProfile()           // Myinfo Business
-e.Name.String(); e.UENStatus.Code(); e.Address.String()
+e.Name.String(); e.RegistrationNumber.String(); e.UENStatus.Code(); e.Address.String()
 e.Appointments; e.Shareholders           // person or entity party, flattened
+e.Financials[0].Company.Revenue.Float()  // also Capitals, Licences, Grants, History, …
 id.Myinfo.Auth.Authorisations()          // Corppass auth_info, flattened
 ```
 
