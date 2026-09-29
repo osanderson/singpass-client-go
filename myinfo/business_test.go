@@ -2,7 +2,6 @@ package myinfo
 
 import (
 	"testing"
-	"time"
 )
 
 // Shaped as Corppass's entity_info OpenAPI specification defines each item.
@@ -46,48 +45,46 @@ func entityResponse() *Response {
 
 func TestEntityProfileComplete(t *testing.T) {
 	e := entityResponse().EntityProfile()
-
-	if e.RegistrationNumber.String() != "201912345K" || e.Type.Code() != "LC" || e.CountryOfIncorporation.Code() != "SG" {
-		t.Errorf("basic profile = %q %q %q", e.RegistrationNumber.String(), e.Type.Code(), e.CountryOfIncorporation.Code())
-	}
-	if d, ok := e.RegistrationDate.Date(); !ok || !d.Equal(time.Date(2019, 4, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Errorf("RegistrationDate = %v", d)
-	}
-	if e.PrimaryActivity.Code() != "46900" || e.PrimaryActivity.Member("edition") != "2025" || e.SecondaryActivity.Present() {
-		t.Errorf("activities = %q %q", e.PrimaryActivity.Code(), e.PrimaryActivity.Member("edition"))
-	}
-
-	if len(e.Capitals) != 1 {
-		t.Fatalf("Capitals = %d", len(e.Capitals))
-	}
-	if paid, _ := e.Capitals[0].PaidUpAmount.Float(); paid != 100000 || e.Capitals[0].Currency.Code() != "SGD" {
-		t.Errorf("capital = %+v", e.Capitals[0])
-	}
-	if len(e.Financials) != 1 {
-		t.Fatalf("Financials = %d", len(e.Financials))
+	h := e.History
+	checkAll(t,
+		check{"Capitals", len(e.Capitals), 1},
+		check{"Financials", len(e.Financials), 1},
+		check{"Licences", len(e.Licences), 1},
+		check{"PreviousNames", len(h.PreviousNames), 1},
+		check{"PreviousRegistrationNumbers", len(h.PreviousRegistrationNumbers), 1},
+		check{"Builders", len(e.Builders), 1},
+		check{"Contractors", len(e.Contractors), 1},
+		check{"Grants", len(e.Grants), 1},
+		check{"Shareholders", len(e.Shareholders), 1},
+	)
+	if t.Failed() {
+		return
 	}
 	f := e.Financials[0]
-	rev, _ := f.Company.Revenue.Float()
-	pat, _ := f.Company.ProfitLossAfterTax.Float()
-	if rev != 2500000 || pat != -12500.5 || f.IsAudited.String() != "Y" || f.Group.Revenue.Present() {
-		t.Errorf("financial = %+v", f)
-	}
-	if len(e.Licences) != 1 || e.Licences[0].IssuanceAgency.Code() != "SC" || e.Licences[0].LicenceName.String() != "IMPORT LICENCE" {
-		t.Errorf("licences = %+v", e.Licences)
-	}
-	h := e.History
-	if len(h.PreviousNames) != 1 || h.PreviousNames[0].Name.String() != "HARBOURFRONT PTE. LTD." || len(h.PreviousRegistrationNumbers) != 1 || h.PreviousRegistrationNumbers[0].String() != "53123456A" {
-		t.Errorf("history = %+v", h)
-	}
-	if len(e.Builders) != 1 || len(e.Contractors) != 1 || e.Contractors[0].WorkheadFinancialGrade.String() != "B1" {
-		t.Errorf("builders/contractors = %+v / %+v", e.Builders, e.Contractors)
-	}
-	if amt, _ := e.Grants[0].ApprovedAmount.Float(); len(e.Grants) != 1 || amt != 15000 || e.Grants[0].Status.Code() != "A" {
-		t.Errorf("grants = %+v", e.Grants)
-	}
-	if n, ok := e.Shareholders[0].Data.Field("allocation").Float(); !ok || n != 100000 || e.Shareholders[0].Allocation != "100000" {
-		t.Errorf("shareholder allocation = %v / %q", n, e.Shareholders[0].Allocation)
-	}
+	checkAll(t,
+		check{"RegistrationNumber", e.RegistrationNumber.String(), "201912345K"},
+		check{"Type", e.Type.Code(), "LC"},
+		check{"CountryOfIncorporation", e.CountryOfIncorporation.Code(), "SG"},
+		check{"RegistrationDate", dateOf(e.RegistrationDate), "2019-04-01"},
+		check{"PrimaryActivity", e.PrimaryActivity.Code(), "46900"},
+		check{"PrimaryActivity edition", e.PrimaryActivity.Member("edition"), "2025"},
+		check{"SecondaryActivity present", e.SecondaryActivity.Present(), false},
+		check{"capital PaidUpAmount", floatOf(e.Capitals[0].PaidUpAmount), 100000.0},
+		check{"capital Currency", e.Capitals[0].Currency.Code(), "SGD"},
+		check{"financial Revenue", floatOf(f.Company.Revenue), 2500000.0},
+		check{"financial ProfitLossAfterTax", floatOf(f.Company.ProfitLossAfterTax), -12500.5},
+		check{"financial IsAudited", f.IsAudited.String(), "Y"},
+		check{"financial Group present", f.Group.Revenue.Present(), false},
+		check{"licence IssuanceAgency", e.Licences[0].IssuanceAgency.Code(), "SC"},
+		check{"licence LicenceName", e.Licences[0].LicenceName.String(), "IMPORT LICENCE"},
+		check{"previous name", h.PreviousNames[0].Name.String(), "HARBOURFRONT PTE. LTD."},
+		check{"previous registration number", h.PreviousRegistrationNumbers[0].String(), "53123456A"},
+		check{"contractor WorkheadFinancialGrade", e.Contractors[0].WorkheadFinancialGrade.String(), "B1"},
+		check{"grant ApprovedAmount", floatOf(e.Grants[0].ApprovedAmount), 15000.0},
+		check{"grant Status", e.Grants[0].Status.Code(), "A"},
+		check{"shareholder allocation", floatOf(e.Shareholders[0].Data.Field("allocation")), 100000.0},
+		check{"shareholder Allocation", e.Shareholders[0].Allocation, "100000"},
+	)
 }
 
 func TestEntityProfileAbsentDatasets(t *testing.T) {

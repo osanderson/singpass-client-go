@@ -83,21 +83,22 @@ func FuzzCompareJWKS(f *testing.F) {
 			return
 		}
 		_ = compareJWKS("https://app.example/jwks", w, s)
-		leaks := false
-		for _, k := range w.Keys {
-			for _, m := range privateJWKMembers {
-				if _, ok := k[m]; ok {
-					leaks = true
-				}
-			}
-			if kid, _ := k["kid"].(string); kid == "" {
-				leaks = true // an unnamed key can't be matched by kid
-			}
-		}
-		if err := compareJWKS("https://app.example/jwks", w, w); err != nil && !leaks && !duplicateKIDs(w) {
+		if err := compareJWKS("https://app.example/jwks", w, w); err != nil && !selfMatchExempt(w) {
 			t.Fatalf("a set doesn't match itself: %v", err)
 		}
 	})
+}
+
+// selfMatchExempt reports whether a set can rightly fail to match itself: it
+// leaks private members, has a key without a kid (which can't be matched by
+// kid), or repeats a kid.
+func selfMatchExempt(s jwkSet) bool {
+	for _, k := range s.Keys {
+		if kid, _ := k["kid"].(string); kid == "" || privateMember(k) != "" {
+			return true
+		}
+	}
+	return duplicateKIDs(s)
 }
 
 func duplicateKIDs(s jwkSet) bool {

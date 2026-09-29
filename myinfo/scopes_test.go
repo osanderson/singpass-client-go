@@ -85,12 +85,7 @@ func TestBusinessCatalogue(t *testing.T) {
 	}
 	for item, scopes := range businessCatalogue {
 		for _, s := range scopes {
-			if s != item && !strings.HasPrefix(s, item+".") {
-				t.Errorf("scope %q is filed under %q", s, item)
-			}
-			if rest, ok := strings.CutPrefix(s, "user."); ok && !IsScope(rest) {
-				t.Errorf("%q is not user. + a person-data scope", s)
-			}
+			checkBusinessScope(t, item, s)
 		}
 	}
 	// The entity items EntityProfile reads are catalogue items.
@@ -98,5 +93,17 @@ func TestBusinessCatalogue(t *testing.T) {
 		if _, ok := businessCatalogue[item]; !ok {
 			t.Errorf("%q missing", item)
 		}
+	}
+}
+
+// checkBusinessScope checks a Myinfo Business scope is filed under its item,
+// and that a user.* scope is user. + a person-data scope.
+func checkBusinessScope(t *testing.T, item, s string) {
+	t.Helper()
+	if s != item && !strings.HasPrefix(s, item+".") {
+		t.Errorf("scope %q is filed under %q", s, item)
+	}
+	if rest, ok := strings.CutPrefix(s, "user."); ok && !IsScope(rest) {
+		t.Errorf("%q is not user. + a person-data scope", s)
 	}
 }

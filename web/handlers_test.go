@@ -121,23 +121,30 @@ func TestCallbackStateMismatch(t *testing.T) {
 
 			rec := httptest.NewRecorder()
 			h.Callback(app)(rec, req)
-
-			if auth.completed {
-				t.Error("Complete was called despite state mismatch")
-			}
-			if got.err == nil || got.authenticated != nil {
-				t.Errorf("outcome = %+v, want OnError only", got)
-			}
-			if !errors.Is(got.err, ErrStateMismatch) || !errors.Is(got.err, singpass.ErrLoginExpired) {
-				t.Errorf("OnError err = %v, want ErrStateMismatch wrapping singpass.ErrLoginExpired", got.err)
-			}
-			if c := cookieNamed(rec, "sp_state_login"); c == nil || c.MaxAge >= 0 {
-				t.Errorf("state cookie = %+v, want cleared", c)
-			}
-			if cookieNamed(rec, "sid") != nil {
-				t.Error("session cookie set despite state mismatch")
-			}
+			checkStateMismatchRejected(t, auth, got, rec)
 		})
+	}
+}
+
+// checkStateMismatchRejected checks a callback was refused for its state: it
+// reached OnError with ErrStateMismatch, cleared the state cookie, and neither
+// called Complete nor started a session.
+func checkStateMismatchRejected(t *testing.T, auth *fakeAuth, got *outcome, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if auth.completed {
+		t.Error("Complete was called despite state mismatch")
+	}
+	if got.err == nil || got.authenticated != nil {
+		t.Errorf("outcome = %+v, want OnError only", got)
+	}
+	if !errors.Is(got.err, ErrStateMismatch) || !errors.Is(got.err, singpass.ErrLoginExpired) {
+		t.Errorf("OnError err = %v, want ErrStateMismatch wrapping singpass.ErrLoginExpired", got.err)
+	}
+	if c := cookieNamed(rec, "sp_state_login"); c == nil || c.MaxAge >= 0 {
+		t.Errorf("state cookie = %+v, want cleared", c)
+	}
+	if cookieNamed(rec, "sid") != nil {
+		t.Error("session cookie set despite state mismatch")
 	}
 }
 
@@ -246,64 +253,53 @@ func TestCurrentIdentityWithoutSession(t *testing.T) {
 	}
 }
 
+// TestLogout checks logout only takes a same-origin POST: that drops the
+// session and clears its cookie, while GET and a cross-site POST are refused
+// and leave the user signed in.
 func TestLogout(t *testing.T) {
-	newLoggedIn := func() (*Handlers, string) {
-		h, _, _ := newTestHandlers(&fakeAuth{})
-		return h, mustCreate(t, h.sessions, &singpass.Identity{Subject: "S"}, h.cookies.SessionTTL)
+	for _, tc := range []struct {
+		name         string
+		method, site string
+		wantStatus   int
+		wantOut      bool
+	}{
+		{"POST same-origin logs out", http.MethodPost, "same-origin", http.StatusFound, true},
+		{"GET is refused", http.MethodGet, "", http.StatusMethodNotAllowed, false},
+		{"cross-site POST is refused", http.MethodPost, "cross-site", http.StatusForbidden, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _, _ := newTestHandlers(&fakeAuth{})
+			sid := mustCreate(t, h.sessions, &singpass.Identity{Subject: "S"}, h.cookies.SessionTTL)
+			req := httptest.NewRequest(tc.method, "/login/logout", strings.NewReader(""))
+			if tc.site != "" {
+				req.Header.Set("Sec-Fetch-Site", tc.site)
+			}
+			req.AddCookie(&http.Cookie{Name: "sid", Value: sid})
+
+			rec := httptest.NewRecorder()
+			h.Logout()(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+			}
+			if _, ok := lookup(t, h.sessions, sid); ok == tc.wantOut {
+				t.Errorf("session valid after the request = %v, want %v", ok, !tc.wantOut)
+			}
+			checkLogoutResponse(t, rec, tc.wantOut)
+		})
 	}
+}
 
-	t.Run("POST same-origin logs out", func(t *testing.T) {
-		h, sid := newLoggedIn()
-		req := httptest.NewRequest(http.MethodPost, "/login/logout", nil)
-		req.Header.Set("Sec-Fetch-Site", "same-origin")
-		req.AddCookie(&http.Cookie{Name: "sid", Value: sid})
-
-		rec := httptest.NewRecorder()
-		h.Logout()(rec, req)
-
-		if rec.Code != http.StatusFound {
-			t.Fatalf("status = %d, want 302", rec.Code)
-		}
-		if _, ok := lookup(t, h.sessions, sid); ok {
-			t.Error("session still valid after logout")
-		}
-		if c := cookieNamed(rec, "sid"); c == nil || c.MaxAge >= 0 {
-			t.Errorf("sid cookie = %+v, want cleared", c)
-		}
-	})
-
-	t.Run("GET is refused", func(t *testing.T) {
-		h, sid := newLoggedIn()
-		req := httptest.NewRequest(http.MethodGet, "/login/logout", nil)
-		req.AddCookie(&http.Cookie{Name: "sid", Value: sid})
-
-		rec := httptest.NewRecorder()
-		h.Logout()(rec, req)
-
-		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != http.MethodPost {
-			t.Fatalf("status = %d Allow=%q, want 405 Allow=POST", rec.Code, rec.Header().Get("Allow"))
-		}
-		if _, ok := lookup(t, h.sessions, sid); !ok {
-			t.Error("GET logged the user out")
-		}
-	})
-
-	t.Run("cross-site POST is refused", func(t *testing.T) {
-		h, sid := newLoggedIn()
-		req := httptest.NewRequest(http.MethodPost, "/login/logout", strings.NewReader(""))
-		req.Header.Set("Sec-Fetch-Site", "cross-site")
-		req.AddCookie(&http.Cookie{Name: "sid", Value: sid})
-
-		rec := httptest.NewRecorder()
-		h.Logout()(rec, req)
-
-		if rec.Code != http.StatusForbidden {
-			t.Fatalf("status = %d, want 403", rec.Code)
-		}
-		if _, ok := lookup(t, h.sessions, sid); !ok {
-			t.Error("cross-site POST logged the user out")
-		}
-	})
+// checkLogoutResponse checks a logout's response: a logout clears the session
+// cookie, and a refused GET says POST is the allowed method.
+func checkLogoutResponse(t *testing.T, rec *httptest.ResponseRecorder, loggedOut bool) {
+	t.Helper()
+	if c := cookieNamed(rec, "sid"); loggedOut && (c == nil || c.MaxAge >= 0) {
+		t.Errorf("sid cookie = %+v, want cleared", c)
+	}
+	if rec.Code == http.StatusMethodNotAllowed && rec.Header().Get("Allow") != http.MethodPost {
+		t.Errorf("Allow = %q, want POST", rec.Header().Get("Allow"))
+	}
 }
 
 func TestJWKSServesAppKeys(t *testing.T) {

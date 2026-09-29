@@ -3,54 +3,25 @@ package myinfo
 import (
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestFieldConversions(t *testing.T) {
 	f := func(v any) Field { return Field{m: map[string]any{"value": v}, present: true} }
-	for _, tc := range []struct {
-		value any
-		date  string // "" = not a date
-	}{
-		{"1998-06-06", "1998-06-06"},
-		{"2024-03", "2024-03-01"},
-		{"1965", "1965-01-01"},
-		{"1998-6-6", ""},
-		{"", ""},
-		{"not a date", ""},
-	} {
-		got, ok := f(tc.value).Date()
-		if tc.date == "" {
-			if ok {
-				t.Errorf("Date(%v) = %v, want not ok", tc.value, got)
-			}
-			continue
-		}
-		want, _ := time.Parse(time.DateOnly, tc.date)
-		if !ok || !got.Equal(want) {
-			t.Errorf("Date(%v) = %v, %v; want %v", tc.value, got, ok, want)
-		}
-	}
-
-	if n, ok := f(1000.0).Int(); !ok || n != 1000 {
-		t.Errorf("Int(1000) = %d, %v", n, ok)
-	}
-	if n, ok := f("42").Int(); !ok || n != 42 {
-		t.Errorf(`Int("42") = %d, %v`, n, ok)
-	}
-	if _, ok := f(1.5).Int(); ok {
-		t.Error("Int(1.5) ok")
-	}
-	if x, ok := f(1581.48).Float(); !ok || x != 1581.48 {
-		t.Errorf("Float(1581.48) = %v, %v", x, ok)
-	}
 	var zero Field
-	if _, ok := zero.Float(); ok {
-		t.Error("zero Field Float ok")
-	}
-	if _, ok := zero.Date(); ok {
-		t.Error("zero Field Date ok")
-	}
+	checkAll(t,
+		check{"Date(1998-06-06)", dateOf(f("1998-06-06")), "1998-06-06"},
+		check{"Date(2024-03)", dateOf(f("2024-03")), "2024-03-01"},
+		check{"Date(1965)", dateOf(f("1965")), "1965-01-01"},
+		check{"Date(1998-6-6)", dateOf(f("1998-6-6")), nil},
+		check{`Date("")`, dateOf(f("")), nil},
+		check{"Date(not a date)", dateOf(f("not a date")), nil},
+		check{"Int(1000)", intOf(f(1000.0)), int64(1000)},
+		check{`Int("42")`, intOf(f("42")), int64(42)},
+		check{"Int(1.5)", intOf(f(1.5)), nil},
+		check{"Float(1581.48)", floatOf(f(1581.48)), 1581.48},
+		check{"zero Field Float", floatOf(zero), nil},
+		check{"zero Field Date", dateOf(zero), nil},
+	)
 }
 
 func TestAddressLines(t *testing.T) {
