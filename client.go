@@ -27,6 +27,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -60,8 +61,19 @@ type Options struct {
 	RedirectURI     string   // must match what is registered with the server
 	Scopes          []string // includes "openid"
 	AuthContextType string   // authentication_context_type (Login apps only; rejected on Myinfo)
-	AcrValues       string   // optional requested level of assurance; "" to omit
-	FetchUserInfo   bool     // call the FAPI /userinfo endpoint after token exchange (Myinfo)
+	// AuthContextMessage is the optional authentication_context_message
+	// (Login apps only): up to 100 printable ASCII characters, excluding
+	// < > \ and `, shown to the user while they authenticate.
+	AuthContextMessage string
+	// AppClaimedHTTPS sends redirect_uri_https_type=app_claimed_https, for a
+	// RedirectURI that is a mobile app's App Link / Universal Link.
+	AppClaimedHTTPS bool
+	// AppLaunchURL is the optional app_launch_url: the iOS App Link that
+	// returns the user to your app after authenticating in the Singpass app,
+	// for a journey that starts and ends in an iOS app. Must be https.
+	AppLaunchURL  string
+	AcrValues     string // optional requested level of assurance; "" to omit
+	FetchUserInfo bool   // call the FAPI /userinfo endpoint after token exchange (Myinfo)
 	// TolerateUserInfoSubjectClientID accepts a /userinfo "sub" equal to the
 	// client_id (as well as the id_token sub) — a deviation from OIDC Core
 	// §5.3.2 that Corppass Myinfo Business used to have and has since fixed.
@@ -156,11 +168,15 @@ type Dependencies struct {
 // Client is a relying party (Login, Myinfo, or Myinfo Business). It is safe for
 // concurrent use.
 type Client struct {
-	engine     *client.Client
-	name       string
-	scopes     []string
-	acrValues  []string         // requested acr_values, if any (sent only when non-empty)
-	extensions extension.Values // Singpass-specific PAR parameters (authentication_context_type)
+	engine    *client.Client
+	name      string
+	scopes    []string
+	acrValues []string // requested acr_values, if any (sent only when non-empty)
+	// authContext, appClaimed and appLaunchURL are the Singpass-specific PAR
+	// parameters (see loginExtensions).
+	authContext  LoginContext
+	appClaimed   bool
+	appLaunchURL string
 
 	// fetchUserInfo makes Complete call the engine's native FetchUserInfo
 	// after token exchange to retrieve Myinfo person data.
@@ -384,16 +400,9 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		return nil, fmt.Errorf("singpass: construct client: %w", err)
 	}
 
-	// Attach the Singpass-specific authorization parameters FAPIgo will emit on
-	// every PAR: authentication_context_type as a plain-string extension, and
-	// acr_values (opt-in — Singpass rejects it unless the client is whitelisted,
-	// so it is sent only when configured).
-	var extensions extension.Values
-	if opts.AuthContextType != "" {
-		if err := extension.Set(&extensions, authContextTypeExt, opts.AuthContextType); err != nil {
-			return nil, fmt.Errorf("singpass: set authentication_context_type: %w", err)
-		}
-	}
+	// acr_values is opt-in: Singpass rejects it unless the client is
+	// whitelisted, so it is sent only when configured. The other
+	// Singpass-specific PAR parameters are built per login (loginExtensions).
 	var acrValues []string
 	if v := strings.TrimSpace(opts.AcrValues); v != "" {
 		acrValues = strings.Fields(v)
@@ -404,7 +413,9 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		name:          opts.Name,
 		scopes:        opts.Scopes,
 		acrValues:     acrValues,
-		extensions:    extensions,
+		authContext:   LoginContext{Type: opts.AuthContextType, Message: opts.AuthContextMessage},
+		appClaimed:    opts.AppClaimedHTTPS,
+		appLaunchURL:  opts.AppLaunchURL,
 		fetchUserInfo: opts.FetchUserInfo,
 		httpClient:    base,
 		decryption:    deps.Decryption,
@@ -475,11 +486,34 @@ func (c *Client) PublicJWKS(ctx context.Context) ([]byte, error) {
 // callback to the browser that started the login. With
 // Dependencies.BeginLoginRetries set, a temporary failure is retried.
 func (c *Client) BeginLogin(ctx context.Context) (redirectURL string, state string, err error) {
+	return c.BeginLoginWith(ctx, LoginContext{})
+}
+
+// LoginContext describes, for Singpass Login, the transaction a user is
+// authenticating for: Type is the authentication_context_type (one of the
+// values Singpass defines, used against fraud) and Message the optional
+// authentication_context_message shown to the user — up to 100 printable
+// ASCII characters, excluding < > \ and `. Either left empty falls back to
+// the client's LoginOptions.
+type LoginContext struct {
+	Type    string
+	Message string
+}
+
+// BeginLoginWith is BeginLogin for a Singpass Login client that describes
+// this particular login, e.g. LoginContext{Message: "Approve your transfer of
+// $500"}; its fields override the client's for this login only. Myinfo
+// clients take no login context.
+func (c *Client) BeginLoginWith(ctx context.Context, lc LoginContext) (redirectURL string, state string, err error) {
+	ext, err := c.loginExtensions(lc)
+	if err != nil {
+		return "", "", err
+	}
 	for attempt := 0; ; attempt++ {
 		session, err := c.engine.BeginAuthorization(ctx, client.BeginAuthorizationRequest{
 			Scope:      c.scopes,
 			ACRValues:  c.acrValues,
-			Extensions: c.extensions,
+			Extensions: ext,
 		})
 		if err == nil {
 			return session.URL().String(), session.Handle().String(), nil
@@ -494,6 +528,49 @@ func (c *Client) BeginLogin(ctx context.Context) (redirectURL string, state stri
 		case <-time.After(retryDelay(attempt)):
 		}
 	}
+}
+
+// loginExtensions builds the Singpass-specific PAR parameters for one login:
+// the client's login context overridden by lc, and the mobile-app redirect
+// parameters. FAPIgo sends each as a plain top-level PAR parameter.
+func (c *Client) loginExtensions(lc LoginContext) (extension.Values, error) {
+	typ, msg := c.authContext.Type, c.authContext.Message
+	if lc.Type != "" || lc.Message != "" {
+		if typ == "" {
+			return extension.Values{}, errors.New("singpass: a login context is only for Singpass Login clients")
+		}
+		if lc.Type != "" {
+			typ = lc.Type
+		}
+		if lc.Message != "" {
+			if err := validateAuthContextMessage(lc.Message); err != nil {
+				return extension.Values{}, err
+			}
+			msg = lc.Message
+		}
+	}
+	var ext extension.Values
+	set := func(def extension.Definition[string], v string) error {
+		if v == "" {
+			return nil
+		}
+		if err := extension.Set(&ext, def, v); err != nil {
+			return fmt.Errorf("singpass: set %s: %w", def.Name, err)
+		}
+		return nil
+	}
+	if err := set(authContextTypeExt, typ); err != nil {
+		return ext, err
+	}
+	if err := set(authContextMessageExt, msg); err != nil {
+		return ext, err
+	}
+	if c.appClaimed {
+		if err := set(redirectURIHTTPSTypeExt, "app_claimed_https"); err != nil {
+			return ext, err
+		}
+	}
+	return ext, set(appLaunchURLExt, c.appLaunchURL)
 }
 
 // Complete validates the authorization callback (identified by its raw query
@@ -580,6 +657,30 @@ var authContextTypeExt = extension.Definition[string]{
 	AllowedSources: extension.SourcePlainParameter,
 	MaxBytes:       128,
 }
+
+// authContextMessageExt, redirectURIHTTPSTypeExt and appLaunchURLExt are the
+// other Singpass PAR parameters, sent the same way: the message shown to the
+// user during a Login (Login apps only), and the mobile-app redirect settings.
+var (
+	authContextMessageExt = extension.Definition[string]{
+		Name:           "authentication_context_message",
+		Cardinality:    extension.Single,
+		AllowedSources: extension.SourcePlainParameter,
+		MaxBytes:       maxAuthContextMessage,
+	}
+	redirectURIHTTPSTypeExt = extension.Definition[string]{
+		Name:           "redirect_uri_https_type",
+		Cardinality:    extension.Single,
+		AllowedSources: extension.SourcePlainParameter,
+		MaxBytes:       32,
+	}
+	appLaunchURLExt = extension.Definition[string]{
+		Name:           "app_launch_url",
+		Cardinality:    extension.Single,
+		AllowedSources: extension.SourcePlainParameter,
+		MaxBytes:       2048,
+	}
+)
 
 // parseMyinfo adapts FAPIgo's validated UserInfo response into the envelope-aware
 // myinfo.Response view. info.AsMap presents the already-decrypted,

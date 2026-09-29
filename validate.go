@@ -22,6 +22,18 @@ func validateOptions(opts Options, production bool) error {
 		errs = append(errs, err)
 	}
 	errs = append(errs, validateScopes(opts.Scopes)...)
+	if opts.AuthContextMessage != "" {
+		if opts.AuthContextType == "" {
+			errs = append(errs, errors.New("AuthContextMessage is only for Singpass Login clients"))
+		} else if err := validateAuthContextMessage(opts.AuthContextMessage); err != nil {
+			errs = append(errs, errors.Unwrap(err))
+		}
+	}
+	if opts.AppLaunchURL != "" {
+		if u, err := url.Parse(opts.AppLaunchURL); err != nil || u.Scheme != "https" || u.Host == "" {
+			errs = append(errs, fmt.Errorf("AppLaunchURL %q must be an absolute https URL (an iOS App Link)", opts.AppLaunchURL))
+		}
+	}
 	if len(errs) == 0 {
 		return nil
 	}
@@ -95,4 +107,22 @@ func validateScopes(scopes []string) []error {
 		errs = append(errs, errors.New(`"openid" is missing from Scopes`))
 	}
 	return errs
+}
+
+// maxAuthContextMessage is Singpass's limit on authentication_context_message.
+const maxAuthContextMessage = 100
+
+// validateAuthContextMessage checks an authentication_context_message against
+// Singpass's rules: at most 100 printable ASCII characters, excluding < > \
+// and `.
+func validateAuthContextMessage(m string) error {
+	if len(m) > maxAuthContextMessage {
+		return fmt.Errorf("singpass: %w", fmt.Errorf("AuthContextMessage is %d characters; Singpass allows at most %d", len(m), maxAuthContextMessage))
+	}
+	for _, r := range m {
+		if r < 0x20 || r > 0x7e || strings.ContainsRune("<>\\`", r) {
+			return fmt.Errorf("singpass: %w", fmt.Errorf("AuthContextMessage contains %q; Singpass allows printable ASCII except < > \\ and `", r))
+		}
+	}
+	return nil
 }

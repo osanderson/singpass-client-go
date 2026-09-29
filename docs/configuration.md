@@ -5,7 +5,8 @@
 `singpass.New` splits configuration in two:
 
 - **`Options`** — protocol *behaviour*: `Issuer`, `ClientID`, `RedirectURI`,
-  `Scopes`, `AuthContextType`, `AcrValues`, `FetchUserInfo`,
+  `Scopes`, `AuthContextType`, `AuthContextMessage`, `AcrValues`,
+  `AppClaimedHTTPS`, `AppLaunchURL`, `FetchUserInfo`,
   `TolerateUserInfoSubjectClientID`. The product constructors fill most of this in.
 - **`Dependencies`** — injected *collaborators*. Only `Keys` and `Decryption` are
   required (the product constructors build them from your key material when you

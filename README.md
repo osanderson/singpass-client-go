@@ -101,6 +101,11 @@ it rather than an error. `singpass.ErrorCode(err)` gives the error code Singpass
 sent, and `singpass.IsTemporary(err)` says whether trying again may help
 (`Dependencies.BeginLoginRetries` retries `BeginLogin` for you).
 
+For Singpass Login, `LoginOptions.AuthContextMessage` — or
+`client.BeginLoginWith(ctx, singpass.LoginContext{Message: …})` for one login —
+tells the user what they're authenticating for, and `AppClaimedHTTPS` /
+`AppLaunchURL` cover logins started from a mobile app.
+
 New to Singpass? The [onboarding guide](docs/onboarding.md) walks through the
 developer portal and maps each setting to these options.
 
