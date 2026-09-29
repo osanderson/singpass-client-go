@@ -23,6 +23,12 @@ require passing checks — `commit-lint` plus [`ci.yml`](.github/workflows/ci.ym
 (`gofmt`, `go mod tidy`, `go vet`, staticcheck, build, `go test -race`,
 govulncheck for both modules; a no-push build of the demo image; actionlint).
 
+`ci.yml` also runs a [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=osanderson_singpass-client-go)
+analysis of both modules, with their test coverage. It isn't a required
+check, but its quality gate shows on each pull request.
+[`sonar-project.properties`](sonar-project.properties) holds its settings,
+including each rule suppressed on a file and why.
+
 ## Fuzzing
 
 Code that parses untrusted input has fuzz tests: the Myinfo parser and typed

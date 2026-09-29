@@ -4,6 +4,10 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/osanderson/singpass-client-go/deploy.yml?branch=main&label=CI)](https://github.com/osanderson/singpass-client-go/actions/workflows/deploy.yml)
 [![Release](https://img.shields.io/github/v/release/osanderson/singpass-client-go)](https://github.com/osanderson/singpass-client-go/releases)
 [![License: MIT](https://img.shields.io/github/license/osanderson/singpass-client-go)](LICENSE)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/quality_gate?project=osanderson_singpass-client-go)](https://sonarcloud.io/summary/new_code?id=osanderson_singpass-client-go)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=osanderson_singpass-client-go&metric=coverage)](https://sonarcloud.io/summary/new_code?id=osanderson_singpass-client-go)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=osanderson_singpass-client-go&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=osanderson_singpass-client-go)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=osanderson_singpass-client-go&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=osanderson_singpass-client-go)
 
 A Go library for integrating **[Singpass Login](https://docs.developer.singpass.gov.sg/docs/products/singpass-login/key-principles)**,
 **[Myinfo](https://docs.developer.singpass.gov.sg/docs/products/myinfo/introduction)** and

@@ -16,7 +16,7 @@ import (
 	"github.com/osanderson/singpass-client-go/singpasstest"
 
 	"github.com/idfoundry/fapigo/storage"
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // registers the "sqlite" driver the tests open
 )
 
 // newStore opens a fresh SQLite database file (so several connections share

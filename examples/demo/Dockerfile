@@ -20,10 +20,13 @@ ENV GOWORK=off CGO_ENABLED=0 GOOS=linux
 # Dependency layer: cached until a go.mod / go.sum changes.
 COPY go.mod go.sum ./
 COPY examples/demo/go.mod examples/demo/go.sum ./examples/demo/
-RUN cd examples/demo && go mod download
+WORKDIR /src/examples/demo
+RUN go mod download
 
+WORKDIR /src
 COPY . .
-RUN cd examples/demo && go build -trimpath -ldflags="-s -w" -o /app ./cmd/server
+WORKDIR /src/examples/demo
+RUN go build -trimpath -ldflags="-s -w" -o /app ./cmd/server
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 
