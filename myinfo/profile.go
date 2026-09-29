@@ -143,19 +143,36 @@ func hdbOwnerships(p Data) []HDBOwnership {
 	return out
 }
 
-// EntityProfile is a typed view of a Myinfo Business entity_info block: the
-// basic profile items, the address and the appointment and shareholder
-// records. The entity's registration number (UEN) is also in the id_token —
-// Identity.SubjectAttributes().EntityRegNumber. Anything not modelled here is
-// reachable through BasicProfile and Data.
+// EntityProfile is a typed view of a Myinfo Business entity_info block,
+// modelled on Corppass's entity_info OpenAPI specification: the basic
+// profile, address, people and share capital, financial results, licences,
+// registrations, grants and history. Each dataset is empty when its scopes
+// weren't requested (see Scopes and the Entity constants). Anything not
+// modelled is reachable through BasicProfile and Data.
 type EntityProfile struct {
-	Name        Field   // basic_profile.name
-	CompanyType Field   // basic_profile.company_type (coded)
-	UENStatus   Field   // basic_profile.uen_status (coded)
-	Address     Address // address
+	Name                   Field   // basic_profile.name
+	RegistrationNumber     Field   // basic_profile.registration_number: the UEN
+	Type                   Field   // basic_profile.type (coded), e.g. LC local company
+	CompanyType            Field   // basic_profile.company_type (coded), for LC and FC
+	Constitution           Field   // basic_profile.constitution (coded), for BN and PF
+	UENStatus              Field   // basic_profile.uen_status (coded)
+	CountryOfIncorporation Field   // basic_profile.country_of_incorporation (coded)
+	RegistrationDate       Field   // basic_profile.registration_date
+	ExpiryDate             Field   // basic_profile.expiry_date
+	PrimaryActivity        Field   // basic_profile.primary_activity: SSIC code (Member("edition") is its edition)
+	SecondaryActivity      Field   // basic_profile.secondary_activity: SSIC code
+	Address                Address // address
 
 	Appointments []Appointment // appointments
 	Shareholders []Shareholder // shareholders
+	Capitals     []Capital     // capitals
+
+	Financials  []Financial              // financials
+	Licences    []BusinessLicence        // licences
+	Builders    []BuilderLicence         // builders
+	Contractors []ContractorRegistration // contractors
+	Grants      []Grant                  // grants
+	History     RegistrationHistory      // history
 
 	// BasicProfile is the basic_profile object, and Data the whole
 	// entity_info block.
@@ -173,13 +190,28 @@ func (m *Response) EntityProfile() EntityProfile {
 	}
 	bp := e.Object("basic_profile")
 	return EntityProfile{
-		Name:         bp.Field("name"),
-		CompanyType:  bp.Field("company_type"),
-		UENStatus:    bp.Field("uen_status"),
-		Address:      e.Address("address"),
-		Appointments: e.Appointments(),
-		Shareholders: e.Shareholders(),
-		BasicProfile: bp,
-		Data:         e,
+		Name:                   bp.Field("name"),
+		RegistrationNumber:     bp.Field("registration_number"),
+		Type:                   bp.Field("type"),
+		CompanyType:            bp.Field("company_type"),
+		Constitution:           bp.Field("constitution"),
+		UENStatus:              bp.Field("uen_status"),
+		CountryOfIncorporation: bp.Field("country_of_incorporation"),
+		RegistrationDate:       bp.Field("registration_date"),
+		ExpiryDate:             bp.Field("expiry_date"),
+		PrimaryActivity:        bp.Field("primary_activity"),
+		SecondaryActivity:      bp.Field("secondary_activity"),
+		Address:                e.Address("address"),
+		Appointments:           e.Appointments(),
+		Shareholders:           e.Shareholders(),
+		Capitals:               capitals(e),
+		Financials:             financials(e),
+		Licences:               businessLicences(e),
+		Builders:               builderLicences(e),
+		Contractors:            contractorRegistrations(e),
+		Grants:                 grants(e),
+		History:                entityHistory(e),
+		BasicProfile:           bp,
+		Data:                   e,
 	}
 }

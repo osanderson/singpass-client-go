@@ -37,9 +37,35 @@ func summary(id *singpass.Identity) []demoapp.Highlight {
 	e := id.Myinfo.EntityProfile()
 	if e.Data.Present() {
 		field("Entity", e.Name, "e.Name.String()")
-		add("UEN", id.SubjectAttributes().EntityRegNumber, "id.SubjectAttributes().EntityRegNumber", myinfo.SourceUnknown)
+		if e.RegistrationNumber.Available() {
+			field("UEN", e.RegistrationNumber, "e.RegistrationNumber.String()")
+		} else {
+			add("UEN", id.SubjectAttributes().EntityRegNumber, "id.SubjectAttributes().EntityRegNumber", myinfo.SourceUnknown)
+		}
+		field("Entity type", e.Type, "e.Type.String()")
 		field("Company type", e.CompanyType, "e.CompanyType.String()")
 		field("UEN status", e.UENStatus, "e.UENStatus.String()")
+		if d, ok := e.RegistrationDate.Date(); ok {
+			add("Registered", d.Format("2 January 2006"), "e.RegistrationDate.Date()", e.RegistrationDate.SourceCode())
+		}
+		if a := e.PrimaryActivity; a.Available() {
+			add("Primary activity", a.String()+" (SSIC "+a.Code()+")", "e.PrimaryActivity.String(), .Code()", a.SourceCode())
+		}
+		for _, c := range e.Capitals {
+			if x, ok := c.PaidUpAmount.Float(); ok {
+				add("Paid-up capital", sgd(x)+" "+c.ShareType.String(), "e.Capitals[i].PaidUpAmount.Float()", c.Data.SourceCode())
+			}
+		}
+		if len(e.Financials) > 0 {
+			f := e.Financials[0]
+			if x, ok := f.Company.Revenue.Float(); ok {
+				period := ""
+				if end, ok := f.CurrentPeriodEndDate.Date(); ok {
+					period = " (FY to " + end.Format("Jan 2006") + ")"
+				}
+				add("Revenue"+period, sgd(x), "e.Financials[0].Company.Revenue.Float()", f.Data.SourceCode())
+			}
+		}
 		add("Address", e.Address.String(), "e.Address.String()", e.Address.Data.EffectiveSource())
 		if n := len(e.Appointments); n > 0 {
 			add("Appointments", partyList(n, func(i int) (string, myinfo.Party) {

@@ -4,8 +4,9 @@
 // Start with the typed profiles: Response.PersonProfile and
 // Response.EntityProfile name the common items (UINFIN, name, date of birth,
 // registered address, mobile number, CPF balances, NOA, vehicles, HDB
-// ownership, driving licence; an entity's name, status, address,
-// appointments and shareholders), with Address and Phone formatting and
+// ownership, driving licence; an entity's basic profile, address,
+// appointments, shareholders, capital, financials, licences, grants and
+// history), with Address and Phone formatting and
 // Field.Date / Int / Float parsing values. Scopes turns data items into the
 // scopes to request: the Item constants for Myinfo, and the Entity, User and
 // Corppass constants for Myinfo Business.
@@ -346,6 +347,11 @@ func (f Field) LastUpdated() string { return asString(f.m["lastupdated"]) }
 
 // Raw returns the field's underlying envelope map (nil for the zero Field).
 func (f Field) Raw() map[string]any { return f.m }
+
+// Member returns another member of the field's envelope as a string, for the
+// few items that carry one beside value/code/desc — e.g. the SSIC "edition"
+// of an entity's primary_activity. Empty when absent.
+func (f Field) Member(name string) string { return asString(f.m[name]) }
 
 // Date parses the field's value as a Myinfo date — "2006-01-02", or the
 // partial "2006-01" and "2006" some records use — at midnight UTC. ok is false

@@ -34,7 +34,7 @@ type Appointment struct {
 // Shareholder is one entity_info shareholders record, with its party
 // flattened.
 type Shareholder struct {
-	Allocation string // allocation: number of shares
+	Allocation string // allocation: number of shares (Data.Field("allocation").Float() for the number)
 	ShareType  string // share_type
 	Currency   string // currency
 	Category   string // category

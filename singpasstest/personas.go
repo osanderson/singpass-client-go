@@ -154,8 +154,28 @@ func DefaultPersonas(issuer Issuer) []Persona {
 						"name":                field("HARBOURFRONT TRADING PTE. LTD."),
 						"registration_number": field("201912345K"),
 						"uen_status":          coded("R", "REGISTERED"),
+						"type":                coded("LC", "LOCAL COMPANY"),
 						"company_type":        coded("P", "PRIVATE COMPANY LIMITED BY SHARES"),
+						"registration_date":   field("2019-04-01"),
+						"primary_activity": map[string]any{
+							"code": "46900", "desc": "WHOLESALE TRADE OF A VARIETY OF GOODS WITHOUT A DOMINANT PRODUCT", "edition": "2025",
+							"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+						},
 					},
+					"capitals": []any{map[string]any{
+						"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+						"share_type": coded("ORD", "ORDINARY"), "share_allotted_number": field(100000),
+						"issued_amount": field(100000), "paid_up_amount": field(100000),
+						"currency": coded("SGD", "SINGAPORE, DOLLARS"),
+					}},
+					"financials": []any{map[string]any{
+						"source": "1", "classification": "C", "lastupdated": "2026-01-15",
+						"current_period_start_date": field("2025-01-01"), "current_period_end_date": field("2025-12-31"),
+						"is_audited": field("Y"), "currency": coded("SGD", "SINGAPORE, DOLLARS"),
+						"company_financial": map[string]any{
+							"revenue": field(2480000.5), "profit_loss_before_tax": field(310000), "profit_loss_after_tax": field(257300),
+						},
+					}},
 					"address": map[string]any{
 						"source": "1", "classification": "C", "lastupdated": "2026-01-15",
 						"block": field("10"), "street": field("HARBOURFRONT AVENUE"),
