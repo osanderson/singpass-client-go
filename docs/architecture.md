@@ -90,6 +90,8 @@ configuration, encoded in `NewMyinfoBusiness`:
   `StagingCorppassIssuer` (the default) or `ProductionCorppassIssuer`.
 - **Scope namespaces** — `entity.*` (organisation), `user.*` (person),
   `corppass.*` (Corppass account); each must be whitelisted on the client.
+  `myinfo.Scopes(myinfo.EntityBasicProfile, …)` expands an item into its
+  scopes.
 - **Multiple `/userinfo` blocks** — the response can carry `entity_info`,
   `person_info`, `corppass_info`, `auth_info`, `tp_auth_info`, each a nested object.
   `Identity.Myinfo` exposes each one as its own `Data` block (`Person`, `Entity`,

@@ -149,7 +149,9 @@ hard-code it. No staging client yet? Try the demo with `DEMO_MOCK=1`.
 `NewMyinfo` and `NewMyinfoBusiness` take options shaped like `NewLogin`'s.
 Myinfo scopes are per data item; `myinfo.Scopes` expands items to the scopes
 Singpass's data catalogue lists for them (`vehicles` alone is 37):
-`Scopes: myinfo.Scopes("openid", myinfo.ItemName, myinfo.ItemVehicles)`.
+`Scopes: myinfo.Scopes("openid", myinfo.ItemName, myinfo.ItemVehicles)`. For
+Myinfo Business, use the block-prefixed items:
+`myinfo.Scopes("openid", myinfo.EntityBasicProfile, myinfo.EntityAppointments, myinfo.UserName)`.
 `Complete` then also calls `/userinfo` and fills `Identity.Myinfo`. The typed
 profiles name the common items, so there are no keys to look up:
 

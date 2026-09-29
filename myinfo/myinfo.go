@@ -6,8 +6,9 @@
 // registered address, mobile number, CPF balances, NOA, vehicles, HDB
 // ownership, driving licence; an entity's name, status, address,
 // appointments and shareholders), with Address and Phone formatting and
-// Field.Date / Int / Float parsing values. Scopes turns data items (the Item
-// constants) into the scopes to request.
+// Field.Date / Int / Float parsing values. Scopes turns data items into the
+// scopes to request: the Item constants for Myinfo, and the Entity, User and
+// Corppass constants for Myinfo Business.
 //
 // Underneath, Response groups the data blocks, and Data and Field read each
 // item's Myinfo envelope (value or code+desc, source, classification,
