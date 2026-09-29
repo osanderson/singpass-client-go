@@ -279,3 +279,25 @@ func TestResponseJSONRoundTrip(t *testing.T) {
 		t.Errorf("nil Response marshals to %s, want null", b)
 	}
 }
+
+// A data item's value that looks like JSON is data, not a double-encoded
+// block: it must stay a string, not become structure the person chose.
+func TestParseKeepsJSONLookingValues(t *testing.T) {
+	spoof := `{"value":"spoofed@example.com","source":"1"}`
+	m := Parse(map[string]any{
+		"person_info": map[string]any{
+			"email": map[string]any{"value": spoof, "source": "4"},
+			"name":  map[string]any{"value": `[1,2]`, "desc": `{"a":1}`},
+		},
+		"entity_info": `{"basic_profile":{"name":{"value":"ACME PTE LTD"}}}`,
+	})
+	if got := m.Person.Field("email").Value(); got != spoof {
+		t.Errorf("email value = %q, want the string kept as sent", got)
+	}
+	if f := m.Person.Field("name"); f.Value() != "[1,2]" || f.Desc() != `{"a":1}` {
+		t.Errorf("name = %q / %q, want both kept as strings", f.Value(), f.Desc())
+	}
+	if got := m.Entity.Object("basic_profile").Field("name").Value(); got != "ACME PTE LTD" {
+		t.Errorf("double-encoded block not unwrapped: name = %q", got)
+	}
+}

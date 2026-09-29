@@ -189,3 +189,31 @@ func TestFullLoginThroughStore(t *testing.T) {
 		t.Errorf("stored identity name = %q", got)
 	}
 }
+
+// The table holds only a hash of each session id: a copy of it doesn't give
+// anyone a session id they could present, and Delete still finds the row.
+func TestLoginSessionsStoreHashedIDs(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t, Config{})
+	ls := s.LoginSessions()
+	sid, err := ls.Create(ctx, &singpass.Identity{Subject: "a9865837"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored string
+	if err := s.db.QueryRowContext(ctx, `SELECT sid FROM singpass_login_sessions`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored == sid || stored != sidHash(sid) {
+		t.Errorf("stored key = %q, want the SHA-256 of the session id", stored)
+	}
+	if _, ok, _ := ls.Get(ctx, stored); ok {
+		t.Error("the stored key works as a session id")
+	}
+	if err := ls.Delete(ctx, sid); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := ls.Get(ctx, sid); ok {
+		t.Error("session still there after Delete")
+	}
+}

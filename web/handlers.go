@@ -90,8 +90,15 @@ type Config struct {
 	// request. Nil redirects to "/".
 	OnDenied func(w http.ResponseWriter, r *http.Request, app *App, denied *singpass.DeniedError)
 
-	// OnError is called on a protocol or transport failure. Nil writes a 500.
+	// OnError is called on a protocol or transport failure, or with
+	// ErrTooManyLogins when LoginRateLimit refuses a login. Nil writes a 500,
+	// or a 429 for ErrTooManyLogins.
 	OnError func(w http.ResponseWriter, r *http.Request, app *App, err error)
+
+	// LoginRateLimit limits how often one client may start a login. Nil
+	// means no limit: set it for any app reachable from the internet, with a
+	// Key that finds the client's address behind your proxy.
+	LoginRateLimit *LoginRateLimit
 }
 
 // Handlers is the HTTP surface for a set of relying parties. Build it with New.
@@ -107,6 +114,8 @@ type Handlers struct {
 	onAuthenticated func(http.ResponseWriter, *http.Request, *App, *singpass.Identity)
 	onDenied        func(http.ResponseWriter, *http.Request, *App, *singpass.DeniedError)
 	onError         func(http.ResponseWriter, *http.Request, *App, error)
+
+	limiter *rateLimiter // nil: no limit
 }
 
 // New builds a Handlers from cfg, applying defaults for every optional field.
@@ -143,9 +152,20 @@ func New(cfg Config) *Handlers {
 		}
 	}
 	if h.onError == nil {
-		h.onError = func(w http.ResponseWriter, _ *http.Request, _ *App, _ error) {
+		h.onError = func(w http.ResponseWriter, _ *http.Request, _ *App, err error) {
+			if errors.Is(err, ErrTooManyLogins) {
+				http.Error(w, "too many logins started; try again shortly", http.StatusTooManyRequests)
+				return
+			}
 			http.Error(w, "login failed", http.StatusInternalServerError)
 		}
+	}
+	if cfg.LoginRateLimit != nil {
+		h.limiter = newRateLimiter(*cfg.LoginRateLimit)
+	}
+	if cfg.SessionIdentity == nil && cfg.LoginSessions != nil {
+		h.log.Warn("web: login sessions keep each full identity, Myinfo data included, in the LoginSessions store; " +
+			"set Config.SessionIdentity (e.g. web.MinimalIdentity) to keep less")
 	}
 	return h
 }
@@ -183,6 +203,14 @@ func (h *Handlers) Mux() *http.ServeMux {
 func (h *Handlers) Login(a *App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setNoStore(w)
+		if h.limiter != nil {
+			if ok, retry := h.limiter.allow(r); !ok {
+				h.log.Warn("login rate limited", "app", a.Name)
+				w.Header().Set("Retry-After", retryAfterSeconds(retry))
+				h.onError(w, r, a, ErrTooManyLogins)
+				return
+			}
+		}
 		redirectURL, state, err := a.Auth.BeginLogin(r.Context())
 		if err != nil {
 			h.log.Error("begin login", "app", a.Name, "err", err)

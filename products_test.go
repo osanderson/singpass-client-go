@@ -2,6 +2,7 @@ package singpass
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -61,5 +62,34 @@ func TestProductionRequiresKeyCustody(t *testing.T) {
 	}, Dependencies{HTTPClient: fakeIssuer(t, discoveryDoc())})
 	if err == nil || !strings.Contains(err.Error(), "KeyCustody") {
 		t.Fatalf("err = %v, want a KeyCustody error", err)
+	}
+}
+
+func TestProductionRefusesDebug(t *testing.T) {
+	_, err := NewLogin(context.Background(), LoginOptions{
+		Environment: Production, Issuer: testIssuer,
+		ClientID: "c", RedirectURI: "https://rp.example/cb", Scopes: []string{"openid"},
+		SigningKey: newECKey(t), SigningKID: "s", EncryptionKey: newECKey(t), EncryptionKID: "e",
+	}, Dependencies{HTTPClient: fakeIssuer(t, discoveryDoc()), KeyCustody: KeyCustody{Durable: true}, Debug: true})
+	if err == nil || !strings.Contains(err.Error(), "Debug") {
+		t.Fatalf("err = %v, want a Debug error", err)
+	}
+}
+
+// A production issuer with development assurance is allowed, as an explicit
+// choice, but logged.
+func TestProductionIssuerWithoutProductionAssuranceWarns(t *testing.T) {
+	var logs strings.Builder
+	_, _ = NewLogin(context.Background(), LoginOptions{
+		Environment: Production,
+		ClientID:    "c", RedirectURI: "https://rp.example/cb", Scopes: []string{"openid"},
+		SigningKey: newECKey(t), SigningKID: "s", EncryptionKey: newECKey(t), EncryptionKID: "e",
+	}, Dependencies{
+		Assurance:  AssuranceDevelopment,
+		HTTPClient: fakeIssuer(t, discoveryDoc()),
+		Logger:     slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+	if !strings.Contains(logs.String(), "production issuer without AssuranceProduction") {
+		t.Errorf("no warning logged; logs:\n%s", logs.String())
 	}
 }
