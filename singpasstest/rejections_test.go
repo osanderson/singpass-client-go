@@ -93,14 +93,15 @@ func TestServerRejectsMalformedRequests(t *testing.T) {
 		}
 	}
 
-	// /userinfo without an access token is refused with a DPoP challenge.
+	// /userinfo without an access token gets 401 and a challenge naming no
+	// error (RFC 6750 §3.1), offering DPoP.
 	res, err := http.Get(srv.Issuer() + "/userinfo")
 	if err != nil {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.StatusCode < 400 || !strings.HasPrefix(res.Header.Get("WWW-Authenticate"), "DPoP") {
-		t.Errorf("/userinfo without a token: %d, WWW-Authenticate %q", res.StatusCode, res.Header.Get("WWW-Authenticate"))
+	if challenge := res.Header.Get("WWW-Authenticate"); res.StatusCode != http.StatusUnauthorized || !strings.Contains(challenge, "DPoP") || strings.Contains(challenge, "error") {
+		t.Errorf("/userinfo without a token: %d, WWW-Authenticate %q", res.StatusCode, challenge)
 	}
 
 	// /auth for an unknown request_uri, and a decision for an unknown login.
