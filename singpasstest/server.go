@@ -420,7 +420,9 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	result, err := s.srv.PushAuthorizationRequest(r.Context(), server.PushAuthorizationRequest{HTTP: form})
+	// Pass the DPoP proof on, so the code is bound to its key (RFC 9449 §10) and
+	// a token request proving another key is refused, as Singpass does.
+	result, err := s.srv.PushAuthorizationRequest(r.Context(), server.PushAuthorizationRequest{HTTP: form, DPoPProofs: r.Header.Values("DPoP")})
 	if err != nil {
 		writeServerError(w, err)
 		return
