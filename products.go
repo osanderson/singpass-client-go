@@ -100,8 +100,13 @@ type LoginOptions struct {
 	// Key material. Used to build Dependencies.Keys / Dependencies.Decryption
 	// when the caller leaves those nil; ignored when they are set (an HSM/KMS
 	// caller injects its own).
-	SigningKey    crypto.Signer     // ES256 / P-256 client-assertion + DPoP signer
-	SigningKID    string            // kid of the registered signing key
+	SigningKey crypto.Signer // ES256 / P-256 client-assertion signer
+	SigningKID string        // kid of the registered signing key
+	// DPoPKey is the ES256 / P-256 key DPoP proofs are signed with, the same
+	// on every instance (see NewKeyManagerWithDPoP). Nil generates one at
+	// startup, which only suits a single instance in development:
+	// AssuranceProduction requires it.
+	DPoPKey       crypto.Signer
 	EncryptionKey *ecdsa.PrivateKey // id_token decryption key (in-memory)
 	EncryptionKID string            // kid of EncryptionKey; ignored when EncryptionAgreer is set
 	// EncryptionAgreer is an optional HSM/KMS-backed ECDH agreer for id_token
@@ -141,8 +146,13 @@ type MyinfoOptions struct {
 	AppClaimedHTTPS bool
 	AppLaunchURL    string
 
-	SigningKey    crypto.Signer     // ES256 / P-256 client-assertion + DPoP signer
-	SigningKID    string            // kid of the registered signing key
+	SigningKey crypto.Signer // ES256 / P-256 client-assertion signer
+	SigningKID string        // kid of the registered signing key
+	// DPoPKey is the ES256 / P-256 key DPoP proofs are signed with, the same
+	// on every instance (see NewKeyManagerWithDPoP). Nil generates one at
+	// startup, which only suits a single instance in development:
+	// AssuranceProduction requires it.
+	DPoPKey       crypto.Signer
 	EncryptionKey *ecdsa.PrivateKey // id_token / userinfo decryption key (in-memory)
 	EncryptionKID string            // kid of EncryptionKey; ignored when EncryptionAgreer is set
 	// EncryptionAgreer is an optional HSM/KMS-backed ECDH agreer for id_token /
@@ -176,8 +186,13 @@ type MyinfoBusinessOptions struct {
 	Scopes      []string    // entity.* / user.* / corppass.* scopes; must include "openid"
 	AcrValues   string      // optional requested level of assurance; "" to omit
 
-	SigningKey    crypto.Signer     // ES256 / P-256 client-assertion + DPoP signer
-	SigningKID    string            // kid of the registered signing key
+	SigningKey crypto.Signer // ES256 / P-256 client-assertion signer
+	SigningKID string        // kid of the registered signing key
+	// DPoPKey is the ES256 / P-256 key DPoP proofs are signed with, the same
+	// on every instance (see NewKeyManagerWithDPoP). Nil generates one at
+	// startup, which only suits a single instance in development:
+	// AssuranceProduction requires it.
+	DPoPKey       crypto.Signer
 	EncryptionKey *ecdsa.PrivateKey // id_token / userinfo decryption key (in-memory)
 	EncryptionKID string            // kid of EncryptionKey; ignored when EncryptionAgreer is set
 	// EncryptionAgreer is an optional HSM/KMS-backed ECDH agreer for id_token /
@@ -220,7 +235,7 @@ func NewLogin(ctx context.Context, o LoginOptions, deps Dependencies) (*Client, 
 	if o.AuthContextType == "" {
 		o.AuthContextType = DefaultAuthContextType
 	}
-	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
+	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.DPoPKey, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +263,7 @@ func NewMyinfo(ctx context.Context, o MyinfoOptions, deps Dependencies) (*Client
 		o.Issuer, _ = o.Environment.issuers()
 	}
 	deps = o.Environment.forEnvironment(deps)
-	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
+	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.DPoPKey, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +290,7 @@ func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Depend
 		_, o.Issuer = o.Environment.issuers()
 	}
 	deps = o.Environment.forEnvironment(deps)
-	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
+	deps, err := ensureKeyDeps(ctx, deps, keyMaterial{o.SigningKey, o.SigningKID, o.DPoPKey, o.EncryptionKey, o.EncryptionKID, o.EncryptionAgreer, o.AdditionalSigningKeys, o.AdditionalEncryptionKeys})
 	if err != nil {
 		return nil, err
 	}
@@ -295,6 +310,7 @@ func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Depend
 type keyMaterial struct {
 	sig        crypto.Signer
 	sigKID     string
+	dpop       crypto.Signer
 	enc        *ecdsa.PrivateKey
 	encKID     string
 	agreer     keys.ECDHAgreer
@@ -309,14 +325,17 @@ type keyMaterial struct {
 // Rotation keys need the built ones: they can't be added to an injected
 // KeyManager or Decrypter.
 func ensureKeyDeps(ctx context.Context, deps Dependencies, k keyMaterial) (Dependencies, error) {
-	if deps.Keys == nil {
-		km, err := NewRotatingKeyManager(k.sig, k.sigKID, k.addSigning...)
+	switch {
+	case deps.Keys == nil:
+		km, err := newRotatingKeyManager(k.sig, k.sigKID, k.dpop, k.addSigning)
 		if err != nil {
 			return deps, err
 		}
 		deps.Keys = km
-	} else if len(k.addSigning) > 0 {
+	case len(k.addSigning) > 0:
 		return deps, errors.New("singpass: AdditionalSigningKeys can't be combined with Dependencies.Keys: build it with NewRotatingKeyManager")
+	case k.dpop != nil:
+		return deps, errors.New("singpass: DPoPKey can't be combined with Dependencies.Keys: build it with NewKeyManagerWithDPoP")
 	}
 	if deps.Decryption == nil {
 		agreer, err := k.encryptionAgreer()

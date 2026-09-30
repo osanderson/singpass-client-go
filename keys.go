@@ -22,10 +22,13 @@ import (
 //   - keys.ClientAuthentication — signs the private_key_jwt client assertion
 //     with the persistent EC key whose public half is registered with the
 //     authorization server under "use":"sig".
-//   - keys.DPoPProofSigning — signs DPoP proofs (RFC 9449) with an ephemeral
-//     EC key generated here at startup. A DPoP key is sender-constraining and
-//     per-instance; it is never pre-registered, so it deliberately does not
-//     survive a restart.
+//   - keys.DPoPProofSigning — signs DPoP proofs (RFC 9449) with an EC key
+//     generated here at startup. It is never registered, but Singpass binds
+//     each authorization code to the DPoP key the login started with, so a
+//     callback that reaches another instance, or this one after a restart,
+//     fails with invalid_dpop_proof. That suits one long-lived instance in
+//     development; AssuranceProduction refuses it. Use NewKeyManagerWithDPoP
+//     to give every instance the same DPoP key.
 //
 // sig is any crypto.Signer over an ES256 / P-256 key: a plain *ecdsa.PrivateKey
 // held in memory, or an HSM/KMS-backed signer. FAPIgo's
@@ -37,17 +40,41 @@ import (
 // It is used only for JWE decryption, driven through the separate keys.Decrypter
 // (see NewECDHDecrypter), which is why it lives outside the KeyManager contract.
 func NewKeyManager(sig crypto.Signer, sigKID string) (KeyManager, error) {
+	return newKeyManager(sig, sigKID, nil)
+}
+
+// NewKeyManagerWithDPoP is NewRotatingKeyManager with dpop, an ES256 / P-256
+// key, as the DPoP key in place of one generated at startup. Give every
+// instance of the app the same dpop, loaded like the signing key (from a file
+// or secret store, or an HSM/KMS signer), so a login can finish on whichever
+// instance the callback reaches, and survive a restart: Singpass binds each
+// authorization code to the DPoP key the login started with. The DPoP key is
+// never published or registered.
+func NewKeyManagerWithDPoP(sig crypto.Signer, sigKID string, dpop crypto.Signer, published ...PublishedKey) (KeyManager, error) {
+	if dpop == nil {
+		return nil, errors.New("singpass: the DPoP key is nil")
+	}
+	return newRotatingKeyManager(sig, sigKID, dpop, published)
+}
+
+// newKeyManager builds the key manager over sig and dpop, generating a DPoP
+// key when dpop is nil.
+func newKeyManager(sig crypto.Signer, sigKID string, dpop crypto.Signer) (*rotatingKeyManager, error) {
 	if sig == nil {
 		return nil, fmt.Errorf("singpass: client authentication key is required")
 	}
 	if sigKID == "" {
 		return nil, fmt.Errorf("singpass: the signing key's kid is required: it's how Singpass finds the key in your JWKS")
 	}
-	// The ephemeral DPoP key. NewKeyManagerFromSigners validates its curve
-	// (and the client-auth key's) against ES256, so no explicit check here.
-	dpop, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("singpass: generate ephemeral DPoP key: %w", err)
+	// NewKeyManagerFromSigners validates the DPoP key's curve (and the
+	// client-auth key's) against ES256, so no explicit check here.
+	ephemeral := dpop == nil
+	if ephemeral {
+		generated, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return nil, fmt.Errorf("singpass: generate ephemeral DPoP key: %w", err)
+		}
+		dpop = generated
 	}
 
 	km, err := keys.NewKeyManagerFromSigners(
@@ -67,7 +94,7 @@ func NewKeyManager(sig crypto.Signer, sigKID string) (KeyManager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("singpass: build key manager: %w", err)
 	}
-	return &rotatingKeyManager{KeyManager: km}, nil
+	return &rotatingKeyManager{KeyManager: km, ephemeralDPoP: ephemeral}, nil
 }
 
 // NewECDHDecrypter builds the keys.Decrypter FAPIgo uses to unwrap the JWE

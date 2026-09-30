@@ -362,6 +362,11 @@ func checkAssurance(opts Options, deps Dependencies) error {
 	if deps.Debug {
 		return fmt.Errorf("singpass: Dependencies.Debug is refused under AssuranceProduction: it logs the client assertion and authorization code")
 	}
+	if km, ok := deps.Keys.(*rotatingKeyManager); ok && km.ephemeralDPoP {
+		return errors.New("singpass: AssuranceProduction needs a DPoP key shared by every instance (DPoPKey, or NewKeyManagerWithDPoP): " +
+			"Singpass binds each login to the DPoP key it started with, so with a key generated per process a callback that reaches " +
+			"another instance, or this one after a restart, fails with invalid_dpop_proof")
+	}
 	return checkKeyCustody(deps)
 }
 
