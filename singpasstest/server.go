@@ -590,13 +590,9 @@ func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 		DPoPProofs:    r.Header.Values("DPoP"),
 	})
 	if err != nil {
-		var rerr *resource.Error
-		if errors.As(err, &rerr) {
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`DPoP error=%q`, rerr.Code()))
-			writeOAuthError(w, rerr.HTTPStatus(), string(rerr.Code()), rerr.PublicDescription())
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// The RFC 6750 / RFC 9449 challenge: no error code for a request
+		// without credentials, the DPoP error otherwise.
+		resource.WriteError(w, err)
 		return
 	}
 	c, ok := s.clients.get(fapi.ClientID(authz.ClientID))
