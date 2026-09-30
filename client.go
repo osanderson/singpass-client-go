@@ -153,9 +153,11 @@ type Dependencies struct {
 	Algorithms *Algorithms
 
 	// AllowLoopbackHTTP permits http:// issuer and endpoint URLs on a loopback
-	// host (localhost, 127.0.0.0/8, ::1) — for a local fake authorization
-	// server such as singpasstest's. Development only: New refuses it together
-	// with AssuranceProduction.
+	// host — localhost, a name under .localhost, 127.0.0.0/8 or ::1 — for a
+	// local fake authorization server such as singpasstest's. Any other name
+	// stays refused even if it resolves to a loopback address, so a URL
+	// taken from a response can't reach services on this machine.
+	// Development only: New refuses it together with AssuranceProduction.
 	AllowLoopbackHTTP bool
 
 	// Debug, when true, logs outbound PAR/token/userinfo requests and responses
@@ -275,8 +277,7 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	// (Client.FetchUserInfo) once we declare the response algorithms (below);
 	// the endpoint itself rides along in discovered.Endpoints like every other
 	// endpoint. Fail fast here if the issuer advertises none — an endpoint-
-	// presence check NewFromDiscovery (below) does not make: it validates the
-	// declared algorithms against discovery, but never touches cfg.Endpoints.
+	// presence check NewFromDiscovery (below) does not make.
 	if opts.FetchUserInfo && discovered.Endpoints.UserInfo.IsZero() {
 		return nil, fmt.Errorf("singpass: issuer advertises no userinfo_endpoint but FetchUserInfo is set")
 	}
@@ -288,15 +289,15 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	// so the default behaviour is a plain pass-through.
 	httpClient := newLoggingHTTPClient(base, deps.Debug, deps.Logger)
 
-	// NewFromDiscovery is New plus two discovery-only checks: it runs
-	// discovered.SupportsAlgorithms(cfg.Algorithms) — so a declared-but-
-	// unadvertised algorithm fails cleanly at startup instead of as an opaque
-	// signature/JWE-decrypt failure on the first live response — and it upgrades
+	// NewFromDiscovery is New plus discovery-only checks: cfg.Issuer must
+	// equal the discovered issuer; it runs discovered.SupportsAlgorithms(
+	// cfg.Algorithms) — so a declared-but-unadvertised algorithm fails
+	// cleanly at startup instead of as an opaque signature/JWE-decrypt
+	// failure on the first live response; and it upgrades
 	// cfg.AuthorizationResponseIssPolicy to RequireAuthorizationResponseIss from
 	// discovered.AuthorizationResponseIssSupported (RFC 9207 §2.4), on top of the
-	// TolerateAbsent baseline set in engineConfig. It does not
-	// read or modify cfg.Endpoints, so the UserInfo endpoint-presence fail-fast
-	// above is still ours to make.
+	// TolerateAbsent baseline set in engineConfig. cfg.Endpoints is already
+	// set, so it is used as given.
 	engine, err := client.NewFromDiscovery(discovered, cfg, engineDependencies(deps, issuerKeys, httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("singpass: construct client: %w", err)
