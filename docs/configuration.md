@@ -73,8 +73,10 @@ unapproved scopes still fail at login.
   restart and isn't shared between instances; to run more than one instance use
   `sqlstore`'s `LoginSessions()`, or implement the interface over Redis or similar.
 - **`AllowLoopbackHTTP`** permits `http://localhost` issuers for a local fake
-  server such as `singpasstest`'s. It is development-only: `New` refuses it
-  together with `AssuranceProduction`.
+  server such as `singpasstest`'s: `localhost`, a name under `.localhost`,
+  `127.0.0.0/8` or `::1`. Any other host name is refused even if it resolves
+  to a loopback address (an `/etc/hosts` alias, say). It is development-only:
+  `New` refuses it together with `AssuranceProduction`.
 - **`Debug` dumps secrets.** `Dependencies.Debug` logs outbound PAR/token/userinfo
   requests including the `client_assertion`, the authorization code and the
   PKCE verifier — enable it only against staging. `New` refuses it under
