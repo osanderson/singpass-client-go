@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.12.0](https://github.com/osanderson/singpass-client-go/compare/v0.11.0...v0.12.0) (2026-09-30)
+
+
+### Features
+
+* **web:** add LoginRateLimit to limit how fast one client starts logins ([d368a1d](https://github.com/osanderson/singpass-client-go/commit/d368a1db6657ffe4267800c34bd261c09b6fdae9))
+
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.40.0 ([#84](https://github.com/osanderson/singpass-client-go/issues/84)) ([79b39c3](https://github.com/osanderson/singpass-client-go/commit/79b39c3be55c505f09749346c1f5d21e54e7fefa))
+* **myinfo:** keep item values that look like JSON as strings ([d368a1d](https://github.com/osanderson/singpass-client-go/commit/d368a1db6657ffe4267800c34bd261c09b6fdae9))
+* refuse Dependencies.Debug under AssuranceProduction, and warn on a production issuer without it ([d368a1d](https://github.com/osanderson/singpass-client-go/commit/d368a1db6657ffe4267800c34bd261c09b6fdae9))
+* **sqlstore:** store login sessions under a SHA-256 hash of the session id; users are signed out once on upgrade ([d368a1d](https://github.com/osanderson/singpass-client-go/commit/d368a1db6657ffe4267800c34bd261c09b6fdae9))
+
+
+### Documentation
+
+* note the stricter loopback rule in the v0.12.0 upgrade guide ([#85](https://github.com/osanderson/singpass-client-go/issues/85)) ([182a65e](https://github.com/osanderson/singpass-client-go/commit/182a65e7681447e777175c1dfaaf276322fbb49c))
+* production checklist for rate limiting and login-session data ([d368a1d](https://github.com/osanderson/singpass-client-go/commit/d368a1db6657ffe4267800c34bd261c09b6fdae9))
+
 ## [0.11.0](https://github.com/osanderson/singpass-client-go/compare/v0.10.0...v0.11.0) (2026-09-29)
 
 
