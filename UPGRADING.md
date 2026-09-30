@@ -7,7 +7,8 @@ to adapt to the ones that need edits.
 
 ## v0.12.0
 
-Security hardening. No API is removed, but four behaviours tighten:
+Security hardening and FAPIgo v0.40.0. No API is removed, but five behaviours
+tighten:
 
 - **`Dependencies.Debug` is refused under `AssuranceProduction`**, so
   `New` (and the product constructors with `Environment: Production`) fail
@@ -23,6 +24,11 @@ Security hardening. No API is removed, but four behaviours tighten:
 - **Myinfo item values that look like JSON stay strings.** The parser used to
   unwrap any string beginning with `{` or `[`, including a person's own
   `value`; now it only unwraps double-encoded blocks and objects.
+- **`Dependencies.AllowLoopbackHTTP` only allows literal loopback hosts**
+  (FAPIgo v0.40.0): `localhost`, a name under `.localhost`, `127.0.0.0/8`
+  and `::1`. A local fake issuer reached through any other name that
+  resolves to loopback, such as an `/etc/hosts` alias, now fails at `New`;
+  use `http://localhost:PORT` or `http://127.0.0.1:PORT` instead.
 
 `web.New` also logs a warning when a `LoginSessions` store is set without
 `SessionIdentity`, and `New` logs one when a production issuer runs without
