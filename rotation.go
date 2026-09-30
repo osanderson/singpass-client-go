@@ -42,9 +42,15 @@ type DecryptionKey struct {
 // NewRotatingKeyManager is NewKeyManager plus signing keys that are published
 // in the JWKS but never used to sign, for a signing-key rotation.
 func NewRotatingKeyManager(sig crypto.Signer, sigKID string, published ...PublishedKey) (KeyManager, error) {
-	km, err := NewKeyManager(sig, sigKID)
-	if err != nil || len(published) == 0 {
-		return km, err
+	return newRotatingKeyManager(sig, sigKID, nil, published)
+}
+
+// newRotatingKeyManager builds the key manager over sig and dpop (generated
+// when nil) that also publishes published.
+func newRotatingKeyManager(sig crypto.Signer, sigKID string, dpop crypto.Signer, published []PublishedKey) (KeyManager, error) {
+	km, err := newKeyManager(sig, sigKID, dpop)
+	if err != nil {
+		return nil, err
 	}
 	seen := map[string]bool{sigKID: true}
 	infos := make([]keys.PublicKeyInfo, 0, len(published))
@@ -62,15 +68,17 @@ func NewRotatingKeyManager(sig crypto.Signer, sigKID string, published ...Publis
 		seen[p.KID] = true
 		infos = append(infos, keys.PublicKeyInfo{KeyID: p.KID, PublicKey: p.Key})
 	}
-	return &rotatingKeyManager{KeyManager: km.(*rotatingKeyManager).KeyManager, published: infos}, nil
+	km.published = infos
+	return km, nil
 }
 
 // rotatingKeyManager signs with its KeyManager's key and, through FAPIgo's
 // keys.RotatingKeyManager, publishes the extra client-authentication keys too.
 type rotatingKeyManager struct {
 	keys.KeyManager
-	published []keys.PublicKeyInfo
-	custody   keys.KeyCustody // declared through Dependencies.KeyCustody
+	published     []keys.PublicKeyInfo
+	custody       keys.KeyCustody // declared through Dependencies.KeyCustody
+	ephemeralDPoP bool            // the DPoP key was generated at startup
 }
 
 // KeyCustody implements keys.KeyCustodyAssurance.

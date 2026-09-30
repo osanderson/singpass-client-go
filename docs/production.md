@@ -37,6 +37,7 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
     RedirectURI: "https://app.example.com/mi/callback",
     Scopes:      []string{"openid", "name", "uinfin"},
     SigningKey:  signer, SigningKID: "myinfo-sig-2026",
+    DPoPKey:     dpopSigner, // the same on every instance; see below
     EncryptionAgreer: agreer, // HSM/KMS ECDH; or EncryptionKey + EncryptionKID
 }, singpass.Dependencies{
     Sessions:   durableStore,                       // required under AssuranceProduction; see §3
@@ -53,6 +54,18 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
       keys survive a restart: loaded from a file or secret store, or held in an
       HSM or KMS (they must, once Singpass has your JWKS). Keys you build with
       FAPIgo directly declare it with `keys.DeclareCustody` instead.
+- [ ] **One DPoP key for every instance: `DPoPKey`.** Singpass binds each
+      authorization code to the DPoP key the login started with (at PAR), and
+      refuses a token request proving any other key with `invalid_dpop_proof`
+      ("Incoming DPOP Proof JWT does not match the initial dpop_jkt sent at
+      PAR endpoint"). A key generated per process therefore fails every login
+      whose callback reaches another instance, or this one after a restart, so
+      production assurance refuses it. Generate an EC P-256 key once (e.g.
+      `openssl ecparam -name prime256v1 -genkey -noout -out dpop.pem`), keep it
+      with the signing key in your secret store, load it with
+      `keyfile.LoadECPrivateKey` (or pass an HSM/KMS `crypto.Signer`), and pass
+      it as `DPoPKey`. It is never published or registered. Building
+      `Dependencies.Keys` yourself? Use `singpass.NewKeyManagerWithDPoP`.
 - [ ] **Leave `Dependencies.Random` unset.** Production assurance requires
       `crypto/rand.Reader`, the default.
 - [ ] **Retry temporary failures:** `Dependencies.BeginLoginRetries: 3` retries
@@ -98,7 +111,8 @@ singpass: construct client: client: dependencies: sessions must implement storag
       These hold the state, nonce and PKCE verifier between `BeginLogin` and
       `Complete`, for a few minutes. The store must:
       - be **shared by every instance**, since the callback can reach a
-        different instance from the one that started the login;
+        different instance from the one that started the login (which also
+        needs the shared `DPoPKey` above);
       - **consume atomically**, exactly once per state;
       - declare `singpass.StoreAssurance`.
 

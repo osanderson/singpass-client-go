@@ -44,7 +44,7 @@ func TestProductionRefusesInMemorySessions(t *testing.T) {
 		Environment: Production,
 		Issuer:      testIssuer, // the fake; Production still sets the assurance
 		ClientID:    "client-1", RedirectURI: "https://rp.example/callback", Scopes: []string{"openid"},
-		SigningKey: newECKey(t), SigningKID: "sig-1", EncryptionKey: newECKey(t), EncryptionKID: "enc-1",
+		SigningKey: newECKey(t), SigningKID: "sig-1", EncryptionKey: newECKey(t), EncryptionKID: "enc-1", DPoPKey: newECKey(t),
 	}, deps)
 	if err == nil {
 		t.Fatal("NewLogin succeeded with Production and the in-memory session store")
@@ -58,7 +58,7 @@ func TestProductionRequiresKeyCustody(t *testing.T) {
 	_, err := NewLogin(context.Background(), LoginOptions{
 		Environment: Production, Issuer: testIssuer,
 		ClientID: "c", RedirectURI: "https://rp.example/cb", Scopes: []string{"openid"},
-		SigningKey: newECKey(t), SigningKID: "s", EncryptionKey: newECKey(t), EncryptionKID: "e",
+		SigningKey: newECKey(t), SigningKID: "s", EncryptionKey: newECKey(t), EncryptionKID: "e", DPoPKey: newECKey(t),
 	}, Dependencies{HTTPClient: fakeIssuer(t, discoveryDoc())})
 	if err == nil || !strings.Contains(err.Error(), "KeyCustody") {
 		t.Fatalf("err = %v, want a KeyCustody error", err)
@@ -91,5 +91,41 @@ func TestProductionIssuerWithoutProductionAssuranceWarns(t *testing.T) {
 	})
 	if !strings.Contains(logs.String(), "production issuer without AssuranceProduction") {
 		t.Errorf("no warning logged; logs:\n%s", logs.String())
+	}
+}
+
+// Under production, a DPoP key generated per process is refused: a login
+// could only finish on the instance, and process, that started it.
+func TestProductionRequiresSharedDPoPKey(t *testing.T) {
+	opts := LoginOptions{
+		Environment: Production, Issuer: testIssuer,
+		ClientID: "c", RedirectURI: "https://rp.example/cb", Scopes: []string{"openid"},
+		SigningKey: newECKey(t), SigningKID: "s", EncryptionKey: newECKey(t), EncryptionKID: "e",
+	}
+	deps := Dependencies{HTTPClient: fakeIssuer(t, discoveryDoc()), KeyCustody: KeyCustody{Durable: true}}
+	if _, err := NewLogin(context.Background(), opts, deps); err == nil || !strings.Contains(err.Error(), "DPoP key shared by every instance") {
+		t.Errorf("per-process DPoP key: err = %v", err)
+	}
+	opts.DPoPKey = newECKey(t)
+	if _, err := NewLogin(context.Background(), opts, deps); err != nil && strings.Contains(err.Error(), "DPoP") {
+		t.Errorf("shared DPoP key refused: %v", err)
+	}
+}
+
+func TestDPoPKeyMisuse(t *testing.T) {
+	if _, err := NewKeyManagerWithDPoP(newECKey(t), "s", nil); err == nil || !strings.Contains(err.Error(), "DPoP key is nil") {
+		t.Errorf("nil DPoP key: %v", err)
+	}
+	km, err := NewKeyManager(newECKey(t), "s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ensureKeyDeps(context.Background(), Dependencies{Keys: km}, keyMaterial{dpop: newECKey(t)})
+	if err == nil || !strings.Contains(err.Error(), "DPoPKey can't be combined with Dependencies.Keys") {
+		t.Errorf("DPoPKey with Dependencies.Keys: %v", err)
+	}
+	shared, err := NewKeyManagerWithDPoP(newECKey(t), "s", newECKey(t))
+	if err != nil || shared.(*rotatingKeyManager).ephemeralDPoP || !km.(*rotatingKeyManager).ephemeralDPoP {
+		t.Errorf("ephemeralDPoP: shared %v, generated %v (%v)", shared.(*rotatingKeyManager).ephemeralDPoP, km.(*rotatingKeyManager).ephemeralDPoP, err)
 	}
 }
