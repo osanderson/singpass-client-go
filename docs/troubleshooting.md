@@ -22,6 +22,7 @@ Corppass uses the same codes.
 | `singpass: …` naming an option (`RedirectURI`, `Scopes`, `kid is required`, …) | The constructor's option checks | Fix the option it names; every problem is listed at once. See [configuration.md](configuration.md#validation). |
 | `discover metadata` fails | The issuer URL is wrong or unreachable | Use the library's defaults: the Singpass issuer ends in `/fapi`, Corppass's doesn't ([singpass-quirks.md](singpass-quirks.md#discovery)). Check outbound HTTPS to `stg-id.singpass.gov.sg` / `id.singpass.gov.sg`. |
 | `AssuranceProduction` refuses the session store | Production needs a durable store | Set `Dependencies.Sessions`, e.g. from `sqlstore` ([production.md](production.md)). |
+| `AssuranceProduction needs a DPoP key shared by every instance` | The DPoP key would be generated per process | Set `DPoPKey` to a key every instance loads ([production.md](production.md#2-client-configuration)). |
 
 ## At `BeginLogin` (PAR)
 
@@ -42,6 +43,7 @@ Corppass uses the same codes.
 |---|---|---|
 | `errors.Is(err, singpass.ErrLoginExpired)` | The login state is unknown, used or expired: the callback was reloaded or replayed, came after the login timed out, or arrived without this browser's login state — the `state` passed to `Complete`, e.g. in another browser | Show "please try again" and restart the login. It isn't a fault. |
 | `*singpass.DeniedError` | The user cancelled, or Singpass returned an error to the redirect URI (`server_error`, `temporarily_unavailable`) | Show a friendly page. Don't display the error description verbatim ([Singpass advises against it](https://docs.developer.singpass.gov.sg/docs/technical-specifications/integration-guide/2.-handling-the-redirect)). |
+| `invalid_dpop_proof`: `Incoming DPOP Proof JWT does not match the initial dpop_jkt sent at PAR endpoint` | The callback reached another instance, or this one after a restart, with a different DPoP key from the one the login started with: Singpass binds the code to that key | Give every instance the same `DPoPKey` ([production.md](production.md#2-client-configuration)), or route each login's callback back to the instance that started it. |
 | `invalid_grant` | The code was exchanged more than 60 seconds after it was issued, or the redirect URI differs from the one sent at PAR | Complete the callback promptly; don't change `RedirectURI` between `BeginLogin` and `Complete`. |
 | `invalid_client` | As at PAR: the JWKS or client ID | As at PAR. |
 | Decryption fails, or `token is encrypted to kid …, but this client holds …` | The id_token or `/userinfo` response is encrypted to a key the client doesn't hold: the registered JWKS has an encryption key the app wasn't given, often mid-rotation | Give the client every published encryption key ([production.md](production.md#7-rotating-keys)). |

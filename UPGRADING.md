@@ -5,6 +5,45 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.13.0
+
+### Production: a shared DPoP key
+
+Singpass binds each authorization code to the DPoP key the login started with,
+and refuses a token request proving another key (`invalid_dpop_proof`,
+verified on staging). The library used to generate the DPoP key per process,
+so with more than one instance a login failed whenever its callback reached a
+different instance, even with a shared `sqlstore`, and any login in flight
+failed across a restart.
+
+The product options take a `DPoPKey`, and `AssuranceProduction` now refuses
+to start without one:
+
+```
+singpass: AssuranceProduction needs a DPoP key shared by every instance (DPoPKey, or NewKeyManagerWithDPoP): …
+```
+
+Generate an EC P-256 key once, keep it in your secret store with the signing
+key, and pass it on every instance:
+
+```go
+dpop, err := keyfile.LoadECPrivateKey("/secrets/dpop.pem")
+…
+singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
+    Environment: singpass.Production,
+    DPoPKey:     dpop, // or an HSM/KMS crypto.Signer
+    …
+```
+
+It is never published or registered, so there's nothing to change in the
+portal. If you build `Dependencies.Keys` yourself, use
+`singpass.NewKeyManagerWithDPoP`. Staging and development are unchanged: without
+`DPoPKey` a key is still generated per process.
+
+`singpasstest` now binds each code to the PAR's DPoP key too, so a test that
+finishes a login on a different client from the one that started it fails
+(with `invalid_grant`) the way it would against Singpass.
+
 ## v0.12.0
 
 Security hardening and FAPIgo v0.40.0. No API is removed, but five behaviours

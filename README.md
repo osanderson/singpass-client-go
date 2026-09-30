@@ -262,8 +262,10 @@ The defaults target **staging**. For production, set
 production issuer and production assurance, under which the in-memory session
 store is refused, so supply a durable `Dependencies.Sessions` — `sqlstore`
 provides one (and the `web` helper's login sessions) on Postgres, MySQL or
-SQLite — and declare durable keys with
-`Dependencies.KeyCustody: singpass.KeyCustody{Durable: true}`. Work through the [go-live checklist](docs/production.md), which also
+SQLite — declare durable keys with
+`Dependencies.KeyCustody: singpass.KeyCustody{Durable: true}`, and give every
+instance the same `DPoPKey`, since Singpass binds each login to the DPoP key it
+started with. Work through the [go-live checklist](docs/production.md), which also
 covers [rotating keys](docs/production.md#7-rotating-keys) without downtime.
 
 ## Documentation

@@ -5,7 +5,9 @@
 //
 // It uses database/sql only, so it adds no dependencies: bring your own driver
 // for Postgres, MySQL or SQLite. Every instance of the app shares the database,
-// so a login can start on one instance and finish on another.
+// so a login can start on one instance and finish on another — provided every
+// instance also has the same DPoP key (the product options' DPoPKey), since
+// Singpass binds each login to the DPoP key it started with.
 //
 //	db, _ := sql.Open("pgx", os.Getenv("DATABASE_URL"))
 //	store := sqlstore.New(db, sqlstore.Config{Dialect: sqlstore.Postgres})

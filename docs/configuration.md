@@ -84,9 +84,9 @@ unapproved scopes still fail at login.
 
 ## Keys
 
-Each client registers two EC P-256 keys: a **signing** key (`private_key_jwt`
-client assertion + DPoP) and an **encryption** key (id_token / userinfo
-decryption). Both support an HSM/KMS backend so no private key need enter the
+Each client registers two EC P-256 keys: a **signing** key (the
+`private_key_jwt` client assertion) and an **encryption** key (id_token /
+userinfo decryption). Both support an HSM/KMS backend so no private key need enter the
 process: the signing key is any `crypto.Signer` (passed as `SigningKey`), and
 the encryption key can be a `singpass.ECDHAgreer` (passed as `EncryptionAgreer`,
 which wins over the in-memory `EncryptionKey`) — its `AgreeSharedSecret` maps to
@@ -99,7 +99,15 @@ the public JWKS to register during onboarding from the keys' public halves only
 (so HSM/KMS-held keys work too) — before any `client_id` or
 discovery document exists — using the same FAPIgo library code the live client's
 `Client.PublicJWKS` resolves through, so the offline and online sets are
-identical ([`keys.go`](../keys.go)). The DPoP key is deliberately not published.
+identical ([`keys.go`](../keys.go)).
+
+A third key signs **DPoP** proofs. It is never published or registered, but
+Singpass binds each authorization code to the DPoP key the login started with,
+so every instance must use the same one: pass it as `DPoPKey` (any
+`crypto.Signer`, loaded like the signing key), or build `Dependencies.Keys` with
+`NewKeyManagerWithDPoP`. Left unset, a DPoP key is generated per process, which
+only suits one instance in development; production assurance refuses it (see
+[production.md](production.md#2-client-configuration)).
 
 Singpass takes the JWKS as a URL it fetches (a JWKS endpoint) or pasted into
 the portal (a JWKS object); see [onboarding.md](onboarding.md#3-create-a-staging-app).
