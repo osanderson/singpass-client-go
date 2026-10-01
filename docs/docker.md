@@ -19,6 +19,7 @@ docker run --rm -p 5156:5156 -p 5157:5157 ghcr.io/osanderson/singpass-fake-serve
 | Discovery | `http://localhost:5156/fapi/.well-known/openid-configuration` | `http://localhost:5157/.well-known/openid-configuration` |
 | Test clients | `login-test`, `myinfo-test` | `myinfo-business-test` |
 | Test client keys | `http://localhost:5156/_fake/test-client/jwks.json` | `http://localhost:5157/_fake/test-client/jwks.json` |
+| Dashboard | `http://localhost:5156/_fake/` | `http://localhost:5157/_fake/` |
 
 Configure your app with an issuer, a test client ID and the test client keys,
 and log in:
@@ -73,6 +74,12 @@ headers are MockPass's, so tests written for MockPass carry over.
 test user.
 
 ## When a login fails
+
+Open the server's dashboard, at `/_fake/` (`http://localhost:5156/_fake/` for
+Singpass). It shows the issuer, the registered clients, the test users and
+the last 200 requests, each with its client, status and outcome: who logged
+in, or the error and how to fix it. It updates live. The same request log is
+JSON at `/_fake/requests`, which a CI job can print when a test fails.
 
 The fake server explains rejections more than Singpass does. The
 `error_description` your app receives says what was wrong and, for the usual
