@@ -65,6 +65,10 @@
 // receives each rejection, and flags requests that reach the server at
 // another host than its URL.
 //
+// Each server serves a dashboard at /_fake/ (Server.DashboardURL): its
+// issuer, clients, test users and recent requests with their outcomes, also
+// as JSON at /_fake/requests and from Server.Requests.
+//
 // Not reproduced: acr_values, refresh tokens, and Singpass's full error
 // vocabulary.
 package singpasstest

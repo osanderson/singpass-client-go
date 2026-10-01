@@ -77,6 +77,9 @@
 // the servers at a name that isn't loopback, such as a Docker Compose service
 // name.
 //
+// Each server has a dashboard at /_fake/, e.g. http://127.0.0.1:5156/_fake/:
+// its issuer, clients, test users and recent requests with their outcomes.
+//
 // Each rejected request is logged on standard error, with the same
 // explanation as its error_description: what was wrong and, for the usual
 // mistakes (an unregistered client or redirect URI, the wrong key, a
@@ -379,6 +382,8 @@ func checkHealth(ctx context.Context, specs []serverSpec, t tlsSettings) error {
 		if err != nil {
 			return err
 		}
+		// The dashboard's request log leaves out requests with this agent.
+		req.Header.Set("User-Agent", "singpass-fake-server-healthcheck")
 		resp, err := client.Do(req)
 		if err != nil {
 			return err
@@ -433,6 +438,7 @@ func startServer(sc serverSpec, tlsConfig *tls.Config, interactive, testClients 
 	}
 	fmt.Fprintf(stdout, "%s issuer: %s\n", name, srv.Issuer())
 	fmt.Fprintf(stdout, "  discovery:    %s/.well-known/openid-configuration\n", srv.Issuer())
+	fmt.Fprintf(stdout, "  dashboard:    %s\n", srv.DashboardURL())
 	if ids := srv.TestClients(); len(ids) > 0 {
 		fmt.Fprintf(stdout, "  test clients: %s, for any http://localhost redirect URI\n", strings.Join(ids, ", "))
 		fmt.Fprintf(stdout, "                keys (published, for testing only): %s\n", srv.TestClientKeysURL())

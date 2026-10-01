@@ -41,8 +41,19 @@ func (s *Server) rejectWith(w http.ResponseWriter, r *http.Request, param func(s
 	if h := s.hostHint(r); h != "" {
 		desc += ". " + h
 	}
-	s.log.Warn("rejected "+r.Method+" "+r.URL.Path, "client_id", param("client_id"), "error", code, "error_description", desc)
+	s.log.Warn("rejected "+r.Method+" "+r.URL.Path, "client_id", clientOf(param), "error", code, "error_description", desc)
+	note(w, clientOf(param), "")
 	writeOAuthError(w, status, code, oauthSafe(desc))
+}
+
+// clientOf returns the client a request comes from: its client_id, or with
+// private_key_jwt, which may leave that out, the client_assertion's issuer.
+func clientOf(param func(string) string) string {
+	if id := param("client_id"); id != "" {
+		return id
+	}
+	iss, _ := jwtClaims(param("client_assertion"))["iss"].(string)
+	return iss
 }
 
 // formParam reads a parameter of form.

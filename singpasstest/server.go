@@ -140,6 +140,7 @@ type Server struct {
 	custom      map[string]Persona // custom-login users, by subject
 	testClients bool               // RegisterTestClients has run
 	hostsSeen   map[string]bool    // hosts checkHost has logged
+	requests    requestLog         // for the dashboard
 
 	log *slog.Logger
 
@@ -397,10 +398,12 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST "+prefix+pathToken, s.handleToken)
 	mux.HandleFunc("GET "+prefix+pathUserInfo, s.handleUserInfo)
 	mux.HandleFunc("GET "+testClientKeysPath+"{file}", s.handleTestClientKeys)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET "+dashboardPath+"{$}", s.handleDashboard)
+	mux.HandleFunc("GET "+requestsPath, s.handleRequests)
+	return s.record(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.checkHost(r)
 		mux.ServeHTTP(w, r)
-	})
+	}))
 }
 
 func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
@@ -481,6 +484,7 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 		s.reject(w, r, param, err)
 		return
 	}
+	note(w, clientOf(param), "accepted the pushed authorization request")
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"request_uri": result.RequestURI.String(),
 		"expires_in":  result.ExpiresIn,
@@ -490,6 +494,7 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	// Check the X-Custom-* headers before the request_uri is used up.
 	q := r.URL.Query()
+	note(w, q.Get("client_id"), "")
 	as, persona, err := s.headerLogin(r.Header)
 	if err != nil {
 		s.rejectWith(w, r, q.Get, http.StatusBadRequest, "invalid_request", err.Error())
@@ -515,6 +520,7 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		s.remember(persona)
 		s.complete(w, r, interaction.Handle, interaction.Interaction.Scope, &persona)
 	case s.cfg.Interactive:
+		note(w, "", "showed the sign-in page")
 		renderSignIn(w, s, interaction)
 	default:
 		s.mu.Lock()
@@ -540,6 +546,7 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
+	note(w, r.PostFormValue("client_id"), "")
 	handle, err := server.ParseInteractionHandle(r.PostFormValue("handle"))
 	if err != nil {
 		http.Error(w, "bad interaction handle", http.StatusBadRequest)
@@ -580,8 +587,10 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 func (s *Server) complete(w http.ResponseWriter, r *http.Request, handle server.InteractionHandle, scope []string, p *Persona) {
 	var result server.InteractionResult
 	if p == nil {
+		note(w, "", "the user cancelled")
 		result = server.Deny("the user cancelled the login")
 	} else {
+		note(w, "", "logged in as "+strings.TrimSpace(p.label()+" "+p.Name))
 		subjectID, err := server.NewSubjectID(p.Subject)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -648,6 +657,7 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	if result.HasIDToken {
 		resp["id_token"] = result.IDToken.Reveal()
 	}
+	note(w, clientOf(param), "issued tokens")
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -698,6 +708,7 @@ func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, serr)
 		return
 	}
+	note(w, authz.ClientID, "sent the Myinfo data of "+strings.TrimSpace(persona.label()+" "+persona.Name))
 	w.Header().Set("Content-Type", "application/jwt")
 	_, _ = io.WriteString(w, jwe)
 }
@@ -815,6 +826,7 @@ func writeServerError(w http.ResponseWriter, err error) {
 }
 
 func writeOAuthError(w http.ResponseWriter, status int, code, description string) {
+	noteError(w, "", code, description)
 	writeJSON(w, status, map[string]string{"error": code, "error_description": description})
 }
 
