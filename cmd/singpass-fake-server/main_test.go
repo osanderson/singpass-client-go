@@ -18,6 +18,7 @@ import (
 	"time"
 
 	singpass "github.com/osanderson/singpass-client-go"
+	"github.com/osanderson/singpass-client-go/singpasstest"
 )
 
 type keyPair struct{ sig, enc *ecdsa.PrivateKey }
@@ -200,7 +201,7 @@ func TestRunPersonaFlags(t *testing.T) {
 		done <- run(ctx, []string{"-config", cfg, "-personas", personas, "-only-personas", "-corppass-addr", "", "-singpass-addr", freeAddr(t)}, &out, &log)
 	}()
 	deadline := time.Now().Add(3 * time.Second)
-	for !strings.Contains(out.String(), "test user: Extra User") {
+	for !strings.Contains(out.String(), "S1234567D") {
 		if time.Now().After(deadline) {
 			t.Fatalf("stdout = %s", out.String())
 		}
@@ -224,7 +225,7 @@ func TestRunErrors(t *testing.T) {
 		want string
 	}{
 		"unknown flag":          {[]string{"-nope"}, "flag provided but not defined"},
-		"no -config":            {nil, "-config is required"},
+		"incomplete -client-id": {[]string{"-client-id", "a", "-client-product", "login"}, "-client-id: client \"a\" has no redirect_uris"},
 		"missing config":        {[]string{"-config", filepath.Join(t.TempDir(), "absent.json")}, "no such file"},
 		"config not JSON":       {[]string{"-config", writeConfig(t, `{`)}, "unexpected end"},
 		"client without an id":  {[]string{"-config", writeConfig(t, `{"clients": [{"product": "login"}]}`)}, "a client has no id"},
@@ -287,5 +288,128 @@ func TestJWKPublicKeyErrors(t *testing.T) {
 		if _, err := k.publicKey(); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+// With no clients configured, the built-in test clients are registered, and
+// an app logs in with their published keys and any loopback redirect URI.
+func TestRunZeroConfig(t *testing.T) {
+	spAddr, cpAddr := freeAddr(t), freeAddr(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, log lockedBuffer
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, []string{"-singpass-addr", spAddr, "-corppass-addr", cpAddr}, &out, &log) }()
+	waitFor(t, &out, "test clients: myinfo-business-test", "X-Custom-NRIC")
+	keysURL := "http://" + spAddr + "/_fake/test-client/jwks.json"
+	if !strings.Contains(out.String(), "test clients: login-test, myinfo-test") || !strings.Contains(out.String(), keysURL) ||
+		!strings.Contains(out.String(), "test user: S9812381D") || !strings.Contains(out.String(), "test user: 201912345K / S7812345J") {
+		t.Errorf("stdout = %s", out.String())
+	}
+
+	sig, enc := singpasstest.TestClientKeys()
+	c, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
+		Issuer: "http://" + spAddr + "/fapi", ClientID: singpasstest.TestClientMyinfo, RedirectURI: "http://localhost:3000/callback",
+		Scopes: []string{"openid", "uinfin", "name"}, SigningKey: sig, SigningKID: singpasstest.TestClientSigningKID,
+		EncryptionKey: enc, EncryptionKID: singpasstest.TestClientEncryptionKID,
+	}, singpass.Dependencies{AllowLoopbackHTTP: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	redirect, state, err := c.BeginLogin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The sign-in page is on; the header skips it.
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, redirect, nil)
+	req.Header.Set(singpasstest.HeaderNRIC, "S8012345F")
+	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := hc.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	id, err := c.Complete(ctx, loc.RawQuery, state)
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if got := id.Myinfo.PersonProfile().UINFIN.String(); got != "S8012345F" {
+		t.Errorf("uinfin = %q", got)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("run = %v", err)
+	}
+}
+
+// Flags can be set from FAKE_* environment variables; a flag on the command
+// line wins.
+func TestRunFlagsFromEnv(t *testing.T) {
+	k := newKeyPair(t)
+	jwks := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(k.jwks(t)) }))
+	defer jwks.Close()
+	spAddr := freeAddr(t)
+	t.Setenv("FAKE_SINGPASS_ADDR", "not used")
+	t.Setenv("FAKE_CORPPASS_ADDR", "")
+	t.Setenv("FAKE_SINGPASS_URL", "http://localhost:"+strings.Split(spAddr, ":")[1])
+	t.Setenv("FAKE_CLIENT_ID", "my-app")
+	t.Setenv("FAKE_CLIENT_PRODUCT", "myinfo")
+	t.Setenv("FAKE_CLIENT_REDIRECT_URIS", "http://localhost:3000/cb, http://localhost:3000/cb2")
+	t.Setenv("FAKE_CLIENT_SCOPES", "uinfin name")
+	t.Setenv("FAKE_CLIENT_JWKS_URL", jwks.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, log lockedBuffer
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, []string{"-singpass-addr", spAddr}, &out, &log) }()
+	waitFor(t, &log, `registered client "my-app" (myinfo)`)
+	if !strings.Contains(out.String(), "Singpass issuer: http://localhost:") || strings.Contains(out.String(), "Corppass issuer") || strings.Contains(out.String(), "test clients") {
+		t.Errorf("stdout = %s", out.String())
+	}
+	cancel()
+	<-done
+
+	t.Setenv("FAKE_AUTO", "maybe")
+	if err := run(context.Background(), nil, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "FAKE_AUTO") {
+		t.Errorf("bad FAKE_AUTO: err = %v", err)
+	}
+}
+
+func TestHealthcheck(t *testing.T) {
+	spAddr := freeAddr(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, log lockedBuffer
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, []string{"-singpass-addr", spAddr, "-corppass-addr", ""}, &out, &log) }()
+	waitFor(t, &out, "Singpass issuer")
+
+	// An unspecified listen address is checked on loopback.
+	port := strings.Split(spAddr, ":")[1]
+	for _, addr := range []string{spAddr, "0.0.0.0:" + port, ":" + port} {
+		if err := run(ctx, []string{"-healthcheck", "-singpass-addr", addr, "-corppass-addr", ""}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Errorf("healthcheck %s: %v", addr, err)
+		}
+	}
+	if err := run(ctx, []string{"-healthcheck", "-singpass-addr", spAddr, "-corppass-addr", freeAddr(t)}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
+		t.Error("healthcheck passed with the Corppass server down")
+	}
+	if err := run(ctx, []string{"-healthcheck", "-singpass-addr", "no port", "-corppass-addr", ""}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
+		t.Error("healthcheck passed with a bad address")
+	}
+	cancel()
+	<-done
+}
+
+// waitFor waits for b to contain every one of want.
+func waitFor(t *testing.T, b *lockedBuffer, want ...string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !containsAll(b.String(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("output lacks one of %q:\n%s", want, b.String())
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
