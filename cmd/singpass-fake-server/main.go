@@ -77,6 +77,13 @@
 // the servers at a name that isn't loopback, such as a Docker Compose service
 // name.
 //
+// Each rejected request is logged on standard error, with the same
+// explanation as its error_description: what was wrong and, for the usual
+// mistakes (an unregistered client or redirect URI, the wrong key, a
+// client_assertion aud or DPoP htu that isn't this server's), how to fix it.
+// So is a request that reaches a server at another host or port than its
+// URL, the usual sign that -singpass-url or -corppass-url needs setting.
+//
 // -healthcheck checks that the servers at -singpass-addr and -corppass-addr
 // answer, and exits non-zero if not, for a container health check.
 //
@@ -97,6 +104,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -235,8 +243,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			_ = srv.Close()
 		}
 	}()
+	// Rejected requests are logged with how to fix them.
+	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+		if a.Key == slog.TimeKey {
+			return slog.Attr{}
+		}
+		return a
+	}}))
 	for _, sc := range specs {
-		srv, err := startServer(sc, tlsConfig, !*auto, withTestClients, users, stdout)
+		srv, err := startServer(sc, tlsConfig, !*auto, withTestClients, users, logger.With("server", sc.name), stdout)
 		if err != nil {
 			return err
 		}
@@ -397,7 +412,7 @@ func (u testUsers) load(issuer singpasstest.Issuer) ([]singpasstest.Persona, err
 
 // startServer starts the named fake server on addr, registers the test
 // clients if testClients, and lists how to use it on stdout.
-func startServer(sc serverSpec, tlsConfig *tls.Config, interactive, testClients bool, users testUsers, stdout io.Writer) (*singpasstest.Server, error) {
+func startServer(sc serverSpec, tlsConfig *tls.Config, interactive, testClients bool, users testUsers, logger *slog.Logger, stdout io.Writer) (*singpasstest.Server, error) {
 	name := sc.name
 	ps, err := users.load(sc.issuer)
 	if err != nil {
@@ -406,7 +421,7 @@ func startServer(sc serverSpec, tlsConfig *tls.Config, interactive, testClients 
 	if len(ps) == 0 {
 		return nil, fmt.Errorf("the %s server has no test users: add some to %s", name, users.path)
 	}
-	srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: sc.issuer, Addr: sc.addr, BaseURL: sc.url, TLS: tlsConfig, Interactive: interactive, Personas: ps})
+	srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: sc.issuer, Addr: sc.addr, BaseURL: sc.url, TLS: tlsConfig, Interactive: interactive, Personas: ps, Logger: logger})
 	if err != nil {
 		return nil, fmt.Errorf("start %s server: %w", name, err)
 	}

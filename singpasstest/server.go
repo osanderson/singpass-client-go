@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -86,6 +87,11 @@ type Config struct {
 	// Off by default, matching Corppass today. Use it to test a client that
 	// must tolerate it (MyinfoBusinessOptions.TolerateUserInfoSubjectClientID).
 	CorppassUserInfoSubClientID bool
+	// Logger receives a line for each rejected request — with the same
+	// explanation, and how to fix it, as the error_description — and for each
+	// host a request reaches the server at other than its URL's. Nil
+	// discards them.
+	Logger *slog.Logger
 	// Interactive serves a sign-in page listing the personas, with a cancel
 	// button, for a browser to use. Otherwise every authorization is approved
 	// straight away as the current persona (see SetPersona) — what automated
@@ -133,6 +139,9 @@ type Server struct {
 	current     int                // index into personas for non-interactive approval
 	custom      map[string]Persona // custom-login users, by subject
 	testClients bool               // RegisterTestClients has run
+	hostsSeen   map[string]bool    // hosts checkHost has logged
+
+	log *slog.Logger
 
 	// regMu serialises adding a loopback redirect URI to a client, so two at
 	// once don't lose one.
@@ -156,7 +165,10 @@ func NewServer(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("singpasstest: listen: %w", err)
 	}
-	s := &Server{cfg: cfg, clients: newRegistry(), ln: ln}
+	s := &Server{cfg: cfg, clients: newRegistry(), ln: ln, log: cfg.Logger}
+	if s.log == nil {
+		s.log = slog.New(slog.DiscardHandler)
+	}
 	scheme := "http://"
 	if cfg.TLS != nil {
 		scheme = "https://"
@@ -385,7 +397,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST "+prefix+pathToken, s.handleToken)
 	mux.HandleFunc("GET "+prefix+pathUserInfo, s.handleUserInfo)
 	mux.HandleFunc("GET "+testClientKeysPath+"{file}", s.handleTestClientKeys)
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.checkHost(r)
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
@@ -428,33 +443,34 @@ func (s *Server) handleJWKS(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 	form, err := server.FormRequestFromHTTP(r)
 	if err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		s.rejectWith(w, r, func(string) string { return "" }, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
+	param := formParam(form)
 	// Singpass/Corppass: authentication_context_type is required for Login
 	// clients and rejected for Myinfo ones.
 	if c, ok := s.clients.get(fapi.ClientID(formValue(form, "client_id"))); ok {
 		if err := s.allowLoopbackRedirect(c.cfg.ID, parRedirectURI(form)); err != nil {
-			writeOAuthError(w, http.StatusInternalServerError, "server_error", err.Error())
+			s.rejectWith(w, r, param, http.StatusInternalServerError, "server_error", err.Error())
 			return
 		}
 		act := formValue(form, "authentication_context_type")
 		msg := formValue(form, "authentication_context_message")
 		switch https := formValue(form, "redirect_uri_https_type"); {
 		case https != "" && https != "app_claimed_https" && https != "standard_https":
-			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "redirect_uri_https_type must be app_claimed_https or standard_https")
+			s.rejectWith(w, r, param, http.StatusBadRequest, "invalid_request", "redirect_uri_https_type must be app_claimed_https or standard_https")
 			return
 		case len(msg) > 100 || strings.ContainsAny(msg, "<>\\`") || !isPrintableASCII(msg):
-			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "authentication_context_message must be at most 100 printable ASCII characters, excluding < > \\ and `")
+			s.rejectWith(w, r, param, http.StatusBadRequest, "invalid_request", "authentication_context_message must be at most 100 printable ASCII characters, excluding < > \\ and `")
 			return
 		}
 		switch {
 		case c.cfg.App == Myinfo && (act != "" || msg != ""):
-			writeOAuthError(w, http.StatusBadRequest, "invalid_request",
+			s.rejectWith(w, r, param, http.StatusBadRequest, "invalid_request",
 				"authentication_context_type and authentication_context_message can only be provided for Login apps. Please remove these fields from your request body.")
 			return
 		case c.cfg.App == Login && act == "":
-			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "authentication_context_type is required for Login apps")
+			s.rejectWith(w, r, param, http.StatusBadRequest, "invalid_request", "authentication_context_type is required for Login apps")
 			return
 		}
 	}
@@ -462,7 +478,7 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 	// a token request proving another key is refused, as Singpass does.
 	result, err := s.srv.PushAuthorizationRequest(r.Context(), server.PushAuthorizationRequest{HTTP: form, DPoPProofs: r.Header.Values("DPoP")})
 	if err != nil {
-		writeServerError(w, err)
+		s.reject(w, r, param, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -473,18 +489,18 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	// Check the X-Custom-* headers before the request_uri is used up.
+	q := r.URL.Query()
 	as, persona, err := s.headerLogin(r.Header)
 	if err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		s.rejectWith(w, r, q.Get, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	q := r.URL.Query()
 	action, err := s.srv.BeginAuthorization(r.Context(), server.BeginAuthorizationRequest{
 		RequestURI: q.Get("request_uri"),
 		ClientID:   fapi.ClientID(q.Get("client_id")),
 	})
 	if err != nil {
-		writeServerError(w, err)
+		s.reject(w, r, q.Get, err)
 		return
 	}
 	interaction, ok := action.(server.InteractionRequired)
@@ -606,16 +622,17 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request, handle server.
 func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	form, err := server.FormRequestFromHTTP(r)
 	if err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		s.rejectWith(w, r, func(string) string { return "" }, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	if formValue(form, "grant_type") != "authorization_code" {
-		writeOAuthError(w, http.StatusBadRequest, "unsupported_grant_type", "only authorization_code is supported")
+	param := formParam(form)
+	if param("grant_type") != "authorization_code" {
+		s.rejectWith(w, r, param, http.StatusBadRequest, "unsupported_grant_type", "only authorization_code is supported")
 		return
 	}
 	result, err := s.srv.ExchangeAuthorizationCode(r.Context(), server.AuthorizationCodeExchangeRequest{HTTP: form, DPoPProofs: r.Header.Values("DPoP")})
 	if err != nil {
-		writeServerError(w, err)
+		s.reject(w, r, param, err)
 		return
 	}
 	resp := map[string]any{

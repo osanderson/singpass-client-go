@@ -151,7 +151,7 @@ func TestLoginAsRejectsBadHeaders(t *testing.T) {
 		"UEN on Singpass":    {as: singpasstest.LoginAs{NRIC: "S1234567D", UEN: "201912345K"}, want: "X-Custom-UEN is for Corppass"},
 		"bad UUID":           {as: singpasstest.LoginAs{NRIC: "S1234567D", UUID: "not-a-uuid"}, want: "must be a UUID"},
 		"cancel and NRIC":    {header: http.Header{"X-Custom-Error": {"access_denied"}, "X-Custom-Nric": {"S1234567D"}}, want: "cannot be combined"},
-		"unknown error":      {header: http.Header{"X-Custom-Error": {"server_error"}}, want: `"server_error" is not supported`},
+		"unknown error":      {header: http.Header{"X-Custom-Error": {"server_error"}}, want: `'server_error' is not supported`},
 		"no UEN on Corppass": {corppass: true, as: singpasstest.LoginAs{NRIC: "S1234567D"}, want: "X-Custom-UEN is required on Corppass"},
 		"bad UEN":            {corppass: true, as: singpasstest.LoginAs{NRIC: "S1234567D", UEN: "1"}, want: "must be 9 or 10 letters and digits"},
 	} {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdh"
 	"fmt"
+	"slices"
 	"sync"
 
 	fapi "github.com/idfoundry/fapigo"
@@ -40,6 +41,18 @@ func (r *registry) get(id fapi.ClientID) (registeredClient, bool) {
 	defer r.mu.RUnlock()
 	c, ok := r.clients[id]
 	return c, ok
+}
+
+// ids returns the registered client IDs, sorted.
+func (r *registry) ids() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ids := make([]string, 0, len(r.clients))
+	for id := range r.clients {
+		ids = append(ids, string(id))
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 // ResolveClient implements storage.ClientRepository.

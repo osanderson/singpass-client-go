@@ -313,6 +313,14 @@ func TestRunZeroConfig(t *testing.T) {
 	if got := id.Myinfo.PersonProfile().UINFIN.String(); got != "S8012345F" {
 		t.Errorf("uinfin = %q", got)
 	}
+
+	// A rejection is logged with how to fix it.
+	resp, err := http.PostForm("http://"+spAddr+"/fapi/par", url.Values{"client_id": {"my-app"}, "client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}, "client_assertion": {"x.y.z"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	waitFor(t, &log, "level=WARN", `msg="rejected POST /fapi/par"`, "server=Singpass", "client_id=my-app", "malformed client assertion")
 	cancel()
 	if err := <-done; err != nil {
 		t.Errorf("run = %v", err)

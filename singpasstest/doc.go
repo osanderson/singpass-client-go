@@ -58,6 +58,13 @@
 // (cmd/singpass-fake-server). Config.BaseURL sets the URL clients reach a
 // server at, e.g. when it runs in a container.
 //
+// Being a test tool, it explains a rejection more than Singpass does: the
+// error_description adds the cause and, for the usual mistakes (an
+// unregistered client or redirect URI, the wrong key, a client_assertion aud
+// or DPoP htu that isn't this server's), how to fix it. Config.Logger also
+// receives each rejection, and flags requests that reach the server at
+// another host than its URL.
+//
 // Not reproduced: acr_values, refresh tokens, and Singpass's full error
 // vocabulary.
 package singpasstest
