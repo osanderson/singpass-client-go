@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.13.0](https://github.com/osanderson/singpass-client-go/compare/v0.12.0...v0.13.0) (2026-10-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* under AssuranceProduction, New and the product constructors refuse a DPoP key generated per process, because Singpass binds each login to the DPoP key it started with. Set DPoPKey to a key every instance loads, or build Dependencies.Keys with NewKeyManagerWithDPoP.
+
+### Features
+
+* add Dependencies.AllowedPrivateHosts, for a fake issuer reached by a Docker Compose service name ([29f4049](https://github.com/osanderson/singpass-client-go/commit/29f4049159926060b88fcae7e06b41cf4c4c6d5e))
+* share one DPoP key across instances (DPoPKey, NewKeyManagerWithDPoP), and require it in production ([7fd4b5f](https://github.com/osanderson/singpass-client-go/commit/7fd4b5fb2e3e87fa535552cf96e9a514312a68b3))
+* **singpass-fake-server:** publish a container image ([#91](https://github.com/osanderson/singpass-client-go/issues/91)) ([afa1556](https://github.com/osanderson/singpass-client-go/commit/afa1556ca2e0818d4c1c398a92ded666f4f49d61))
+* **singpass-fake-server:** run with no configuration ([#90](https://github.com/osanderson/singpass-client-go/issues/90)) ([186d6f2](https://github.com/osanderson/singpass-client-go/commit/186d6f23393c6d520d1d205caadead7adcf16e14))
+* **singpass-fake-server:** serve HTTPS, for apps that reach it by a service name ([29f4049](https://github.com/osanderson/singpass-client-go/commit/29f4049159926060b88fcae7e06b41cf4c4c6d5e))
+* **singpasstest:** add a dashboard at /_fake/ ([#94](https://github.com/osanderson/singpass-client-go/issues/94)) ([a8e98ae](https://github.com/osanderson/singpass-client-go/commit/a8e98ae7043f69515ff6b38ff3635f12ef9db701))
+* **singpasstest:** choose the test user per login with X-Custom-* headers ([#89](https://github.com/osanderson/singpass-client-go/issues/89)) ([f07c49e](https://github.com/osanderson/singpass-client-go/commit/f07c49e7a280467e0d18975804c70660473d10e5))
+* **singpasstest:** explain rejections, and how to fix them ([#93](https://github.com/osanderson/singpass-client-go/issues/93)) ([391e4ac](https://github.com/osanderson/singpass-client-go/commit/391e4acfae20652b26be2ef60b8cccb8dbc4fed8))
+
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.41.0 ([8d2438a](https://github.com/osanderson/singpass-client-go/commit/8d2438a8c016c2cfee05b5392d22a2adc8a36643))
+* **singpasstest:** answer /userinfo without credentials with a bare challenge, as RFC 6750 asks ([8d2438a](https://github.com/osanderson/singpass-client-go/commit/8d2438a8c016c2cfee05b5392d22a2adc8a36643))
+* **singpasstest:** bind each code to the DPoP key used at PAR, as Singpass does ([7fd4b5f](https://github.com/osanderson/singpass-client-go/commit/7fd4b5fb2e3e87fa535552cf96e9a514312a68b3))
+
+
+### Documentation
+
+* document the shared DPoP key and the invalid_dpop_proof it prevents ([7fd4b5f](https://github.com/osanderson/singpass-client-go/commit/7fd4b5fb2e3e87fa535552cf96e9a514312a68b3))
+
 ## [0.12.0](https://github.com/osanderson/singpass-client-go/compare/v0.11.0...v0.12.0) (2026-09-30)
 
 
