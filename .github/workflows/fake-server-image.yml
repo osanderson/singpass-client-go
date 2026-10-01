@@ -128,10 +128,19 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/singpass-fake-server
+          # latest is only the explicit tag below: the default (latest=auto)
+          # would add it to any semver tag, moving it back to an older
+          # release on a manual rebuild of one.
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ steps.release.outputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.release.outputs.tag }}
             type=raw,value=latest,enable=${{ steps.release.outputs.latest }}
+          # The image's own title and description, with the disclaimer, not
+          # the repository's, which would otherwise override the Dockerfile's.
+          labels: |
+            org.opencontainers.image.title=singpass-fake-server
+            org.opencontainers.image.description=Fake Singpass and Corppass FAPI 2.0 servers for testing. A community test tool, not affiliated with or endorsed by GovTech, Singpass or Corppass.
 
       - name: Build and push
         if: steps.dockerfile.outputs.skip != 'true'
