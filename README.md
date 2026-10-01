@@ -243,7 +243,8 @@ go run github.com/osanderson/singpass-client-go/cmd/singpass-fake-server@latest
 
 The image runs Singpass at `http://localhost:5156/fapi` and Corppass at
 `http://localhost:5157`. [docs/docker.md](docs/docker.md) covers
-configuring it, GitHub Actions and Docker Compose.
+configuring it, GitHub Actions, Docker Compose, and HTTPS with a test CA for
+apps that reach it by a service name.
 
 With no configuration it registers built-in test clients — `login-test`,
 `myinfo-test` and `myinfo-business-test`, allowed every scope and any

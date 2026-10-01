@@ -31,6 +31,10 @@ COPY . .
 ARG TARGETOS TARGETARCH
 RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /singpass-fake-server ./cmd/singpass-fake-server
 
+# An empty /certs for FAKE_TLS_CA_DIR, owned by the image's non-root user so a
+# named volume mounted there is writable.
+RUN mkdir /certs
+
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 
 LABEL org.opencontainers.image.title="singpass-fake-server" \
@@ -39,6 +43,7 @@ LABEL org.opencontainers.image.title="singpass-fake-server" \
       org.opencontainers.image.licenses="MIT"
 
 COPY --from=builder /singpass-fake-server /singpass-fake-server
+COPY --from=builder --chown=65532:65532 /certs /certs
 
 # Listen on every interface, so published ports reach the servers, and
 # advertise the issuers at localhost, where `docker run -p 5156:5156
@@ -51,10 +56,14 @@ ENV FAKE_SINGPASS_ADDR=0.0.0.0:5156 \
 
 EXPOSE 5156 5157
 
+# With FAKE_TLS_CA_DIR=/certs, the test CA is kept here: share the volume with
+# the app, which trusts /certs/ca.pem.
+VOLUME /certs
+
 USER nonroot:nonroot
 
 # distroless has no shell or wget: the binary checks itself, reading the same
-# FAKE_* addresses.
+# FAKE_* settings (over HTTPS when TLS is on).
 HEALTHCHECK --interval=5s --timeout=3s --start-period=2s --retries=3 \
     CMD ["/singpass-fake-server", "-healthcheck"]
 

@@ -48,7 +48,9 @@ support:
 - signed and encrypted `/userinfo` responses, for Myinfo
 
 It must also accept an `http://localhost` issuer. In this library, that's
-`Dependencies{AllowLoopbackHTTP: true}`.
+`Dependencies{AllowLoopbackHTTP: true}`. Over HTTPS (see
+[Reached by a service name](#reached-by-a-service-name-over-https)), it
+must trust the test CA instead.
 
 ## Choosing the user in headless tests
 
@@ -91,6 +93,8 @@ and the flag's name in capitals with underscores for hyphens:
 | `FAKE_TEST_CLIENTS` | `false` | keep the test clients alongside your own |
 | `FAKE_PERSONAS` | | a JSON file of extra test users |
 | `FAKE_ONLY_PERSONAS` | `false` | use only the `FAKE_PERSONAS` users |
+| `FAKE_TLS_CA_DIR` | | serve HTTPS with a certificate from a test CA kept here, e.g. `/certs` |
+| `FAKE_TLS_CERT`, `FAKE_TLS_KEY` | | serve HTTPS with your own certificate and key instead |
 
 **Different host ports.** The issuer has to be the URL your app uses. If you
 publish on other host ports, change the URLs to match:
@@ -128,8 +132,10 @@ users from a mounted file in the same way.
 
 ## Where your app runs
 
-The servers use plain HTTP, which this library and FAPI 2.0 only accept on a
-loopback host. So your app must reach them at `localhost`.
+By default the servers use plain HTTP. This library and FAPI 2.0 only accept
+plain HTTP on a loopback host, so your app must reach them at `localhost`, as
+in the first two setups. To reach them by another name, use HTTPS, as in the
+third.
 
 ### On your machine, or a GitHub Actions job on the runner
 
@@ -192,10 +198,89 @@ services:
 
 Your app still reaches other services (a database, say) by their names.
 
-### Reached by a service name
+### Reached by a service name, over HTTPS
 
-An app that reaches the fake server by its service name (`http://singpass:5156`)
-isn't supported yet: that needs HTTPS. Use one of the setups above.
+When your app reaches the fake server by a name like `singpass` (an ordinary
+Compose network, or a GitHub Actions job running in a container), serve
+HTTPS:
+
+- Set `FAKE_TLS_CA_DIR=/certs`. The fake server creates a test CA there on
+  first start and issues itself a certificate for the host names in
+  `FAKE_SINGPASS_URL` and `FAKE_CORPPASS_URL`, plus `localhost`.
+- Set those URLs to the names your app uses. With TLS, `http://` URLs become
+  `https://`.
+- Share `/certs` with your app, and have it trust `/certs/ca.pem`. The CA
+  lives in the volume, so it survives restarts.
+
+```yaml
+services:
+  fake:
+    image: ghcr.io/osanderson/singpass-fake-server:latest
+    networks:
+      default:
+        aliases: [singpass, corppass]
+    volumes:
+      - certs:/certs
+    environment:
+      FAKE_TLS_CA_DIR: /certs
+      FAKE_SINGPASS_URL: https://singpass:5156
+      FAKE_CORPPASS_URL: https://corppass:5157
+
+  app:
+    build: .
+    depends_on:
+      fake:
+        condition: service_healthy
+    volumes:
+      - certs:/certs:ro
+    environment:
+      SINGPASS_ISSUER: https://singpass:5156/fapi
+      NODE_EXTRA_CA_CERTS: /certs/ca.pem # Node; see below for others
+
+volumes:
+  certs:
+```
+
+How your app trusts the CA depends on its language:
+
+| Runtime | Trust `/certs/ca.pem` with |
+| --- | --- |
+| Node.js | `NODE_EXTRA_CA_CERTS=/certs/ca.pem` |
+| Python (`requests`) | `REQUESTS_CA_BUNDLE=/certs/ca.pem` |
+| Python (`ssl`, `httpx`) | `SSL_CERT_FILE=/certs/ca.pem` |
+| Java | import it into a truststore with `keytool -importcert` |
+| Go, with this library | an `http.Client` whose `RootCAs` holds it, as `Dependencies.HTTPClient` |
+
+In Go, this library also refuses by default to fetch discovery and keys from
+a name that resolves to a private address, which a Compose service does.
+List the fake server's names in `Dependencies.AllowedPrivateHosts`:
+
+```go
+ca, err := os.ReadFile("/certs/ca.pem")
+if err != nil {
+	return err
+}
+roots := x509.NewCertPool()
+roots.AppendCertsFromPEM(ca)
+transport := http.DefaultTransport.(*http.Transport).Clone()
+transport.TLSClientConfig = &tls.Config{RootCAs: roots}
+deps := singpass.Dependencies{
+	HTTPClient:          &http.Client{Transport: transport},
+	AllowedPrivateHosts: []string{"singpass", "corppass"},
+}
+```
+
+The redirect URI is still where the browser goes, so the test clients'
+`http://localhost` redirect URIs work if the browser runs on your machine
+with your app's port published. For a browser to reach the fake server at
+`https://singpass:5156`, add `127.0.0.1 singpass corppass` to your hosts
+file, publish ports 5156 and 5157, and trust `ca.pem` in the browser or your
+system. Headless tests with the `X-Custom-*` headers need none of that.
+
+To use your own certificate instead, for example from
+[mkcert](https://github.com/FiloSottile/mkcert), mount it and set
+`FAKE_TLS_CERT` and `FAKE_TLS_KEY`. The certificate file may include
+intermediates.
 
 ## Versions
 

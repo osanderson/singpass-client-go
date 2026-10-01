@@ -46,7 +46,8 @@
 //
 // The server listens on plain HTTP on a loopback address, so the client needs
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production
-// assurance.
+// assurance. With Config.TLS it serves HTTPS instead, for a client that
+// reaches it at another name.
 //
 // RegisterTestClients registers built-in clients with fixed, published keys
 // (TestClientKeys), allowed every scope and any loopback redirect URI, so an

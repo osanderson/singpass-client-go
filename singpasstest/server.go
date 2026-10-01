@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -71,8 +73,12 @@ type Config struct {
 	// Addr — e.g. listening on 0.0.0.0:5156 in a container published as
 	// http://localhost:5156. The issuer and endpoints are built from it. It
 	// must be https, or http on a loopback host. Empty means
-	// http://<the listen address>.
+	// http://<the listen address>, or https:// with TLS.
 	BaseURL string
+	// TLS, if set, serves HTTPS with it instead of plain HTTP, so the server
+	// can be reached at a host name that isn't loopback. BaseURL must then be
+	// https. Clients must trust its certificate.
+	TLS *tls.Config
 	// Personas are the test users. Nil means DefaultPersonas(Issuer).
 	Personas []Persona
 	// CorppassUserInfoSubClientID reproduces Corppass's former /userinfo
@@ -109,8 +115,9 @@ type Client struct {
 }
 
 // Server is a fake Singpass or Corppass FAPI 2.0 authorization server,
-// listening on a loopback address over plain HTTP. Point a client at it with
-// Issuer as the issuer and singpass.Dependencies.AllowLoopbackHTTP set.
+// listening on a loopback address over plain HTTP — or, with Config.TLS,
+// HTTPS. Point a client at it with Issuer as the issuer and, over plain HTTP,
+// singpass.Dependencies.AllowLoopbackHTTP set.
 type Server struct {
 	cfg      Config
 	base     string // scheme://host:port
@@ -150,9 +157,18 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("singpasstest: listen: %w", err)
 	}
 	s := &Server{cfg: cfg, clients: newRegistry(), ln: ln}
-	s.base = "http://" + ln.Addr().String()
+	scheme := "http://"
+	if cfg.TLS != nil {
+		scheme = "https://"
+		s.ln = tls.NewListener(ln, cfg.TLS)
+	}
+	s.base = scheme + ln.Addr().String()
 	if cfg.BaseURL != "" {
 		s.base = strings.TrimRight(cfg.BaseURL, "/")
+	}
+	if cfg.TLS != nil && !strings.HasPrefix(s.base, "https://") {
+		ln.Close()
+		return nil, fmt.Errorf("singpasstest: BaseURL %q must be https with TLS", cfg.BaseURL)
 	}
 	s.issuer = s.base
 	if cfg.Issuer == Singpass {
@@ -172,7 +188,7 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	s.httpSrv = &http.Server{Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
-	go func() { _ = s.httpSrv.Serve(ln) }()
+	go func() { _ = s.httpSrv.Serve(s.ln) }()
 	return s, nil
 }
 
@@ -740,7 +756,10 @@ func (s *Server) AuthorizeAs(ctx context.Context, redirectURL string, as LoginAs
 		return "", err
 	}
 	req.Header = as.Header()
-	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	noFollow := &http.Client{
+		Transport:     s.transport(),
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	res, err := noFollow.Do(req)
 	if err != nil {
 		return "", err
@@ -850,4 +869,23 @@ func parRedirectURI(form server.FormRequest) string {
 	}
 	_ = json.Unmarshal(payload, &claims)
 	return claims.RedirectURI
+}
+
+// transport returns an HTTP transport that trusts the server's own TLS
+// certificate, if it has one, for AuthorizeAs.
+func (s *Server) transport() http.RoundTripper {
+	if s.cfg.TLS == nil {
+		return http.DefaultTransport
+	}
+	pool := x509.NewCertPool()
+	for _, c := range s.cfg.TLS.Certificates {
+		for _, der := range c.Certificate {
+			if cert, err := x509.ParseCertificate(der); err == nil {
+				pool.AddCert(cert)
+			}
+		}
+	}
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	return t
 }
