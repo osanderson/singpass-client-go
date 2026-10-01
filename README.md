@@ -233,15 +233,23 @@ foreigner's pass), and its sign-in page — or `singpasstest.UserPersona` /
 [example](https://pkg.go.dev/github.com/osanderson/singpass-client-go/singpasstest#example-package).
 
 To use the fake servers from an app in any language, or by hand in a
-browser, run them standalone and register your clients in a JSON file:
+browser, run them standalone:
 
 ```sh
-go install github.com/osanderson/singpass-client-go/cmd/singpass-fake-server@latest
-singpass-fake-server -config clients.json   # Singpass at http://127.0.0.1:5156/fapi, Corppass at http://127.0.0.1:5157
+go run github.com/osanderson/singpass-client-go/cmd/singpass-fake-server@latest
+# Singpass at http://127.0.0.1:5156/fapi, Corppass at http://127.0.0.1:5157
 ```
 
-See the [command's documentation](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-fake-server)
-for the file format.
+With no configuration it registers built-in test clients — `login-test`,
+`myinfo-test` and `myinfo-business-test`, allowed every scope and any
+`http://localhost` redirect URI — whose keys it serves at
+`/_fake/test-client/jwks.json`. Those keys are published, so they're for
+this fake only. To use your app's own keys, register it with
+`-client-id`, `-client-product`, `-client-redirect-uris`, `-client-scopes`
+and `-client-jwks-url`, or register several clients from a JSON file with
+`-config`. Every flag can also be set from an environment variable
+(`-singpass-url` is `FAKE_SINGPASS_URL`). See the
+[command's documentation](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-fake-server).
 
 **Choosing the user in a headless test.** Send MockPass's `X-Custom-*`
 headers on the authorization request (the GET of the URL `BeginLogin`

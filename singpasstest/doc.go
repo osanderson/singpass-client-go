@@ -48,6 +48,10 @@
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production
 // assurance.
 //
+// RegisterTestClients registers built-in clients with fixed, published keys
+// (TestClientKeys), allowed every scope and any loopback redirect URI, so an
+// app can log in without registering anything.
+//
 // To run the servers outside a Go test — for an app in another language, or
 // by hand in a browser — use the singpass-fake-server command
 // (cmd/singpass-fake-server). Config.BaseURL sets the URL clients reach a

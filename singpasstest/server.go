@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -93,6 +95,10 @@ type Client struct {
 	ID           string
 	App          App
 	RedirectURIs []string
+	// AnyLoopbackRedirectURI also accepts any http redirect URI on a loopback
+	// host (localhost, 127.0.0.1 or [::1]), on any port and path, as if it
+	// were registered. RedirectURIs may then be empty.
+	AnyLoopbackRedirectURI bool
 	// Scopes the client may request. "openid" is always allowed.
 	Scopes []string
 
@@ -116,9 +122,14 @@ type Server struct {
 	httpSrv  *http.Server
 	ln       net.Listener
 
-	mu      sync.Mutex
-	current int                // index into personas for non-interactive approval
-	custom  map[string]Persona // custom-login users, by subject
+	mu          sync.Mutex
+	current     int                // index into personas for non-interactive approval
+	custom      map[string]Persona // custom-login users, by subject
+	testClients bool               // RegisterTestClients has run
+
+	// regMu serialises adding a loopback redirect URI to a client, so two at
+	// once don't lose one.
+	regMu sync.Mutex
 }
 
 const (
@@ -303,7 +314,7 @@ func (s *Server) SetPersona(subject string) error {
 
 // RegisterClient registers a relying party, as onboarding would.
 func (s *Server) RegisterClient(c Client) error {
-	if c.ID == "" || len(c.RedirectURIs) == 0 {
+	if c.ID == "" || len(c.RedirectURIs) == 0 && !c.AnyLoopbackRedirectURI {
 		return errors.New("singpasstest: client ID and at least one redirect URI are required")
 	}
 	if c.SigningKey == nil || c.EncryptionKey == nil {
@@ -312,6 +323,11 @@ func (s *Server) RegisterClient(c Client) error {
 	redirects := make([]fapi.RegisteredRedirectURI, 0, len(c.RedirectURIs))
 	for _, u := range c.RedirectURIs {
 		redirects = append(redirects, fapi.RegisteredRedirectURI(u))
+	}
+	if len(redirects) == 0 {
+		// FAPIgo needs one; the loopback URIs the client uses are added as
+		// it uses them (see allowLoopbackRedirect).
+		redirects = append(redirects, "http://localhost/")
 	}
 	scopes := append([]string{"openid"}, c.Scopes...)
 	rc := storage.RegisteredClientConfig{
@@ -352,6 +368,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST "+prefix+"/auth/decision", s.handleDecision)
 	mux.HandleFunc("POST "+prefix+pathToken, s.handleToken)
 	mux.HandleFunc("GET "+prefix+pathUserInfo, s.handleUserInfo)
+	mux.HandleFunc("GET "+testClientKeysPath+"{file}", s.handleTestClientKeys)
 	return mux
 }
 
@@ -401,6 +418,10 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 	// Singpass/Corppass: authentication_context_type is required for Login
 	// clients and rejected for Myinfo ones.
 	if c, ok := s.clients.get(fapi.ClientID(formValue(form, "client_id"))); ok {
+		if err := s.allowLoopbackRedirect(c.cfg.ID, parRedirectURI(form)); err != nil {
+			writeOAuthError(w, http.StatusInternalServerError, "server_error", err.Error())
+			return
+		}
 		act := formValue(form, "authentication_context_type")
 		msg := formValue(form, "authentication_context_message")
 		switch https := formValue(form, "redirect_uri_https_type"); {
@@ -783,4 +804,50 @@ func isPrintableASCII(s string) bool {
 		}
 	}
 	return true
+}
+
+// allowLoopbackRedirect registers redirectURI for the client if the client
+// accepts any loopback redirect URI, redirectURI is one, and it isn't
+// registered yet.
+func (s *Server) allowLoopbackRedirect(id, redirectURI string) error {
+	s.regMu.Lock()
+	defer s.regMu.Unlock()
+	c, ok := s.clients.get(fapi.ClientID(id))
+	if !ok || !c.cfg.AnyLoopbackRedirectURI || c.stored.HasRedirectURI(redirectURI) || !isLoopbackHTTP(redirectURI) {
+		return nil
+	}
+	cfg := c.cfg
+	cfg.RedirectURIs = append(slices.Clone(cfg.RedirectURIs), redirectURI)
+	return s.RegisterClient(cfg)
+}
+
+// isLoopbackHTTP reports whether raw is an http URL on a loopback host.
+func isLoopbackHTTP(raw string) bool {
+	if !strings.HasPrefix(raw, "http://") {
+		return false
+	}
+	_, err := fapi.ParseEndpointURL(raw, fapi.AllowLoopbackHTTP())
+	return err == nil
+}
+
+// parRedirectURI returns a pushed authorization request's redirect_uri: the
+// form parameter, or else the claim in its request object, read without
+// verifying it — the server verifies the request object itself.
+func parRedirectURI(form server.FormRequest) string {
+	if u := formValue(form, "redirect_uri"); u != "" {
+		return u
+	}
+	parts := strings.Split(formValue(form, "request"), ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims struct {
+		RedirectURI string `json:"redirect_uri"`
+	}
+	_ = json.Unmarshal(payload, &claims)
+	return claims.RedirectURI
 }
