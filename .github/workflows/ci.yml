@@ -130,9 +130,16 @@ jobs:
           name: sonar-demo
           path: examples/demo
 
+      # Waits for the analysis's quality gate and fails if it does, so a gate
+      # failure shows on the pull request rather than only on the SonarQube
+      # Cloud dashboard. Gives up after 5 minutes.
       - name: SonarQube Scan
         if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        with:
+          args: >-
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
 
   docker:
     name: docker (demo image)
