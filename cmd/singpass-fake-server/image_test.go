@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -21,34 +23,63 @@ import (
 // — in CI, the container image — at the issuers in SMOKE_SINGPASS_ISSUER and
 // SMOKE_CORPPASS_ISSUER, as an app in another language would: with the
 // built-in test clients, their keys fetched from the server, and the
-// X-Custom-* headers. Skipped unless SMOKE_SINGPASS_ISSUER is set.
+// X-Custom-* headers. Over HTTPS, it trusts the CA certificate in
+// SMOKE_CA_FILE. Skipped unless SMOKE_SINGPASS_ISSUER is set.
 func TestImage(t *testing.T) {
 	sp, cp := os.Getenv("SMOKE_SINGPASS_ISSUER"), os.Getenv("SMOKE_CORPPASS_ISSUER")
 	if sp == "" {
 		t.Skip("SMOKE_SINGPASS_ISSUER not set")
 	}
-	sig, enc := fetchTestClientKeys(t, strings.TrimSuffix(sp, "/fapi")+"/_fake/test-client/jwks.json")
+	hc := http.DefaultClient
+	if ca := os.Getenv("SMOKE_CA_FILE"); ca != "" {
+		hc = trustingClient(t, ca)
+	}
+	smokeLogins(t, hc, sp, cp)
+}
 
-	id := headerLogin(t, sp, singpasstest.TestClientMyinfo, sig, enc, singpasstest.LoginAs{NRIC: "S8012345F"})
+// smokeLogins logs in to the Singpass issuer sp as each of its test clients,
+// and to the Corppass issuer cp, if set, as its test client.
+func smokeLogins(t *testing.T, hc *http.Client, sp, cp string) {
+	t.Helper()
+	sig, enc := fetchTestClientKeys(t, hc, strings.TrimSuffix(sp, "/fapi")+"/_fake/test-client/jwks.json")
+
+	id := headerLogin(t, hc, sp, singpasstest.TestClientMyinfo, sig, enc, singpasstest.LoginAs{NRIC: "S8012345F"})
 	if got := id.Myinfo.PersonProfile().UINFIN.String(); got != "S8012345F" {
 		t.Errorf("Myinfo uinfin = %q", got)
 	}
-	id = headerLogin(t, sp, singpasstest.TestClientLogin, sig, enc, singpasstest.LoginAs{NRIC: "S1234567D"})
+	id = headerLogin(t, hc, sp, singpasstest.TestClientLogin, sig, enc, singpasstest.LoginAs{NRIC: "S1234567D"})
 	if got := id.SubjectAttributes().IdentityNumber; got != "S1234567D" {
 		t.Errorf("Login identity_number = %q", got)
 	}
 	if cp != "" {
-		id = headerLogin(t, cp, singpasstest.TestClientMyinfoBusiness, sig, enc, singpasstest.LoginAs{UEN: "201912345K", NRIC: "S7812345J"})
+		id = headerLogin(t, hc, cp, singpasstest.TestClientMyinfoBusiness, sig, enc, singpasstest.LoginAs{UEN: "201912345K", NRIC: "S7812345J"})
 		if got := id.Myinfo.EntityProfile().Name.String(); got != "HARBOURFRONT TRADING PTE. LTD." {
 			t.Errorf("Myinfo Business entity name = %q", got)
 		}
 	}
 }
 
-// fetchTestClientKeys reads the test clients' private JWKS from the server.
-func fetchTestClientKeys(t *testing.T, jwksURL string) (sig, enc *ecdsa.PrivateKey) {
+// trustingClient returns an HTTP client that trusts the CA certificates in
+// the PEM file caFile.
+func trustingClient(t *testing.T, caFile string) *http.Client {
 	t.Helper()
-	resp, err := http.Get(jwksURL)
+	pemBytes, err := os.ReadFile(caFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		t.Fatalf("%s holds no certificate", caFile)
+	}
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	return &http.Client{Transport: tr}
+}
+
+// fetchTestClientKeys reads the test clients' private JWKS from the server.
+func fetchTestClientKeys(t *testing.T, hc *http.Client, jwksURL string) (sig, enc *ecdsa.PrivateKey) {
+	t.Helper()
+	resp, err := hc.Get(jwksURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,12 +110,16 @@ func fetchTestClientKeys(t *testing.T, jwksURL string) (sig, enc *ecdsa.PrivateK
 	return sig, enc
 }
 
-// headerLogin logs in to issuer as clientID, choosing the user with the
-// X-Custom-* headers, and returns the identity.
-func headerLogin(t *testing.T, issuer, clientID string, sig, enc *ecdsa.PrivateKey, as singpasstest.LoginAs) *singpass.Identity {
+// headerLogin logs in to issuer as clientID over hc, choosing the user with
+// the X-Custom-* headers, and returns the identity.
+func headerLogin(t *testing.T, hc *http.Client, issuer, clientID string, sig, enc *ecdsa.PrivateKey, as singpasstest.LoginAs) *singpass.Identity {
 	t.Helper()
 	ctx := context.Background()
-	deps := singpass.Dependencies{AllowLoopbackHTTP: true}
+	deps := singpass.Dependencies{AllowLoopbackHTTP: true, HTTPClient: hc}
+	if u, err := url.Parse(issuer); err == nil && u.Scheme == "https" {
+		// Reached by a service name on a Docker network.
+		deps.AllowedPrivateHosts = []string{u.Hostname()}
+	}
 	const redirect = "http://localhost:3000/callback"
 	keys := func() (*ecdsa.PrivateKey, string, *ecdsa.PrivateKey, string) {
 		return sig, singpasstest.TestClientSigningKID, enc, singpasstest.TestClientEncryptionKID
@@ -114,8 +149,8 @@ func headerLogin(t *testing.T, issuer, clientID string, sig, enc *ecdsa.PrivateK
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, authURL, nil)
 	req.Header = as.Header()
-	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := hc.Do(req)
+	noFollow := &http.Client{Transport: hc.Transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := noFollow.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

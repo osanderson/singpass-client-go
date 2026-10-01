@@ -309,7 +309,7 @@ func TestRunZeroConfig(t *testing.T) {
 
 	// The sign-in page is on; the header skips it.
 	sig, enc := singpasstest.TestClientKeys()
-	id := headerLogin(t, "http://"+spAddr+"/fapi", singpasstest.TestClientMyinfo, sig, enc, singpasstest.LoginAs{NRIC: "S8012345F"})
+	id := headerLogin(t, http.DefaultClient, "http://"+spAddr+"/fapi", singpasstest.TestClientMyinfo, sig, enc, singpasstest.LoginAs{NRIC: "S8012345F"})
 	if got := id.Myinfo.PersonProfile().UINFIN.String(); got != "S8012345F" {
 		t.Errorf("uinfin = %q", got)
 	}

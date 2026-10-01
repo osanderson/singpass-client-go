@@ -75,8 +75,8 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
 - [ ] **`Dependencies.Debug` off.** It logs the client assertion, the
       authorization code and the PKCE verifier; `New` refuses it under
       `AssuranceProduction`.
-- [ ] **`Dependencies.AllowLoopbackHTTP` off.** It's refused under
-      `AssuranceProduction` anyway.
+- [ ] **`Dependencies.AllowLoopbackHTTP` off, and `AllowedPrivateHosts`
+      empty.** Both are refused under `AssuranceProduction` anyway.
 - [ ] **`HTTPClient` / `HTTPTimeout`** suit your egress: proxy, timeouts, and
       access to `id.singpass.gov.sg` / `id.corppass.gov.sg`.
 - [ ] **Myinfo Business: the `/userinfo` `sub` check.** Corppass has fixed its

@@ -77,6 +77,12 @@ unapproved scopes still fail at login.
   `127.0.0.0/8` or `::1`. Any other host name is refused even if it resolves
   to a loopback address (an `/etc/hosts` alias, say). It is development-only:
   `New` refuses it together with `AssuranceProduction`.
+- **`AllowedPrivateHosts`** lists host names discovery and the issuer's JWKS
+  may be fetched from although they resolve to a private address: a fake
+  server reached by its Docker Compose service name over HTTPS (see
+  [docker.md](docker.md#reached-by-a-service-name-over-https)). Names match
+  exactly. It is development-only: `New` refuses it together with
+  `AssuranceProduction`.
 - **`Debug` dumps secrets.** `Dependencies.Debug` logs outbound PAR/token/userinfo
   requests including the `client_assertion`, the authorization code and the
   PKCE verifier — enable it only against staging. `New` refuses it under

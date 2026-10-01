@@ -69,17 +69,28 @@
 // flag's name in capitals with underscores for hyphens: -singpass-url is
 // FAKE_SINGPASS_URL. A flag on the command line wins.
 //
+// The servers use plain HTTP unless TLS is configured. -tls-ca-dir serves
+// HTTPS with a certificate from a test CA kept in that directory: created on
+// first use, it covers the host names in -singpass-url and -corppass-url and
+// localhost, and apps trust its ca.pem. -tls-cert and -tls-key serve your own
+// certificate instead. With TLS, the URLs are https. HTTPS lets an app reach
+// the servers at a name that isn't loopback, such as a Docker Compose service
+// name.
+//
 // -healthcheck checks that the servers at -singpass-addr and -corppass-addr
 // answer, and exits non-zero if not, for a container health check.
 //
-// The servers use plain HTTP on loopback, which a client must be configured
-// to accept; for this library, singpass.Dependencies.AllowLoopbackHTTP.
+// Over plain HTTP, a client must be configured to accept a loopback issuer;
+// for this library, singpass.Dependencies.AllowLoopbackHTTP. Over HTTPS at a
+// name resolving to a private address, it needs
+// singpass.Dependencies.AllowedPrivateHosts.
 package main
 
 import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -88,8 +99,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -138,8 +151,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	cfgPath := fs.String("config", "", "JSON file registering the clients; without it or -client-id, the built-in test clients are registered")
 	spAddr := fs.String("singpass-addr", "127.0.0.1:5156", `listen address of the Singpass server; "" to disable it`)
 	cpAddr := fs.String("corppass-addr", "127.0.0.1:5157", `listen address of the Corppass server; "" to disable it`)
-	spURL := fs.String("singpass-url", "", "URL clients reach the Singpass server at, if not http://<singpass-addr> (e.g. in a container)")
-	cpURL := fs.String("corppass-url", "", "URL clients reach the Corppass server at, if not http://<corppass-addr>")
+	spURL := fs.String("singpass-url", "", "URL clients reach the Singpass server at, if not http://<singpass-addr> (e.g. in a container); https with TLS")
+	cpURL := fs.String("corppass-url", "", "URL clients reach the Corppass server at, if not http://<corppass-addr>; https with TLS")
+	var tlsFlags tlsSettings
+	fs.StringVar(&tlsFlags.caDir, "tls-ca-dir", "", "serve HTTPS with a certificate from a test CA kept in this directory (created if needed); apps trust its ca.pem")
+	fs.StringVar(&tlsFlags.certFile, "tls-cert", "", "serve HTTPS with this certificate (PEM, with any intermediates) …")
+	fs.StringVar(&tlsFlags.keyFile, "tls-key", "", "… and this private key (PEM)")
 	auto := fs.Bool("auto", false, "approve every login straight away as the first test user, without the sign-in page (the X-Custom-* headers choose another user without it)")
 	personasPath := fs.String("personas", "", "JSON file of extra test users (see singpasstest.LoadPersonas), added to the built-in ones")
 	onlyPersonas := fs.Bool("only-personas", false, "use only the -personas test users, not the built-in ones")
@@ -162,8 +179,24 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err := flagsFromEnv(fs); err != nil {
 		return err
 	}
+	if err := tlsFlags.check(); err != nil {
+		return err
+	}
+	var specs []serverSpec
+	for _, sc := range []serverSpec{
+		{"Singpass", singpasstest.Singpass, *spAddr, *spURL},
+		{"Corppass", singpasstest.Corppass, *cpAddr, *cpURL},
+	} {
+		if sc.addr == "" {
+			continue
+		}
+		if tlsFlags.on() {
+			sc.url = httpsURL(sc.url, sc.addr)
+		}
+		specs = append(specs, sc)
+	}
 	if *healthcheck {
-		return checkHealth(ctx, *spAddr, *cpAddr)
+		return checkHealth(ctx, specs, tlsFlags)
 	}
 	var cfg config
 	if *cfgPath != "" {
@@ -185,24 +218,25 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	users := testUsers{path: *personasPath, only: *onlyPersonas}
 	withTestClients := *testClients || len(cfg.Clients) == 0
 
+	var tlsConfig *tls.Config
+	if tlsFlags.on() {
+		var err error
+		if tlsConfig, err = tlsFlags.serverConfig(certHosts(specs)); err != nil {
+			return err
+		}
+		if tlsFlags.caDir != "" {
+			fmt.Fprintf(stdout, "HTTPS with a test CA: trust %s in your app\n", filepath.Join(tlsFlags.caDir, caCertFile))
+		}
+	}
+
 	servers := map[string]*singpasstest.Server{}
 	defer func() {
 		for _, srv := range servers {
 			_ = srv.Close()
 		}
 	}()
-	for _, sc := range []struct {
-		name          string
-		issuer        singpasstest.Issuer
-		addr, baseURL string
-	}{
-		{"Singpass", singpasstest.Singpass, *spAddr, *spURL},
-		{"Corppass", singpasstest.Corppass, *cpAddr, *cpURL},
-	} {
-		if sc.addr == "" {
-			continue
-		}
-		srv, err := startServer(sc.name, sc.issuer, sc.addr, sc.baseURL, !*auto, withTestClients, users, stdout)
+	for _, sc := range specs {
+		srv, err := startServer(sc, tlsConfig, !*auto, withTestClients, users, stdout)
 		if err != nil {
 			return err
 		}
@@ -248,28 +282,89 @@ func splitList(s string) []string {
 	return strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' })
 }
 
-// checkHealth fetches the discovery document of each server listening at a
-// non-empty address, for a container health check.
-func checkHealth(ctx context.Context, spAddr, cpAddr string) error {
+// serverSpec is one fake server to run: its name, issuer kind, listen
+// address and the URL clients reach it at (empty for http://<addr>).
+type serverSpec struct {
+	name   string
+	issuer singpasstest.Issuer
+	addr   string
+	url    string
+}
+
+// httpsURL returns u as https, or https://<addr> if u is empty: with TLS, the
+// URL's scheme follows.
+func httpsURL(u, addr string) string {
+	switch {
+	case u == "":
+		return "https://" + addr
+	case strings.HasPrefix(u, "http://"):
+		return "https://" + strings.TrimPrefix(u, "http://")
+	}
+	return u
+}
+
+// certHosts returns the host names a generated certificate covers: those in
+// the servers' URLs, and the loopback names.
+func certHosts(specs []serverSpec) []string {
+	var hosts []string
+	for _, sc := range specs {
+		if u, err := url.Parse(sc.url); err == nil && u.Hostname() != "" && !slices.Contains(hosts, u.Hostname()) {
+			hosts = append(hosts, u.Hostname())
+		}
+	}
+	for _, h := range []string{"localhost", "127.0.0.1", "::1"} {
+		if !slices.Contains(hosts, h) {
+			hosts = append(hosts, h)
+		}
+	}
+	return hosts
+}
+
+// checkHealth fetches the discovery document of each server, on loopback at
+// its listen address, for a container health check. With TLS it checks the
+// certificate for the host in the server's URL.
+func checkHealth(ctx context.Context, specs []serverSpec, t tlsSettings) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	for _, s := range []struct{ addr, path string }{{spAddr, "/fapi"}, {cpAddr, ""}} {
-		if s.addr == "" {
-			continue
+	scheme, transport := "http://", http.DefaultTransport.(*http.Transport).Clone()
+	if t.on() {
+		roots, err := t.rootCAs()
+		if err != nil {
+			return err
 		}
-		host, port, err := net.SplitHostPort(s.addr)
+		scheme = "https://"
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+	}
+	for _, sc := range specs {
+		host, port, err := net.SplitHostPort(sc.addr)
 		if err != nil {
 			return err
 		}
 		if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
 			host = "127.0.0.1"
 		}
-		u := "http://" + net.JoinHostPort(host, port) + s.path + "/.well-known/openid-configuration"
+		path := ""
+		if sc.issuer == singpasstest.Singpass {
+			path = "/fapi"
+		}
+		u := scheme + net.JoinHostPort(host, port) + path + "/.well-known/openid-configuration"
+		client := &http.Client{Transport: transport}
+		if t.on() {
+			// Dial the listen address, but check the certificate for the
+			// URL's host.
+			pu, err := url.Parse(sc.url)
+			if err != nil {
+				return err
+			}
+			tr := transport.Clone()
+			tr.TLSClientConfig.ServerName = pu.Hostname()
+			client.Transport = tr
+		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
 			return err
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return err
 		}
@@ -302,15 +397,16 @@ func (u testUsers) load(issuer singpasstest.Issuer) ([]singpasstest.Persona, err
 
 // startServer starts the named fake server on addr, registers the test
 // clients if testClients, and lists how to use it on stdout.
-func startServer(name string, issuer singpasstest.Issuer, addr, baseURL string, interactive, testClients bool, users testUsers, stdout io.Writer) (*singpasstest.Server, error) {
-	ps, err := users.load(issuer)
+func startServer(sc serverSpec, tlsConfig *tls.Config, interactive, testClients bool, users testUsers, stdout io.Writer) (*singpasstest.Server, error) {
+	name := sc.name
+	ps, err := users.load(sc.issuer)
 	if err != nil {
 		return nil, err
 	}
 	if len(ps) == 0 {
 		return nil, fmt.Errorf("the %s server has no test users: add some to %s", name, users.path)
 	}
-	srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: issuer, Addr: addr, BaseURL: baseURL, Interactive: interactive, Personas: ps})
+	srv, err := singpasstest.NewServer(singpasstest.Config{Issuer: sc.issuer, Addr: sc.addr, BaseURL: sc.url, TLS: tlsConfig, Interactive: interactive, Personas: ps})
 	if err != nil {
 		return nil, fmt.Errorf("start %s server: %w", name, err)
 	}

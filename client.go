@@ -160,6 +160,17 @@ type Dependencies struct {
 	// Development only: New refuses it together with AssuranceProduction.
 	AllowLoopbackHTTP bool
 
+	// AllowedPrivateHosts lists host names the issuer's discovery document
+	// and JWKS may be fetched from although they resolve to a private
+	// address (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 or fc00::/7): a
+	// fake authorization server reached by its service name on a Docker
+	// Compose network, such as singpass-fake-server's over HTTPS. Names
+	// match exactly; any other host resolving to a private address stays
+	// refused, so a URL taken from a response can't reach the internal
+	// network. Development only: New refuses it together with
+	// AssuranceProduction.
+	AllowedPrivateHosts []string
+
 	// Debug, when true, logs outbound PAR/token/userinfo requests and responses
 	// (method, URL, form body, sizes) via Logger. The request dump includes the
 	// client_assertion, the authorization code and the PKCE verifier, so New
@@ -359,6 +370,9 @@ func checkAssurance(opts Options, deps Dependencies) error {
 	if deps.AllowLoopbackHTTP {
 		return fmt.Errorf("singpass: Dependencies.AllowLoopbackHTTP is refused under AssuranceProduction")
 	}
+	if len(deps.AllowedPrivateHosts) > 0 {
+		return fmt.Errorf("singpass: Dependencies.AllowedPrivateHosts is refused under AssuranceProduction")
+	}
 	if deps.Debug {
 		return fmt.Errorf("singpass: Dependencies.Debug is refused under AssuranceProduction: it logs the client assertion and authorization code")
 	}
@@ -376,10 +390,11 @@ func checkAssurance(opts Options, deps Dependencies) error {
 // cached and auto-refreshing.
 func discover(ctx context.Context, base *http.Client, issuer fapi.URL, deps Dependencies, urlOpts []fapi.URLOption) (client.DiscoveredMetadata, keys.IssuerKeySource, error) {
 	fetcher, err := fapihttp.New(base, fapihttp.Config{
-		MaxResponseBytes:  1 << 20,
-		RequestTimeout:    deps.HTTPTimeout,
-		MaxRedirects:      5,
-		AllowLoopbackHTTP: deps.AllowLoopbackHTTP,
+		MaxResponseBytes:    1 << 20,
+		RequestTimeout:      deps.HTTPTimeout,
+		MaxRedirects:        5,
+		AllowLoopbackHTTP:   deps.AllowLoopbackHTTP,
+		AllowedPrivateHosts: deps.AllowedPrivateHosts,
 	})
 	if err != nil {
 		return client.DiscoveredMetadata{}, nil, fmt.Errorf("singpass: build fetcher: %w", err)
