@@ -2,7 +2,8 @@ name: Fake server published image
 
 # Daily, checks the published singpass-fake-server image as its users get it:
 # pulls ghcr.io/<owner>/singpass-fake-server:latest without logging in, on
-# amd64 and on arm64, checks it is the latest release's, and logs in against
+# amd64 and on arm64, checks it is the latest release's and carries the
+# not-affiliated disclaimer, and logs in against
 # it with this library in each of docs/docker.md's setups
 # (scripts/fake-server-smoke.sh), using the release's own TestImage. Catches
 # a failed or partial push, a missing platform, a package that isn't public,
@@ -86,6 +87,11 @@ jobs:
           fi
           if [ "$arch" != "$ARCH" ]; then
             echo "pulled a $arch image on $ARCH" >&2
+            exit 1
+          fi
+          description=$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.description"}}' "$IMAGE")
+          if [[ $description != *"not affiliated with or endorsed by GovTech"* ]]; then
+            echo "the image's description lacks the disclaimer: $description" >&2
             exit 1
           fi
 
