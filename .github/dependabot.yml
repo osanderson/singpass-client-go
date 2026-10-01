@@ -3,7 +3,8 @@
 # release-please cuts a library release:
 #   fix(deps):   the library's own go.mod — a dependency bump is a patch release
 #   chore(deps): the demo, GitHub Actions and Docker images — no library release
-#                (a fake server base-image bump is published with the next one)
+#                (a fake server base-image bump reaches the published image at
+#                fake-server-image.yml's weekly rebuild)
 # Security updates (enabled in repo settings) follow the same commit-message
 # rules.
 #

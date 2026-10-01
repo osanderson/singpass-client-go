@@ -37,6 +37,20 @@ in as any NRIC, FIN or UEN. The startup log lists the test users.
 Only the Singpass server is needed for Login and Myinfo, so `-p 5157:5157`
 can be dropped unless you use Myinfo Business.
 
+## Keep it local
+
+Run the fake server only where just you, your tests or your CI can reach it:
+your machine, a Compose network, a CI job. Never publish it on a network
+others can reach, or put it behind a public URL. By design it:
+
+- logs anyone in as any user, with no password
+- serves its test clients' private keys
+- lists every request in its dashboard
+
+It holds no real accounts or data, but an app that trusts it would accept
+those logins. Publish its ports on `localhost` only when other machines share
+your network: `-p 127.0.0.1:5156:5156`.
+
 ## What your app's client must support
 
 The fake servers speak the real protocol. Your OIDC client library must
@@ -320,6 +334,11 @@ Each release of this module publishes the image for `linux/amd64` and
 `linux/arm64`, tagged with its version (`0.13.0`), its minor version (`0.13`)
 and `latest`, with build provenance and an SBOM. Before 1.0, a minor release
 may change behaviour, so pin the minor version in CI.
+
+The latest release's image is rebuilt weekly with patched base images and Go
+toolchain, and its tags move to the rebuild. The fake server's own code
+doesn't change. To keep an exact image, pin its digest
+(`ghcr.io/osanderson/singpass-fake-server@sha256:…`).
 
 The image runs as a non-root user, on a distroless base with no shell. Its
 health check runs `singpass-fake-server -healthcheck`.
