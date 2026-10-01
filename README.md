@@ -236,9 +236,14 @@ To use the fake servers from an app in any language, or by hand in a
 browser, run them standalone:
 
 ```sh
+docker run --rm -p 5156:5156 -p 5157:5157 ghcr.io/osanderson/singpass-fake-server
+# or, with Go:
 go run github.com/osanderson/singpass-client-go/cmd/singpass-fake-server@latest
-# Singpass at http://127.0.0.1:5156/fapi, Corppass at http://127.0.0.1:5157
 ```
+
+The image runs Singpass at `http://localhost:5156/fapi` and Corppass at
+`http://localhost:5157`. [docs/docker.md](docs/docker.md) covers
+configuring it, GitHub Actions and Docker Compose.
 
 With no configuration it registers built-in test clients — `login-test`,
 `myinfo-test` and `myinfo-business-test`, allowed every scope and any

@@ -307,33 +307,9 @@ func TestRunZeroConfig(t *testing.T) {
 		t.Errorf("stdout = %s", out.String())
 	}
 
-	sig, enc := singpasstest.TestClientKeys()
-	c, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
-		Issuer: "http://" + spAddr + "/fapi", ClientID: singpasstest.TestClientMyinfo, RedirectURI: "http://localhost:3000/callback",
-		Scopes: []string{"openid", "uinfin", "name"}, SigningKey: sig, SigningKID: singpasstest.TestClientSigningKID,
-		EncryptionKey: enc, EncryptionKID: singpasstest.TestClientEncryptionKID,
-	}, singpass.Dependencies{AllowLoopbackHTTP: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	redirect, state, err := c.BeginLogin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The sign-in page is on; the header skips it.
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, redirect, nil)
-	req.Header.Set(singpasstest.HeaderNRIC, "S8012345F")
-	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := hc.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	loc, _ := url.Parse(resp.Header.Get("Location"))
-	id, err := c.Complete(ctx, loc.RawQuery, state)
-	if err != nil {
-		t.Fatalf("Complete: %v", err)
-	}
+	sig, enc := singpasstest.TestClientKeys()
+	id := headerLogin(t, "http://"+spAddr+"/fapi", singpasstest.TestClientMyinfo, sig, enc, singpasstest.LoginAs{NRIC: "S8012345F"})
 	if got := id.Myinfo.PersonProfile().UINFIN.String(); got != "S8012345F" {
 		t.Errorf("uinfin = %q", got)
 	}

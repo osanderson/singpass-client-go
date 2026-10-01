@@ -3,6 +3,7 @@
 # release-please cuts a library release:
 #   fix(deps):   the library's own go.mod — a dependency bump is a patch release
 #   chore(deps): the demo, GitHub Actions and Docker images — no library release
+#                (a fake server base-image bump is published with the next one)
 # Security updates (enabled in repo settings) follow the same commit-message
 # rules.
 #
@@ -54,4 +55,15 @@ updates:
       include: scope
     groups:
       demo-images:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /cmd/singpass-fake-server
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      fake-server-images:
         patterns: ["*"]
