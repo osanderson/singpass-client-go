@@ -38,6 +38,12 @@
 // Coded write their Myinfo data, and LoadPersonas reads users from a JSON
 // file — into which a real staging /userinfo response can be pasted.
 //
+// A headless test chooses the user per login instead: Server.AuthorizeAs
+// with a LoginAs, or — from any HTTP client — MockPass's X-Custom-NRIC,
+// X-Custom-UEN, X-Custom-UUID, X-Custom-Name and X-Custom-Error headers on
+// the authorization request, which approve the login straight away even on
+// an Interactive server (see HeaderNRIC).
+//
 // The server listens on plain HTTP on a loopback address, so the client needs
 // singpass.Dependencies.AllowLoopbackHTTP, which is refused under production
 // assurance.

@@ -34,6 +34,12 @@
 // URL is fetched until the app serving it is up, so the two can start in any
 // order.
 //
+// A headless test chooses who each login signs in as with MockPass's
+// X-Custom-* headers on the authorization request — X-Custom-NRIC, plus
+// X-Custom-UEN on Corppass, and optionally X-Custom-UUID and X-Custom-Name —
+// or makes it fail with X-Custom-Error: access_denied. Such a request is
+// approved straight away, with or without -auto; see singpasstest.HeaderNRIC.
+//
 // Extra test users — for example with Myinfo data copied from a real staging
 // /userinfo response — come from a JSON file with -personas; see
 // singpasstest.LoadPersonas for the format. -only-personas drops the built-in
@@ -101,7 +107,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	cpAddr := fs.String("corppass-addr", "127.0.0.1:5157", `listen address of the Corppass server; "" to disable it`)
 	spURL := fs.String("singpass-url", "", "URL clients reach the Singpass server at, if not http://<singpass-addr> (e.g. in a container)")
 	cpURL := fs.String("corppass-url", "", "URL clients reach the Corppass server at, if not http://<corppass-addr>")
-	auto := fs.Bool("auto", false, "approve every login straight away as the first test user, without the sign-in page")
+	auto := fs.Bool("auto", false, "approve every login straight away as the first test user, without the sign-in page (the X-Custom-* headers choose another user without it)")
 	personasPath := fs.String("personas", "", "JSON file of extra test users (see singpasstest.LoadPersonas), added to the built-in ones")
 	onlyPersonas := fs.Bool("only-personas", false, "use only the -personas test users, not the built-in ones")
 	fs.Usage = func() {
