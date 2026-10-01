@@ -72,6 +72,31 @@ headers are MockPass's, so tests written for MockPass carry over.
 `FAKE_AUTO=true` instead approves every login without headers, as the first
 test user.
 
+## When a login fails
+
+The fake server explains rejections more than Singpass does. The
+`error_description` your app receives says what was wrong and, for the usual
+mistakes, how to fix them:
+
+- an unregistered client or redirect URI
+- the wrong signing key or `kid`
+- a `client_assertion` whose `aud` isn't the issuer
+- a DPoP `htu` that isn't the server's endpoint
+- a scope the client isn't registered for
+- a DPoP key that changed between PAR and the token request
+- a code used twice
+
+The same explanation is in the container's log (`docker logs`), one line per
+rejection.
+
+The log also flags a request that reaches the server at another host or port
+than its URL, which is what happens when you publish other ports without
+changing `FAKE_SINGPASS_URL` / `FAKE_CORPPASS_URL`:
+
+```
+level=WARN msg="This request reached the server at localhost:8080, but its URL is http://localhost:5156: set the server's URL to the one clients use (…)" server=Singpass
+```
+
 ## Configuration
 
 Every flag of the command can be set with an environment variable, `FAKE_`
