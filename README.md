@@ -243,6 +243,23 @@ singpass-fake-server -config clients.json   # Singpass at http://127.0.0.1:5156/
 See the [command's documentation](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-fake-server)
 for the file format.
 
+**Choosing the user in a headless test.** Send MockPass's `X-Custom-*`
+headers on the authorization request (the GET of the URL `BeginLogin`
+returns) and the login is approved straight away as that user, even with the
+sign-in page on:
+
+| Header | Value |
+| --- | --- |
+| `X-Custom-NRIC` | the NRIC or FIN: a test user's, or any other for a new user |
+| `X-Custom-UEN` | Corppass only, and required there: the entity |
+| `X-Custom-UUID` | optional: replaces the user's Singpass UUID (`sub`, or `act.sub` on Corppass) |
+| `X-Custom-Name` | optional: a new user's name |
+| `X-Custom-Error` | `access_denied`: the user cancels |
+
+Each login chooses its own user, so parallel tests don't interfere. In Go,
+`srv.AuthorizeAs(ctx, url, singpasstest.LoginAs{NRIC: "S8012345F"})` does the
+same.
+
 **Your own test users.** Add them from a JSON file — to the standalone server
 with `-personas users.json`, to the demo's mock mode with
 `DEMO_MOCK_PERSONAS=users.json`, or to a test with

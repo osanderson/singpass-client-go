@@ -81,7 +81,8 @@ type Config struct {
 	// Interactive serves a sign-in page listing the personas, with a cancel
 	// button, for a browser to use. Otherwise every authorization is approved
 	// straight away as the current persona (see SetPersona) — what automated
-	// tests want.
+	// tests want. Either way, a request with the X-Custom-* headers (see
+	// HeaderNRIC) is approved straight away as the user they choose.
 	Interactive bool
 }
 
@@ -434,6 +435,12 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
+	// Check the X-Custom-* headers before the request_uri is used up.
+	as, persona, err := s.headerLogin(r.Header)
+	if err != nil {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
 	q := r.URL.Query()
 	action, err := s.srv.BeginAuthorization(r.Context(), server.BeginAuthorizationRequest{
 		RequestURI: q.Get("request_uri"),
@@ -448,14 +455,31 @@ func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		writeAuthorizationAction(w, action)
 		return
 	}
-	if s.cfg.Interactive {
+	switch {
+	case as.Cancel:
+		s.complete(w, r, interaction.Handle, interaction.Interaction.Scope, nil)
+	case as != (LoginAs{}):
+		s.remember(persona)
+		s.complete(w, r, interaction.Handle, interaction.Interaction.Scope, &persona)
+	case s.cfg.Interactive:
 		renderSignIn(w, s, interaction)
-		return
+	default:
+		s.mu.Lock()
+		p := s.personas[s.current]
+		s.mu.Unlock()
+		s.complete(w, r, interaction.Handle, interaction.Interaction.Scope, &p)
 	}
+}
+
+// remember keeps a user who isn't one of the personas, or is one changed by
+// LoginAs, so /userinfo can find its data.
+func (s *Server) remember(p Persona) {
 	s.mu.Lock()
-	p := s.personas[s.current]
-	s.mu.Unlock()
-	s.complete(w, r, interaction.Handle, interaction.Interaction.Scope, &p)
+	defer s.mu.Unlock()
+	if s.custom == nil {
+		s.custom = map[string]Persona{}
+	}
+	s.custom[p.Subject] = p
 }
 
 func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
@@ -485,13 +509,7 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 		if corppass {
 			p = EntityPersona(uen, r.PostFormValue("entity"), nric, r.PostFormValue("name"))
 		}
-		// Remember the custom user, so /userinfo can find its data.
-		s.mu.Lock()
-		if s.custom == nil {
-			s.custom = map[string]Persona{}
-		}
-		s.custom[p.Subject] = p
-		s.mu.Unlock()
+		s.remember(p)
 		s.complete(w, r, handle, scope, &p)
 		return
 	}
@@ -682,15 +700,25 @@ func filterByScope(m map[string]any, scopes []string) map[string]any {
 // Authorize performs the browser's part of a login for tests: it follows
 // redirectURL (from singpass.Client.BeginLogin) to the fake's authorization
 // endpoint and returns the raw query of the resulting callback, ready for
-// singpass.Client.Complete. The Server must not be Interactive.
+// singpass.Client.Complete. It logs in as the current persona (see
+// SetPersona), so the Server must not be Interactive; AuthorizeAs chooses
+// the user.
 func (s *Server) Authorize(ctx context.Context, redirectURL string) (string, error) {
-	if s.cfg.Interactive {
-		return "", errors.New("singpasstest: Authorize needs a non-interactive server")
+	return s.AuthorizeAs(ctx, redirectURL, LoginAs{})
+}
+
+// AuthorizeAs is Authorize logging in as the user as chooses, by sending it
+// as the X-Custom-* headers. It works on an Interactive Server too, unless as
+// is the zero LoginAs.
+func (s *Server) AuthorizeAs(ctx context.Context, redirectURL string, as LoginAs) (string, error) {
+	if s.cfg.Interactive && as == (LoginAs{}) {
+		return "", errors.New("singpasstest: Authorize needs a non-interactive server, or a LoginAs")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, redirectURL, nil)
 	if err != nil {
 		return "", err
 	}
+	req.Header = as.Header()
 	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	res, err := noFollow.Do(req)
 	if err != nil {
