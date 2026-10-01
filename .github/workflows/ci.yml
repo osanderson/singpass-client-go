@@ -156,11 +156,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   # Builds the singpass-fake-server image and logs in against it with this
-  # library — the test clients, keys fetched from the server, X-Custom-*
-  # headers (cmd/singpass-fake-server/image_test.go) — in each of
-  # docs/docker.md's setups: from the runner through the published ports,
-  # from a container sharing the fake server's network namespace, and by
-  # service name over HTTPS.
+  # library in each of docs/docker.md's setups (scripts/fake-server-smoke.sh):
+  # from the runner through the published ports, from a container sharing
+  # the fake server's network namespace, and by service name over HTTPS.
   fake-server-image:
     name: docker (fake server image)
     runs-on: ubuntu-latest
@@ -186,59 +184,8 @@ jobs:
           cache-from: type=gha,scope=fake-server
           cache-to: type=gha,mode=max,scope=fake-server
 
-      - name: Start the fake server and wait for its health check
-        run: |
-          docker run -d --name fake -p 5156:5156 -p 5157:5157 singpass-fake-server:ci
-          for _ in $(seq 30); do
-            status=$(docker inspect -f '{{.State.Health.Status}}' fake)
-            [ "$status" = healthy ] && exit 0
-            sleep 1
-          done
-          docker logs fake
-          echo "fake server not healthy: $status"
-          exit 1
-
-      - name: Log in from the runner
-        env:
-          GOWORK: "off"
-          SMOKE_SINGPASS_ISSUER: http://localhost:5156/fapi
-          SMOKE_CORPPASS_ISSUER: http://localhost:5157
-        run: go test -count=1 -run '^TestImage$' -v ./cmd/singpass-fake-server
-
-      - name: Log in from a container sharing its network
-        env:
-          GOWORK: "off"
-          CGO_ENABLED: "0"
-        run: |
-          go test -c -o smoke.test ./cmd/singpass-fake-server
-          docker run --rm --network container:fake -v "$PWD/smoke.test:/smoke.test:ro" \
-            -e SMOKE_SINGPASS_ISSUER=http://localhost:5156/fapi -e SMOKE_CORPPASS_ISSUER=http://localhost:5157 \
-            --entrypoint /smoke.test singpass-fake-server:ci -test.run '^TestImage$' -test.v
-
-      # The same login by service name over HTTPS: the fake server keeps a
-      # test CA in a volume the app container trusts.
-      - name: Log in by service name over HTTPS
-        run: |
-          docker network create fakenet
-          docker volume create fakecerts
-          docker run -d --name fake-tls --network fakenet --network-alias singpass --network-alias corppass \
-            -v fakecerts:/certs -e FAKE_TLS_CA_DIR=/certs \
-            -e FAKE_SINGPASS_URL=https://singpass:5156 -e FAKE_CORPPASS_URL=https://corppass:5157 \
-            singpass-fake-server:ci
-          for _ in $(seq 30); do
-            [ "$(docker inspect -f '{{.State.Health.Status}}' fake-tls)" = healthy ] && break
-            sleep 1
-          done
-          docker run --rm --network fakenet -v fakecerts:/certs:ro -v "$PWD/smoke.test:/smoke.test:ro" \
-            -e SMOKE_CA_FILE=/certs/ca.pem \
-            -e SMOKE_SINGPASS_ISSUER=https://singpass:5156/fapi -e SMOKE_CORPPASS_ISSUER=https://corppass:5157 \
-            --entrypoint /smoke.test singpass-fake-server:ci -test.run '^TestImage$' -test.v
-
-      - name: Fake server logs
-        if: always()
-        run: |
-          docker logs fake
-          docker logs fake-tls || true
+      - name: Log in against the image in each setup
+        run: scripts/fake-server-smoke.sh singpass-fake-server:ci
 
   actionlint:
     name: actionlint

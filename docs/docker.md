@@ -336,7 +336,9 @@ and `latest`, with build provenance and an SBOM. Before 1.0, a minor release
 may change behaviour, so pin the minor version in CI.
 
 The latest release's image is rebuilt weekly with patched base images and Go
-toolchain, and its tags move to the rebuild. The fake server's own code
+toolchain, and its tags move to the rebuild. Every image is tested before
+it's published: this library logs in against it in each setup above. The
+published `latest` is pulled and tested again daily, on amd64 and arm64. The fake server's own code
 doesn't change. To keep an exact image, pin its digest
 (`ghcr.io/osanderson/singpass-fake-server@sha256:…`).
 
