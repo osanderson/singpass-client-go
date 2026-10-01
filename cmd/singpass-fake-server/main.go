@@ -5,6 +5,10 @@
 //
 //	go run github.com/osanderson/singpass-client-go/cmd/singpass-fake-server@latest
 //
+// or as a container image (see docs/docker.md):
+//
+//	docker run --rm -p 5156:5156 -p 5157:5157 ghcr.io/osanderson/singpass-fake-server
+//
 // It is a community test tool, not Singpass or Corppass, and is not
 // affiliated with or endorsed by GovTech, Singpass or Corppass.
 //

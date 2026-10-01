@@ -1,7 +1,7 @@
 name: CI
 
 # Format, vet, lint, build, test and vulnerability-check both modules, check
-# the demo image builds, lint the workflows, and analyse the code on
+# the demo image builds, smoke-test the fake server image, lint the workflows, and analyse the code on
 # SonarQube Cloud. Runs on every pull request
 # (required by the protect-main ruleset) and is reused by deploy.yml, so a
 # push to main is checked before it deploys.
@@ -154,6 +154,69 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Builds the singpass-fake-server image and logs in against it with this
+  # library — the test clients, keys fetched from the server, X-Custom-*
+  # headers (cmd/singpass-fake-server/image_test.go) — once from the runner
+  # through the published ports, and once from a container sharing the fake
+  # server's network namespace, as docs/docker.md's compose recipe does.
+  fake-server-image:
+    name: docker (fake server image)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: cmd/singpass-fake-server/Dockerfile
+          load: true
+          tags: singpass-fake-server:ci
+          cache-from: type=gha,scope=fake-server
+          cache-to: type=gha,mode=max,scope=fake-server
+
+      - name: Start the fake server and wait for its health check
+        run: |
+          docker run -d --name fake -p 5156:5156 -p 5157:5157 singpass-fake-server:ci
+          for _ in $(seq 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' fake)
+            [ "$status" = healthy ] && exit 0
+            sleep 1
+          done
+          docker logs fake
+          echo "fake server not healthy: $status"
+          exit 1
+
+      - name: Log in from the runner
+        env:
+          GOWORK: "off"
+          SMOKE_SINGPASS_ISSUER: http://localhost:5156/fapi
+          SMOKE_CORPPASS_ISSUER: http://localhost:5157
+        run: go test -count=1 -run '^TestImage$' -v ./cmd/singpass-fake-server
+
+      - name: Log in from a container sharing its network
+        env:
+          GOWORK: "off"
+          CGO_ENABLED: "0"
+        run: |
+          go test -c -o smoke.test ./cmd/singpass-fake-server
+          docker run --rm --network container:fake -v "$PWD/smoke.test:/smoke.test:ro" \
+            -e SMOKE_SINGPASS_ISSUER=http://localhost:5156/fapi -e SMOKE_CORPPASS_ISSUER=http://localhost:5157 \
+            --entrypoint /smoke.test singpass-fake-server:ci -test.run '^TestImage$' -test.v
+
+      - name: Fake server logs
+        if: always()
+        run: docker logs fake
 
   actionlint:
     name: actionlint
