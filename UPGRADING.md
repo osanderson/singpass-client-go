@@ -9,7 +9,7 @@ to adapt to the ones that need edits.
 
 ### Protocol sessions keep one opaque record
 
-FAPIgo now keeps everything a login needs between `BeginLogin` and `Complete`
+FAPIgo v0.43.0 keeps everything a login needs between `BeginLogin` and `Complete`
 (the nonce, PKCE verifier, expected issuer, redirect URI and response mode, and
 from now on any `max_age`) in one opaque, versioned JSON `Record` that it owns.
 A session store persists `State`, `Record` and `ExpiresAt`, and `Consume`
