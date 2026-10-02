@@ -65,6 +65,8 @@ func TestServerRejectsBadRequests(t *testing.T) {
 			http.StatusBadRequest, "invalid_request", "authentication_context_message"},
 		{"PAR with a message over 100 characters", "/par", url.Values{"client_id": {"login-rp"}, "authentication_context_type": {"X"}, "authentication_context_message": {strings.Repeat("a", 101)}},
 			http.StatusBadRequest, "invalid_request", "authentication_context_message"},
+		{"PAR without openid", "/par", url.Values{"client_id": {"myinfo-rp"}, "scope": {"name"}},
+			http.StatusBadRequest, "invalid_scope", "scope must include openid"},
 		{"token with another grant type", "/token", url.Values{"grant_type": {"client_credentials"}},
 			http.StatusBadRequest, "unsupported_grant_type", ""},
 		{"token without client authentication", "/token", url.Values{"grant_type": {"authorization_code"}, "code": {"nope"}},
@@ -87,9 +89,26 @@ func TestServerRejectsMalformedRequests(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		var e oauthError
+		_ = json.NewDecoder(res.Body).Decode(&e)
 		res.Body.Close()
-		if res.StatusCode != http.StatusBadRequest {
-			t.Errorf("%s with a JSON body: %d, want 400", path, res.StatusCode)
+		if res.StatusCode != http.StatusBadRequest || e.Error != "invalid_request" ||
+			!strings.HasPrefix(e.Description, "the request body must be application/x-www-form-urlencoded") {
+			t.Errorf("%s with a JSON body: %d %+v", path, res.StatusCode, e)
+		}
+	}
+
+	// /userinfo with two Authorization headers is malformed (RFC 9110 §5.3),
+	// not answered with the first.
+	req, _ := http.NewRequest(http.MethodGet, srv.Issuer()+"/userinfo", nil)
+	req.Header.Add("Authorization", "DPoP a")
+	req.Header.Add("Authorization", "DPoP b")
+	if res, err := http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
+	} else {
+		res.Body.Close()
+		if challenge := res.Header.Get("WWW-Authenticate"); res.StatusCode != http.StatusBadRequest || !strings.Contains(challenge, "invalid_request") {
+			t.Errorf("/userinfo with two Authorization headers: %d, WWW-Authenticate %q", res.StatusCode, challenge)
 		}
 	}
 

@@ -78,9 +78,7 @@ func (s *Server) hint(r *http.Request, param func(string) string, serr *server.E
 		if c.cfg.AnyLoopbackRedirectURI {
 			h = fmt.Sprintf("Client %q accepts any http://localhost redirect URI", clientID)
 		}
-		return fmt.Sprintf("%s, not %q", h, parRedirectURI(server.FormRequest{Parameters: []server.FormParameter{
-			{Name: "redirect_uri", Value: param("redirect_uri")}, {Name: "request", Value: param("request")},
-		}}))
+		return fmt.Sprintf("%s, not %q", h, requestParam(param, "redirect_uri"))
 
 	case desc == "no matching client key" && registered:
 		return fmt.Sprintf("The client_assertion's header has kid %q, but client %q's signing key is kid %q%s",

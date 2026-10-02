@@ -28,6 +28,8 @@
 //     is the subject and the acting person is the "act" claim.
 //   - Redirect URIs may be http://localhost for local apps, as Singpass
 //     staging allows.
+//   - A pushed authorization request without the openid scope is refused
+//     (invalid_scope).
 //
 // Test users are Personas: fictitious people and a company, with Myinfo data
 // in the real envelope shape (see DefaultPersonas). Logins are approved
@@ -60,8 +62,9 @@
 //
 // Where a specification is stricter than Singpass, the fake follows the
 // specification, so an integration that passes here doesn't depend on
-// Singpass's leniency: the authorization endpoint, for one, refuses a
-// repeated client_id or request_uri (RFC 6749 §3.1). Where Singpass departs
+// Singpass's leniency: the authorization endpoint refuses a repeated
+// client_id or request_uri (RFC 6749 §3.1), and /userinfo a repeated
+// Authorization header (RFC 9110 §5.3). Where Singpass departs
 // from a specification on purpose, the fake does what Singpass does (the
 // behaviours listed above). A rejection on a specification's account says so.
 //

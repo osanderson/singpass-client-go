@@ -106,7 +106,9 @@ mistakes, how to fix them:
 - a scope the client isn't registered for
 - a DPoP key that changed between PAR and the token request
 - a code used twice
-- a repeated `client_id` or `request_uri` on the authorization request
+- a repeated `client_id` or `request_uri` on the authorization request, or a
+  repeated `Authorization` header on `/userinfo`
+- a scope without `openid`, which Singpass refuses
 
 Where a specification is stricter than Singpass, the fake follows the
 specification, and says so in the rejection: a request Singpass lets through
