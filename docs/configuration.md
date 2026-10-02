@@ -61,7 +61,9 @@ unapproved scopes still fail at login.
 - **A durable `Sessions` store**: use `sqlstore` (Postgres, MySQL, SQLite), or
   implement the two-method
   `singpass.SessionStore` (`Create` / atomic `Consume`) and declare
-  `singpass.StoreAssurance`. `Consume` should return (or wrap)
+  `singpass.StoreAssurance`. Persist each session's `State`, `ExpiresAt` and
+  opaque `Record` (FAPIgo's JSON, kept as is) and return the `Record` from
+  `Consume`. `Consume` should return (or wrap)
   `singpass.ErrLoginExpired` for an unknown, used or expired state, so callers
   can tell a stale login from a failure. Verify your implementation with
   FAPIgo's contract suite in a test:

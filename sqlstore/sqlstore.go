@@ -64,9 +64,9 @@ const (
 // Config configures a Store.
 type Config struct {
 	Dialect Dialect
-	// TablePrefix is prepended to the two table names ("<prefix>auth_sessions"
-	// and "<prefix>login_sessions"). Empty means "singpass_". Letters, digits
-	// and underscores only.
+	// TablePrefix is prepended to the two table names
+	// ("<prefix>auth_sessions_v2" and "<prefix>login_sessions"). Empty means
+	// "singpass_". Letters, digits and underscores only.
 	TablePrefix string
 	// Now returns the current time; nil means time.Now. For tests.
 	Now func() time.Time
@@ -98,7 +98,7 @@ func New(db *sql.DB, cfg Config) *Store {
 	if now == nil {
 		now = time.Now
 	}
-	return &Store{db: db, dialect: cfg.Dialect, auth: prefix + "auth_sessions", login: prefix + "login_sessions", now: now}
+	return &Store{db: db, dialect: cfg.Dialect, auth: prefix + "auth_sessions_v2", login: prefix + "login_sessions", now: now}
 }
 
 // ph returns the n-th (1-based) placeholder for the dialect.
@@ -135,12 +135,12 @@ func (s *Store) CreateTables(ctx context.Context) error {
 		blob = "MEDIUMTEXT" // large Myinfo responses can exceed TEXT's 64 KB
 	}
 	tables := []struct{ name, columns string }{
+		// record is FAPIgo's opaque session record (JSON: the nonce, PKCE
+		// verifier, expected issuer and redirect URI, and the rest), kept as
+		// is. The table replaced <prefix>auth_sessions, which held those as
+		// columns; drop that one once no instance uses it.
 		{s.auth, `state VARCHAR(255) NOT NULL PRIMARY KEY,
-			nonce VARCHAR(255) NOT NULL,
-			pkce_verifier VARCHAR(255) NOT NULL,
-			expected_issuer VARCHAR(2048) NOT NULL,
-			expected_redirect_uri VARCHAR(2048) NOT NULL,
-			expected_response_mode VARCHAR(64) NOT NULL,
+			record TEXT NOT NULL,
 			expires_at BIGINT NOT NULL`}, // Unix nanoseconds
 		// sid is the session id's SHA-256, in hex (sidHash).
 		{s.login, `sid VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -199,10 +199,8 @@ func (authSessions) Capabilities() storage.Capabilities {
 }
 
 func (a authSessions) Create(ctx context.Context, n storage.NewSession) error {
-	_, err := a.s.db.ExecContext(ctx, a.s.q(`INSERT INTO `+a.s.auth+
-		` (state, nonce, pkce_verifier, expected_issuer, expected_redirect_uri, expected_response_mode, expires_at)
-		  VALUES (?, ?, ?, ?, ?, ?, ?)`),
-		n.State, n.Nonce, n.PKCEVerifier, n.ExpectedIssuer, n.ExpectedRedirectURI, n.ExpectedResponseMode, n.ExpiresAt.UnixNano())
+	_, err := a.s.db.ExecContext(ctx, a.s.q(`INSERT INTO `+a.s.auth+` (state, record, expires_at) VALUES (?, ?, ?)`),
+		n.State, string(n.Record), n.ExpiresAt.UnixNano())
 	if err != nil {
 		return fmt.Errorf("sqlstore: create session: %w", err)
 	}
@@ -215,12 +213,11 @@ func (a authSessions) Create(ctx context.Context, n storage.NewSession) error {
 // states report singpass.ErrLoginExpired.
 func (a authSessions) Consume(ctx context.Context, c storage.SessionConsumption) (storage.ConsumedSession, error) {
 	var (
-		out       storage.ConsumedSession
+		record    string
 		expiresNs int64
 	)
-	err := a.s.db.QueryRowContext(ctx, a.s.q(`SELECT nonce, pkce_verifier, expected_issuer, expected_redirect_uri, expected_response_mode, expires_at
-		FROM `+a.s.auth+` WHERE state = ?`), c.State).
-		Scan(&out.Nonce, &out.PKCEVerifier, &out.ExpectedIssuer, &out.ExpectedRedirectURI, &out.ExpectedResponseMode, &expiresNs)
+	err := a.s.db.QueryRowContext(ctx, a.s.q(`SELECT record, expires_at FROM `+a.s.auth+` WHERE state = ?`), c.State).
+		Scan(&record, &expiresNs)
 	if errors.Is(err, sql.ErrNoRows) {
 		return storage.ConsumedSession{}, singpass.ErrLoginExpired
 	}
@@ -236,7 +233,7 @@ func (a authSessions) Consume(ctx context.Context, c storage.SessionConsumption)
 	} else if n != 1 {
 		return storage.ConsumedSession{}, singpass.ErrLoginExpired // another caller consumed it first
 	}
-	out.ExpiresAt = time.Unix(0, expiresNs)
+	out := storage.ConsumedSession{Record: json.RawMessage(record), ExpiresAt: time.Unix(0, expiresNs)}
 	if !a.s.now().Before(out.ExpiresAt) {
 		return storage.ConsumedSession{}, singpass.ErrLoginExpired
 	}
