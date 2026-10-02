@@ -5,6 +5,51 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.14.0
+
+### Protocol sessions keep one opaque record
+
+FAPIgo now keeps everything a login needs between `BeginLogin` and `Complete`
+(the nonce, PKCE verifier, expected issuer, redirect URI and response mode, and
+from now on any `max_age`) in one opaque, versioned JSON `Record` that it owns.
+A session store persists `State`, `Record` and `ExpiresAt`, and `Consume`
+returns the `Record` and `ExpiresAt`. A future FAPIgo feature changes only the
+record, never your store.
+
+**`sqlstore` users:** protocol sessions move to a new table,
+`<prefix>auth_sessions_v2` (`state`, `record`, `expires_at`). The old
+`<prefix>auth_sessions` table isn't read any more.
+
+1. Before deploying, create the new table: call `CreateTables` again (it only
+   adds what's missing), or add it to your own migrations:
+
+   ```sql
+   CREATE TABLE singpass_auth_sessions_v2 (
+       state VARCHAR(255) NOT NULL PRIMARY KEY,
+       record TEXT NOT NULL,
+       expires_at BIGINT NOT NULL  -- Unix nanoseconds
+   );
+   CREATE INDEX singpass_auth_sessions_v2_expires ON singpass_auth_sessions_v2 (expires_at);
+   ```
+
+   On MySQL, declare the index inline (`INDEX … (expires_at)`), as
+   `CreateTables` does.
+2. Deploy.
+3. Once no instance runs the old version, drop `<prefix>auth_sessions`.
+
+Login sessions (`<prefix>login_sessions`) are unchanged.
+
+**Your own `Dependencies.Sessions` store:** persist `NewSession.Record` as is
+(byte for byte, or as equivalent JSON) and return it as
+`ConsumedSession.Record`; drop the `Nonce`, `PKCEVerifier`, `ExpectedIssuer`,
+`ExpectedRedirectURI` and `ExpectedResponseMode` fields.
+`storage.TestSessionStoreContract` checks the round trip. A store that returns
+no record fails every callback with an error naming `NewSession.Record`.
+
+**Either way:** a login in progress during the deploy, started on the old
+version, fails at its callback, and the user starts again. Sessions last a few
+minutes.
+
 ## v0.13.0
 
 ### Production: a shared DPoP key

@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -59,7 +60,7 @@ func TestConsumeStaleIsLoginExpired(t *testing.T) {
 	s := newStore(t, Config{Now: func() time.Time { return now }})
 	sessions := s.Sessions()
 	for _, st := range []string{"used", "stale"} {
-		if err := sessions.Create(ctx, storage.NewSession{State: st, Nonce: "n", ExpiresAt: now.Add(5 * time.Minute)}); err != nil {
+		if err := sessions.Create(ctx, storage.NewSession{State: st, Record: json.RawMessage(`{"v":1}`), ExpiresAt: now.Add(5 * time.Minute)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -71,6 +72,40 @@ func TestConsumeStaleIsLoginExpired(t *testing.T) {
 		if _, err := sessions.Consume(ctx, storage.SessionConsumption{State: st}); !errors.Is(err, singpass.ErrLoginExpired) {
 			t.Errorf("Consume(%q) = %v, want ErrLoginExpired", st, err)
 		}
+	}
+}
+
+// A database from before the session record still has the old protocol
+// sessions table: CreateTables adds the new one beside it, logins use the new
+// one, and the old one is left alone, to be dropped.
+func TestCreateTablesBesideTheOldSessionsTable(t *testing.T) {
+	ctx := context.Background()
+	dsn := "file:" + filepath.Join(t.TempDir(), "sessions.db")
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.ExecContext(ctx, `CREATE TABLE singpass_auth_sessions (state VARCHAR(255) NOT NULL PRIMARY KEY,
+		nonce VARCHAR(255) NOT NULL, pkce_verifier VARCHAR(255) NOT NULL, expected_issuer VARCHAR(2048) NOT NULL,
+		expected_redirect_uri VARCHAR(2048) NOT NULL, expected_response_mode VARCHAR(64) NOT NULL, expires_at BIGINT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	s := New(db, Config{Dialect: SQLite})
+	if err := s.CreateTables(ctx); err != nil {
+		t.Fatalf("CreateTables: %v", err)
+	}
+	record := json.RawMessage(`{"v":1,"nonce":"n"}`)
+	if err := s.Sessions().Create(ctx, storage.NewSession{State: "st", Record: record, ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := s.Sessions().Consume(ctx, storage.SessionConsumption{State: "st"})
+	if err != nil || string(got.Record) != string(record) {
+		t.Fatalf("Consume = %s, %v", got.Record, err)
+	}
+	var old int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM singpass_auth_sessions`).Scan(&old); err != nil || old != 0 {
+		t.Errorf("old table: %d rows, %v", old, err)
 	}
 }
 

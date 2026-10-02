@@ -108,8 +108,9 @@ singpass: construct client: client: dependencies: sessions must implement storag
 ```
 
 - [ ] **Protocol sessions (`Dependencies.Sessions`, a `singpass.SessionStore`).**
-      These hold the state, nonce and PKCE verifier between `BeginLogin` and
-      `Complete`, for a few minutes. The store must:
+      These hold each login's state and FAPIgo's opaque session record (its
+      nonce, PKCE verifier and the rest) between `BeginLogin` and `Complete`,
+      for a few minutes. The store must:
       - be **shared by every instance**, since the callback can reach a
         different instance from the one that started the login (which also
         needs the shared `DPoPKey` above);

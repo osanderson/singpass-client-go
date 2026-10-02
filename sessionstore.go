@@ -34,7 +34,8 @@ var ErrLoginExpired = errors.New("singpass: login expired or already used")
 const sessionSweepInterval = time.Minute
 
 // NewMemorySessionStore returns an in-memory storage.SessionStore for FAPIgo's
-// in-flight authorization state (state, nonce, PKCE verifier) between
+// in-flight authorization state (the state, and the record holding the nonce,
+// PKCE verifier and the rest) between
 // BeginLogin and Complete. It is the default when Dependencies.Sessions is nil.
 //
 // Unlike FAPIgo's memstore, which keeps a session until its callback arrives, it
@@ -110,12 +111,5 @@ func (s *memorySessionStore) Consume(_ context.Context, c storage.SessionConsump
 	if !ok || !now.Before(sess.ExpiresAt) {
 		return storage.ConsumedSession{}, ErrLoginExpired
 	}
-	return storage.ConsumedSession{
-		Nonce:                sess.Nonce,
-		PKCEVerifier:         sess.PKCEVerifier,
-		ExpectedIssuer:       sess.ExpectedIssuer,
-		ExpectedRedirectURI:  sess.ExpectedRedirectURI,
-		ExpectedResponseMode: sess.ExpectedResponseMode,
-		ExpiresAt:            sess.ExpiresAt,
-	}, nil
+	return storage.ConsumedSession{Record: sess.Record, ExpiresAt: sess.ExpiresAt}, nil
 }
