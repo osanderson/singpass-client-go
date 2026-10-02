@@ -120,6 +120,11 @@ func (s *Server) hint(r *http.Request, param func(string) string, serr *server.E
 	case desc == "code_verifier does not match code_challenge":
 		return "Send the PKCE code_verifier of the login this code came from"
 
+	case strings.HasSuffix(desc, "is included more than once") || desc == "the authorization request's query is malformed":
+		return "RFC 6749 section 3.1 forbids a repeated parameter. Singpass may let it through today, but this fake follows the " +
+			"spec where it's stricter: send the browser to the authorization URL as your pushed authorization request built it, " +
+			"with client_id and request_uri once each"
+
 	case strings.HasPrefix(desc, "code is invalid, expired, or already used"):
 		return "A code works once, soon after the login, and this server keeps codes in memory, so a restart forgets them"
 	}

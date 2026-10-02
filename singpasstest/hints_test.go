@@ -238,3 +238,46 @@ func randID() string {
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+// The authorization request is read strictly: a repeated client_id or
+// request_uri is refused, saying the spec forbids it, and doesn't use up the
+// login.
+func TestAuthorizeRefusesRepeatedParameters(t *testing.T) {
+	ctx := context.Background()
+	srv, log := loggingServer(t, singpasstest.Config{})
+	c := myinfoClient(t, srv)
+	redirectURL, state, err := c.BeginLogin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(redirectURL)
+	for _, param := range []string{"client_id", "request_uri"} {
+		repeated := *u
+		q := repeated.Query()
+		q.Add(param, q.Get(param))
+		repeated.RawQuery = q.Encode()
+		res, err := http.Get(repeated.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var e oauthError
+		_ = json.NewDecoder(res.Body).Decode(&e)
+		res.Body.Close()
+		if res.StatusCode != http.StatusBadRequest || e.Error != "invalid_request" ||
+			!strings.Contains(e.Description, param+" is included more than once") || !strings.Contains(e.Description, "RFC 6749 section 3.1") {
+			t.Errorf("repeated %s: %d %+v", param, res.StatusCode, e)
+		}
+	}
+	if !strings.Contains(log.String(), "rejected GET /fapi/auth") {
+		t.Errorf("not logged:\n%s", log.String())
+	}
+
+	// The login still completes with the URL as PAR built it.
+	query, err := srv.Authorize(ctx, redirectURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Complete(ctx, query, state); err != nil {
+		t.Fatalf("login after the refusals: %v", err)
+	}
+}
