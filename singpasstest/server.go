@@ -492,18 +492,23 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	// Check the X-Custom-* headers before the request_uri is used up.
 	q := r.URL.Query()
 	note(w, q.Get("client_id"), "")
+	// Read the request strictly: a repeated client_id or request_uri is
+	// refused, as RFC 6749 §3.1 requires, though a lenient server would
+	// quietly take the first.
+	req, err := server.BeginAuthorizationRequestFromHTTP(r)
+	if err != nil {
+		s.reject(w, r, q.Get, err)
+		return
+	}
+	// Check the X-Custom-* headers before the request_uri is used up.
 	as, persona, err := s.headerLogin(r.Header)
 	if err != nil {
 		s.rejectWith(w, r, q.Get, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	action, err := s.srv.BeginAuthorization(r.Context(), server.BeginAuthorizationRequest{
-		RequestURI: q.Get("request_uri"),
-		ClientID:   fapi.ClientID(q.Get("client_id")),
-	})
+	action, err := s.srv.BeginAuthorization(r.Context(), req)
 	if err != nil {
 		s.reject(w, r, q.Get, err)
 		return

@@ -58,6 +58,13 @@
 // (cmd/singpass-fake-server). Config.BaseURL sets the URL clients reach a
 // server at, e.g. when it runs in a container.
 //
+// Where a specification is stricter than Singpass, the fake follows the
+// specification, so an integration that passes here doesn't depend on
+// Singpass's leniency: the authorization endpoint, for one, refuses a
+// repeated client_id or request_uri (RFC 6749 §3.1). Where Singpass departs
+// from a specification on purpose, the fake does what Singpass does (the
+// behaviours listed above). A rejection on a specification's account says so.
+//
 // Being a test tool, it explains a rejection more than Singpass does: the
 // error_description adds the cause and, for the usual mistakes (an
 // unregistered client or redirect URI, the wrong key, a client_assertion aud
