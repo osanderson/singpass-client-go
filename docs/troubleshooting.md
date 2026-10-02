@@ -23,6 +23,7 @@ Corppass uses the same codes.
 | `discover metadata` fails | The issuer URL is wrong or unreachable | Use the library's defaults: the Singpass issuer ends in `/fapi`, Corppass's doesn't ([singpass-quirks.md](singpass-quirks.md#discovery)). Check outbound HTTPS to `stg-id.singpass.gov.sg` / `id.singpass.gov.sg`. |
 | `AssuranceProduction` refuses the session store | Production needs a durable store | Set `Dependencies.Sessions`, e.g. from `sqlstore` ([production.md](production.md)). |
 | `AssuranceProduction needs a DPoP key shared by every instance` | The DPoP key would be generated per process | Set `DPoPKey` to a key every instance loads ([production.md](production.md#2-client-configuration)). |
+| `sqlstore: create session` / `read session`: `relation "singpass_auth_sessions_v2" does not exist` (Postgres), or `Table '….singpass_auth_sessions_v2' doesn't exist` (MySQL) | Upgraded to v0.14.0 without creating `sqlstore`'s new protocol sessions table, so the first login fails | Call `CreateTables`, or add the table to your migrations ([UPGRADING.md](../UPGRADING.md#v0140)). |
 
 ## At `BeginLogin` (PAR)
 
