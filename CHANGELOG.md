@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/osanderson/singpass-client-go/compare/v0.14.1...v0.14.2) (2026-10-04)
+
+
+### Bug Fixes
+
+* **deps:** bump modernc.org/sqlite from 1.59.0 to 1.60.1 ([#102](https://github.com/osanderson/singpass-client-go/issues/102)) ([c912242](https://github.com/osanderson/singpass-client-go/commit/c912242d3f6444002036a77dd94d136da7e6976f))
+
 ## [0.14.1](https://github.com/osanderson/singpass-client-go/compare/v0.14.0...v0.14.1) (2026-10-04)
 
 
