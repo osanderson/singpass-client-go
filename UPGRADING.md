@@ -9,7 +9,7 @@ to adapt to the ones that need edits.
 
 ### Protocol sessions keep one opaque record
 
-FAPIgo now keeps everything a login needs between `BeginLogin` and `Complete`
+FAPIgo v0.43.0 keeps everything a login needs between `BeginLogin` and `Complete`
 (the nonce, PKCE verifier, expected issuer, redirect URI and response mode, and
 from now on any `max_age`) in one opaque, versioned JSON `Record` that it owns.
 A session store persists `State`, `Record` and `ExpiresAt`, and `Consume`
@@ -32,8 +32,20 @@ record, never your store.
    CREATE INDEX singpass_auth_sessions_v2_expires ON singpass_auth_sessions_v2 (expires_at);
    ```
 
-   On MySQL, declare the index inline (`INDEX … (expires_at)`), as
-   `CreateTables` does.
+   On MySQL, which has no `CREATE INDEX IF NOT EXISTS`, declare the index
+   inline, as `CreateTables` does:
+
+   ```sql
+   CREATE TABLE singpass_auth_sessions_v2 (
+       state VARCHAR(255) NOT NULL PRIMARY KEY,
+       record TEXT NOT NULL,
+       expires_at BIGINT NOT NULL,  -- Unix nanoseconds
+       INDEX singpass_auth_sessions_v2_expires (expires_at)
+   );
+   ```
+
+   If you skip this step, the first login fails with the database's "table
+   doesn't exist" error naming `singpass_auth_sessions_v2`.
 2. Deploy.
 3. Once no instance runs the old version, drop `<prefix>auth_sessions`.
 

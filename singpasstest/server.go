@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -446,14 +445,14 @@ func (s *Server) handleJWKS(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 	form, err := server.FormRequestFromHTTP(r)
 	if err != nil {
-		s.rejectWith(w, r, func(string) string { return "" }, http.StatusBadRequest, "invalid_request", err.Error())
+		s.reject(w, r, func(string) string { return "" }, err)
 		return
 	}
 	param := formParam(form)
 	// Singpass/Corppass: authentication_context_type is required for Login
 	// clients and rejected for Myinfo ones.
 	if c, ok := s.clients.get(fapi.ClientID(formValue(form, "client_id"))); ok {
-		if err := s.allowLoopbackRedirect(c.cfg.ID, parRedirectURI(form)); err != nil {
+		if err := s.allowLoopbackRedirect(c.cfg.ID, requestParam(param, "redirect_uri")); err != nil {
 			s.rejectWith(w, r, param, http.StatusInternalServerError, "server_error", err.Error())
 			return
 		}
@@ -476,6 +475,11 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 			s.rejectWith(w, r, param, http.StatusBadRequest, "invalid_request", "authentication_context_type is required for Login apps")
 			return
 		}
+		if !slices.Contains(strings.Fields(requestParam(param, "scope")), "openid") {
+			s.rejectWith(w, r, param, http.StatusBadRequest, "invalid_scope",
+				"scope must include openid: Singpass and Corppass refuse a request without it, as an OpenID Connect request must include it")
+			return
+		}
 	}
 	// Pass the DPoP proof on, so the code is bound to its key (RFC 9449 §10) and
 	// a token request proving another key is refused, as Singpass does.
@@ -492,18 +496,23 @@ func (s *Server) handlePAR(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	// Check the X-Custom-* headers before the request_uri is used up.
 	q := r.URL.Query()
 	note(w, q.Get("client_id"), "")
+	// Read the request strictly: a repeated client_id or request_uri is
+	// refused, as RFC 6749 §3.1 requires, though a lenient server would
+	// quietly take the first.
+	req, err := server.BeginAuthorizationRequestFromHTTP(r)
+	if err != nil {
+		s.reject(w, r, q.Get, err)
+		return
+	}
+	// Check the X-Custom-* headers before the request_uri is used up.
 	as, persona, err := s.headerLogin(r.Header)
 	if err != nil {
 		s.rejectWith(w, r, q.Get, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	action, err := s.srv.BeginAuthorization(r.Context(), server.BeginAuthorizationRequest{
-		RequestURI: q.Get("request_uri"),
-		ClientID:   fapi.ClientID(q.Get("client_id")),
-	})
+	action, err := s.srv.BeginAuthorization(r.Context(), req)
 	if err != nil {
 		s.reject(w, r, q.Get, err)
 		return
@@ -631,7 +640,7 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request, handle server.
 func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	form, err := server.FormRequestFromHTTP(r)
 	if err != nil {
-		s.rejectWith(w, r, func(string) string { return "" }, http.StatusBadRequest, "invalid_request", err.Error())
+		s.reject(w, r, func(string) string { return "" }, err)
 		return
 	}
 	param := formParam(form)
@@ -665,12 +674,9 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 	u, _ := url.Parse(s.base)
 	u.Path, u.RawQuery = r.URL.Path, r.URL.RawQuery
-	authz, err := s.rs.Verify(r.Context(), resource.VerifyRequest{
-		Method:        r.Method,
-		URL:           u,
-		Authorization: r.Header.Get("Authorization"),
-		DPoPProofs:    r.Header.Values("DPoP"),
-	})
+	// From the request itself, so a repeated Authorization header is
+	// refused (RFC 9110 §5.3) rather than the first one used.
+	authz, err := s.rs.Verify(r.Context(), resource.VerifyRequestFromHTTP(r, u))
 	if err != nil {
 		// The RFC 6750 / RFC 9449 challenge: no error code for a request
 		// without credentials, the DPoP error otherwise.
@@ -709,6 +715,7 @@ func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	note(w, authz.ClientID, "sent the Myinfo data of "+strings.TrimSpace(persona.label()+" "+persona.Name))
+	authz.SetDPoPNonce(w.Header())
 	w.Header().Set("Content-Type", "application/jwt")
 	_, _ = io.WriteString(w, jwe)
 }
@@ -878,26 +885,15 @@ func isLoopbackHTTP(raw string) bool {
 	return err == nil
 }
 
-// parRedirectURI returns a pushed authorization request's redirect_uri: the
+// requestParam returns a pushed authorization request's parameter: the
 // form parameter, or else the claim in its request object, read without
 // verifying it — the server verifies the request object itself.
-func parRedirectURI(form server.FormRequest) string {
-	if u := formValue(form, "redirect_uri"); u != "" {
-		return u
+func requestParam(param func(string) string, name string) string {
+	if v := param(name); v != "" {
+		return v
 	}
-	parts := strings.Split(formValue(form, "request"), ".")
-	if len(parts) != 3 {
-		return ""
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return ""
-	}
-	var claims struct {
-		RedirectURI string `json:"redirect_uri"`
-	}
-	_ = json.Unmarshal(payload, &claims)
-	return claims.RedirectURI
+	v, _ := jwtClaims(param("request"))[name].(string)
+	return v
 }
 
 // transport returns an HTTP transport that trusts the server's own TLS

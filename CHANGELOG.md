@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.14.1](https://github.com/osanderson/singpass-client-go/compare/v0.14.0...v0.14.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.48.1 ([#108](https://github.com/osanderson/singpass-client-go/issues/108)) ([2fa10fe](https://github.com/osanderson/singpass-client-go/commit/2fa10fe8c9f397666c35e2d73000f55026335aba))
+
+## [0.14.0](https://github.com/osanderson/singpass-client-go/compare/v0.13.0...v0.14.0) (2026-10-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** protocol sessions now keep FAPIgo's opaque session record. sqlstore moves them to a new table, <prefix>auth_sessions_v2: run CreateTables, or add the table to your own migrations, before deploying, then drop <prefix>auth_sessions. A custom Dependencies.Sessions store must persist NewSession.Record as is and return it as ConsumedSession.Record. Logins in progress during the deploy fail at their callback. See UPGRADING.md.
+
+### Features
+
+* **singpasstest:** refuse a repeated Authorization header at /userinfo ([58fed4d](https://github.com/osanderson/singpass-client-go/commit/58fed4d4bd6ad2c9c561c66c36eccad9e946b6ed))
+* **singpasstest:** refuse a repeated client_id or request_uri at the authorization endpoint ([#105](https://github.com/osanderson/singpass-client-go/issues/105)) ([75d5cc2](https://github.com/osanderson/singpass-client-go/commit/75d5cc27e756e96ac8fc2f71f292ef0cec980c12))
+
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.43.0 ([#107](https://github.com/osanderson/singpass-client-go/issues/107)) ([195ca23](https://github.com/osanderson/singpass-client-go/commit/195ca232c49a4c8fc9ebca71edaea45afcd47180))
+* **deps:** pin FAPIgo to main ahead of v0.43.0 ([6355777](https://github.com/osanderson/singpass-client-go/commit/635577755a59e888c8c706233c5b439387e2c611))
+* **deps:** pin FAPIgo to main ebc4b5f ([58fed4d](https://github.com/osanderson/singpass-client-go/commit/58fed4d4bd6ad2c9c561c66c36eccad9e946b6ed))
+* **singpasstest:** refuse a pushed authorization request without the openid scope, as Singpass does ([58fed4d](https://github.com/osanderson/singpass-client-go/commit/58fed4d4bd6ad2c9c561c66c36eccad9e946b6ed))
+
+
+### Documentation
+
+* give the MySQL SQL for sqlstore's v0.14.0 table, and the error when it's missing ([#104](https://github.com/osanderson/singpass-client-go/issues/104)) ([c131a4e](https://github.com/osanderson/singpass-client-go/commit/c131a4efa23eb6d70715dcca475ad957f85f6641))
+
 ## [0.13.0](https://github.com/osanderson/singpass-client-go/compare/v0.12.0...v0.13.0) (2026-10-01)
 
 

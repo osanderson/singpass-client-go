@@ -106,6 +106,15 @@ mistakes, how to fix them:
 - a scope the client isn't registered for
 - a DPoP key that changed between PAR and the token request
 - a code used twice
+- a repeated `client_id` or `request_uri` on the authorization request, or a
+  repeated `Authorization` header on `/userinfo`
+- a scope without `openid`, which Singpass refuses
+
+Where a specification is stricter than Singpass, the fake follows the
+specification, and says so in the rejection: a request Singpass lets through
+today may still be refused here. Fixing it keeps your integration from
+depending on that leniency. Where Singpass departs from a specification on
+purpose, the fake does what Singpass does.
 
 The same explanation is in the container's log (`docker logs`), one line per
 rejection.
