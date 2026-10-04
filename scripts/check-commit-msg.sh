@@ -41,6 +41,11 @@ fail() {
   exit 1
 }
 
+# A squash merge appends " (#123)" to the PR title. The title was checked
+# before the merge, so measure the length without that suffix: otherwise a
+# title under the limit fails once it lands on main.
+bare=$(printf '%s' "$subject" | sed -E 's/ \(#[0-9]+\)$//')
+
 [[ -n $subject ]] || fail "empty message"
 [[ $subject =~ $PATTERN ]] || fail "subject doesn't match the pattern"
-(( ${#subject} <= MAX_SUBJECT )) || fail "subject is ${#subject} chars (max ${MAX_SUBJECT})"
+(( ${#bare} <= MAX_SUBJECT )) || fail "subject is ${#bare} chars (max ${MAX_SUBJECT}), not counting a trailing (#PR number)"
