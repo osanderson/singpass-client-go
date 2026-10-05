@@ -80,10 +80,12 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
 - [ ] **`HTTPClient` / `HTTPTimeout`** suit your egress: proxy, timeouts, and
       access to `id.singpass.gov.sg` / `id.corppass.gov.sg`.
 - [ ] **Myinfo Business: the `/userinfo` `sub` check.** Corppass has fixed its
-      former `sub` = `client_id` deviation — confirmed on staging only. If a
-      production login fails with `UserInfo response sub does not match the ID
-      token's sub`, set `MyinfoBusinessOptions.TolerateUserInfoSubjectClientID`
-      (see [corppass-quirks.md](corppass-quirks.md)).
+      former `sub` = `client_id` deviation, confirmed on staging only. The
+      library checks the `sub` strictly and, since v0.15.0, can't tolerate the
+      old value. Try a production login early: if it fails with `UserInfo
+      response sub does not match the ID token's sub`, Corppass production
+      still sends the old value; please report it (see
+      [corppass-quirks.md](corppass-quirks.md)).
 
 ## 3. Durable session stores
 

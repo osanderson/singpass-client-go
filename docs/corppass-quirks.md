@@ -145,11 +145,14 @@
   `/userinfo` `sub` to the `client_id` instead of the id_token's `sub`, contrary to
   OIDC Core §5.3.2, and the library tolerated it by default. A login against
   **Corppass staging on 2026-09-26** passed FAPIgo's strict check, so it now sends
-  the correct `sub` and the tolerance is **off by default** (since v0.5.0). Production couldn't be tested here: if a Corppass environment
-  still fails with `UserInfo response sub does not match the ID token's sub`, set
-  `MyinfoBusinessOptions.TolerateUserInfoSubjectClientID` (FAPIgo's
-  `Config.TolerateUserInfoSubjectEqualsClientID`). `singpasstest` reproduces the
-  old behaviour with `Config.CorppassUserInfoSubClientID`.
+  the correct `sub` and the tolerance is **off by default** (since v0.5.0). Since
+  v0.15.0 it's **gone**: FAPIgo v0.50.0 removed
+  `Config.TolerateUserInfoSubjectEqualsClientID`, so the library always checks
+  the `sub` strictly. Production couldn't be tested here: if a Corppass
+  environment still fails with `UserInfo response sub does not match the ID
+  token's sub`, it is still sending the old value; please report it.
+  `singpasstest` reproduces the old behaviour with
+  `Config.CorppassUserInfoSubClientID`, to test that a client refuses it.
 - **DPoP-bound**, with the same `ath` proof and `DPoP-Nonce` retry as Singpass
   Myinfo — handled by FAPIgo's native `FetchUserInfo`.
 

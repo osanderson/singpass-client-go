@@ -77,11 +77,6 @@ type Options struct {
 	AppLaunchURL  string
 	AcrValues     string // optional requested level of assurance; "" to omit
 	FetchUserInfo bool   // call the FAPI /userinfo endpoint after token exchange (Myinfo)
-	// TolerateUserInfoSubjectClientID accepts a /userinfo "sub" equal to the
-	// client_id (as well as the id_token sub) — a deviation from OIDC Core
-	// §5.3.2 that Corppass Myinfo Business used to have and has since fixed.
-	// Off by default; see MyinfoBusinessOptions.TolerateUserInfoSubjectClientID.
-	TolerateUserInfoSubjectClientID bool
 }
 
 // Dependencies are a Client's injected collaborators. Only Keys and Decryption
@@ -322,7 +317,7 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		acrValues = strings.Fields(v)
 	}
 
-	return &Client{
+	c := &Client{
 		engine:        engine,
 		name:          opts.Name,
 		scopes:        opts.Scopes,
@@ -335,7 +330,14 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 		decryption:    deps.Decryption,
 		retries:       deps.BeginLoginRetries,
 		encAlg:        cfg.Algorithms.IDTokenKeyManagement,
-	}, nil
+	}
+	// Build the JWKS once, so a kid naming two different keys (the signing
+	// and encryption keys', or a rotation key's) fails here, not when the JWKS
+	// is first served.
+	if _, err := c.PublicJWKS(ctx); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // checkDependencies checks what New needs before anything else: the two
@@ -450,11 +452,8 @@ func engineConfig(opts Options, deps Dependencies, issuer fapi.URL, discovered c
 		SenderConstrain:              storage.SenderConstrainDPoP,
 		ClientAuthMethod:             storage.ClientAuthMethodPrivateKeyJWT,
 		BackchannelTokenDeliveryMode: storage.BackchannelTokenDeliveryModePoll,
-		// Opt-in: also accept a /userinfo "sub" equal to the client_id, as
-		// Corppass Myinfo Business used to send (an OIDC Core §5.3.2 deviation).
-		TolerateUserInfoSubjectEqualsClientID: opts.TolerateUserInfoSubjectClientID,
-		Algorithms:                            resolveAlgorithms(deps.Algorithms, opts.FetchUserInfo),
-		Limits:                                resolveLimits(deps.Limits, deps.HTTPTimeout),
+		Algorithms:                   resolveAlgorithms(deps.Algorithms, opts.FetchUserInfo),
+		Limits:                       resolveLimits(deps.Limits, deps.HTTPTimeout),
 	}
 }
 
@@ -543,7 +542,9 @@ func (c *Client) PublicJWKS(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("singpass: publish client JWKS: %w", err)
 	}
-	set.Keys = appendNewKIDs(set.Keys, extra)
+	if set.Keys, err = appendNewKIDs(set.Keys, extra); err != nil {
+		return nil, fmt.Errorf("singpass: publish client JWKS: %w", err)
+	}
 	return json.MarshalIndent(set, "", "  ")
 }
 

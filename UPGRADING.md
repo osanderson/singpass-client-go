@@ -5,6 +5,37 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.15.0
+
+### `TolerateUserInfoSubjectClientID` is removed
+
+`Options.TolerateUserInfoSubjectClientID` and
+`MyinfoBusinessOptions.TolerateUserInfoSubjectClientID` are gone: FAPIgo
+v0.50.0 removed the toleration they turned on. Myinfo Business always requires
+the `/userinfo` `sub` to equal the id_token's `sub`, as OIDC Core §5.3.2 says.
+Corppass fixed its former `sub` = `client_id` deviation (confirmed on staging),
+and the option was off by default since v0.5.0.
+
+**What to change:** delete the field from your options. If a Corppass
+environment still fails with `UserInfo response sub does not match the ID
+token's sub`, it is still sending the old value; please report it.
+
+### A kid naming two different keys is refused
+
+Every key in your published JWKS needs its own `kid` (RFC 7517 §4.5), since
+Singpass picks keys by `kid`. Before, a second, different key under a `kid`
+already published was silently left out of the JWKS, so Singpass couldn't use
+it. That happened when the signing and encryption keys shared a `kid`, or a
+rotation key (`AdditionalSigningKeys`, `AdditionalEncryptionKeys`) reused one.
+Now `New`, `PublicJWKS` and `OfflineClientJWKS` refuse it:
+
+```
+keys: PublicJWKS: kid "…" names two different keys; give each key its own kid
+```
+
+**What to change:** give each key its own `kid`, and register the new JWKS in
+the developer portal. A `kid` repeated for the very same key is still fine.
+
 ## v0.14.0
 
 ### Protocol sessions keep one opaque record

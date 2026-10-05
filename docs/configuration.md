@@ -6,8 +6,8 @@
 
 - **`Options`** — protocol *behaviour*: `Issuer`, `ClientID`, `RedirectURI`,
   `Scopes`, `AuthContextType`, `AuthContextMessage`, `AcrValues`,
-  `AppClaimedHTTPS`, `AppLaunchURL`, `FetchUserInfo`,
-  `TolerateUserInfoSubjectClientID`. The product constructors fill most of this in.
+  `AppClaimedHTTPS`, `AppLaunchURL`, `FetchUserInfo`. The product constructors
+  fill most of this in.
 - **`Dependencies`** — injected *collaborators*. Only `Keys` and `Decryption` are
   required (the product constructors build them from your key material when you
   leave them nil). **Every other field's zero value selects a staging default**,

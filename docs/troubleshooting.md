@@ -50,7 +50,7 @@ Corppass uses the same codes.
 | Decryption fails, or `token is encrypted to kid …, but this client holds …` | The id_token or `/userinfo` response is encrypted to a key the client doesn't hold: the registered JWKS has an encryption key the app wasn't given, often mid-rotation | Give the client every published encryption key ([production.md](production.md#7-rotating-keys)). |
 | `/userinfo` fails with `invalid_request` | Your JWKS couldn't be fetched, or the user has a Singpass Foreign Account, which has no Myinfo data | Check the JWKS as above. For foreign-account users, offer another way to provide the data. On staging, try a different test persona. |
 | `/userinfo` fails with `invalid_token` | The access token expired (30 minutes) | `Complete` fetches `/userinfo` straight after the token; this points to a stalled request. |
-| `/userinfo` subject mismatch on Myinfo Business | Corppass once sent the client ID as the `/userinfo` subject | It no longer does; if an environment still does, set `TolerateUserInfoSubjectClientID` ([corppass-quirks.md](corppass-quirks.md)). |
+| `/userinfo` subject mismatch on Myinfo Business | Corppass once sent the client ID as the `/userinfo` subject | It no longer does on staging, and since v0.15.0 the library can't tolerate it. If an environment still does, please report it ([corppass-quirks.md](corppass-quirks.md)). |
 
 ## In the portal
 

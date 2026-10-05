@@ -211,13 +211,6 @@ type MyinfoBusinessOptions struct {
 	// NewRotatingKeyManager / NewRotatingDecrypter there instead.
 	AdditionalSigningKeys    []PublishedKey
 	AdditionalEncryptionKeys []DecryptionKey
-
-	// TolerateUserInfoSubjectClientID also accepts a /userinfo "sub" equal to
-	// the client_id. Corppass used to send that instead of the id_token's sub
-	// (contrary to OIDC Core §5.3.2); it now sends the correct sub — confirmed
-	// on staging — so this is off by default. Set it only if a Corppass
-	// environment still fails with a /userinfo subject mismatch.
-	TolerateUserInfoSubjectClientID bool
 }
 
 // NewLogin constructs a Login relying party. It fills in the Login-specific
@@ -295,14 +288,13 @@ func NewMyinfoBusiness(ctx context.Context, o MyinfoBusinessOptions, deps Depend
 		return nil, err
 	}
 	return New(ctx, Options{
-		Name:                            o.Name,
-		Issuer:                          o.Issuer,
-		ClientID:                        o.ClientID,
-		RedirectURI:                     o.RedirectURI,
-		Scopes:                          o.Scopes,
-		AcrValues:                       o.AcrValues,
-		FetchUserInfo:                   true,
-		TolerateUserInfoSubjectClientID: o.TolerateUserInfoSubjectClientID,
+		Name:          o.Name,
+		Issuer:        o.Issuer,
+		ClientID:      o.ClientID,
+		RedirectURI:   o.RedirectURI,
+		Scopes:        o.Scopes,
+		AcrValues:     o.AcrValues,
+		FetchUserInfo: true,
 	}, deps)
 }
 
