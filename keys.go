@@ -212,7 +212,9 @@ func OfflineJWKS(ctx context.Context, signing, encryption []PublishedKey) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	set.Keys = appendNewKIDs(set.Keys, extra)
+	if set.Keys, err = appendNewKIDs(set.Keys, extra); err != nil {
+		return nil, fmt.Errorf("singpass: %w", err)
+	}
 	return json.MarshalIndent(set, "", "  ")
 }
 

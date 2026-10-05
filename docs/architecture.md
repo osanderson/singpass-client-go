@@ -103,8 +103,8 @@ configuration, encoded in `NewMyinfoBusiness`:
   nested JSON.
 - **`/userinfo` `sub`** — Corppass used to set it to the `client_id` (an OIDC
   Core §5.3.2 deviation) and has since fixed it, so `NewMyinfoBusiness` checks it
-  strictly; `MyinfoBusinessOptions.TolerateUserInfoSubjectClientID` restores the
-  old tolerance if an environment still needs it.
+  strictly: it must equal the id_token's `sub`. Since v0.15.0 there's no option
+  to tolerate the old value (FAPIgo v0.50.0 removed it).
 
 ## Keys and limits
 

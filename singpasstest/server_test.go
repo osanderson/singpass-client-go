@@ -321,24 +321,20 @@ func TestLoopbackHTTPRedirectURI(t *testing.T) {
 }
 
 // TestCorppassFormerSubjectDeviation covers Corppass's former /userinfo "sub" =
-// client_id: a default Myinfo Business client refuses it (the subject check is
-// strict now Corppass is fixed), and TolerateUserInfoSubjectClientID accepts it.
+// client_id: the Myinfo Business client refuses it, as OIDC Core §5.3.2
+// requires, now Corppass is fixed.
 func TestCorppassFormerSubjectDeviation(t *testing.T) {
 	srv := startServer(t, singpasstest.Config{Issuer: singpasstest.Corppass, CorppassUserInfoSubClientID: true})
 	k := newKeys(t)
 	register(t, srv, "biz-client", singpasstest.Myinfo, []string{"entity.basic_profile.name"}, k)
 
-	newClient := func(tolerate bool) *singpass.Client {
-		c, err := singpass.NewMyinfoBusiness(context.Background(), singpass.MyinfoBusinessOptions{
-			Issuer: srv.Issuer(), ClientID: "biz-client", RedirectURI: redirectURI,
-			Scopes:     []string{"openid", "entity.basic_profile.name"},
-			SigningKey: k.sig, SigningKID: "sig-1", EncryptionKey: k.enc, EncryptionKID: "enc-1",
-			TolerateUserInfoSubjectClientID: tolerate,
-		}, devDeps)
-		if err != nil {
-			t.Fatalf("NewMyinfoBusiness: %v", err)
-		}
-		return c
+	c, err := singpass.NewMyinfoBusiness(context.Background(), singpass.MyinfoBusinessOptions{
+		Issuer: srv.Issuer(), ClientID: "biz-client", RedirectURI: redirectURI,
+		Scopes:     []string{"openid", "entity.basic_profile.name"},
+		SigningKey: k.sig, SigningKID: "sig-1", EncryptionKey: k.enc, EncryptionKID: "enc-1",
+	}, devDeps)
+	if err != nil {
+		t.Fatalf("NewMyinfoBusiness: %v", err)
 	}
 	complete := func(c *singpass.Client) error {
 		ctx := context.Background()
@@ -354,12 +350,9 @@ func TestCorppassFormerSubjectDeviation(t *testing.T) {
 		return err
 	}
 
-	if err := complete(newClient(false)); err == nil {
-		t.Error("default client accepted a /userinfo sub equal to the client_id")
+	if err := complete(c); err == nil {
+		t.Error("client accepted a /userinfo sub equal to the client_id")
 	} else {
-		t.Logf("default client refused it: %v", err)
-	}
-	if err := complete(newClient(true)); err != nil {
-		t.Errorf("tolerant client: %v", err)
+		t.Logf("client refused it: %v", err)
 	}
 }

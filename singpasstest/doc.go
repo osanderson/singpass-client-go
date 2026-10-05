@@ -22,7 +22,7 @@
 //     cover.
 //   - Corppass /userinfo sends each block as double-encoded JSON (and, with
 //     Config.CorppassUserInfoSubClientID, Corppass's former "sub" = client_id
-//     deviation).
+//     deviation, which the client refuses).
 //   - id_tokens carry "sub_type" and "sub_attributes" — on Singpass released
 //     per scope (user.identity, name, email, mobileno); on Corppass the entity
 //     is the subject and the acting person is the "act" claim.

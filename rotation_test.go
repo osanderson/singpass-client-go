@@ -191,3 +191,58 @@ func TestRotationKeyValidation(t *testing.T) {
 		t.Errorf("rotation keys with injected Decryption: %v", err)
 	}
 }
+
+// TestKIDNamingTwoKeysIsRefused: every published key needs its own kid
+// (RFC 7517 §4.5) — Singpass selects by kid — so New refuses a kid that names
+// two different keys, whether the signing and encryption keys share it or a
+// rotation key reuses one.
+func TestKIDNamingTwoKeysIsRefused(t *testing.T) {
+	ctx := context.Background()
+	srv, err := singpasstest.NewServer(singpasstest.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	s1, s2, e1, e2 := genKey(t, "sig-1"), genKey(t, "sig-2"), genKey(t, "enc-1"), genKey(t, "enc-2")
+	base := func() singpass.MyinfoOptions {
+		return singpass.MyinfoOptions{
+			Issuer: srv.Issuer(), ClientID: "rp", RedirectURI: "https://app.example/cb", Scopes: []string{"openid", "name"},
+			SigningKey: s1.key, SigningKID: s1.kid, EncryptionKey: e1.key, EncryptionKID: e1.kid,
+		}
+	}
+	deps := singpass.Dependencies{AllowLoopbackHTTP: true}
+
+	shared := base()
+	shared.EncryptionKID = s1.kid
+	rotatedEnc := base()
+	rotatedEnc.AdditionalEncryptionKeys = []singpass.DecryptionKey{{Key: e2.key, KID: s1.kid}}
+	rotatedSig := base()
+	rotatedSig.AdditionalSigningKeys = []singpass.PublishedKey{{Key: &s2.key.PublicKey, KID: e1.kid}}
+	for name, opts := range map[string]singpass.MyinfoOptions{
+		"signing and encryption keys share a kid":      shared,
+		"a rotation encryption key reuses the sig kid": rotatedEnc,
+		"a rotation signing key reuses the enc kid":    rotatedSig,
+	} {
+		if _, err := singpass.NewMyinfo(ctx, opts, deps); err == nil || !strings.Contains(err.Error(), "names two different keys") {
+			t.Errorf("%s: err = %v, want a kid naming two keys refused", name, err)
+		}
+	}
+
+	// Each key under its own kid is fine, and the JWKS publishes them all.
+	ok := base()
+	ok.AdditionalSigningKeys = []singpass.PublishedKey{{Key: &s2.key.PublicKey, KID: s2.kid}}
+	ok.AdditionalEncryptionKeys = []singpass.DecryptionKey{{Key: e2.key, KID: e2.kid}}
+	c, err := singpass.NewMyinfo(ctx, ok, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwks, err := c.PublicJWKS(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kid := range []string{s1.kid, s2.kid, e1.kid, e2.kid} {
+		if !strings.Contains(string(jwks), `"kid": "`+kid+`"`) {
+			t.Errorf("JWKS lacks %s:\n%s", kid, jwks)
+		}
+	}
+}

@@ -82,9 +82,9 @@ type Config struct {
 	// Personas are the test users. Nil means DefaultPersonas(Issuer).
 	Personas []Persona
 	// CorppassUserInfoSubClientID reproduces Corppass's former /userinfo
-	// deviation: "sub" set to the client_id instead of the id_token's subject.
-	// Off by default, matching Corppass today. Use it to test a client that
-	// must tolerate it (MyinfoBusinessOptions.TolerateUserInfoSubjectClientID).
+	// deviation: "sub" set to the client_id instead of the id_token's subject
+	// (contrary to OIDC Core §5.3.2). Off by default, matching Corppass today.
+	// The library always refuses it; use it to test that a client does.
 	CorppassUserInfoSubClientID bool
 	// Logger receives a line for each rejected request — with the same
 	// explanation, and how to fix it, as the error_description — and for each
@@ -302,8 +302,13 @@ func (s *Server) build() error {
 	if err != nil {
 		return err
 	}
+	// Development assurance: in-memory stores and ephemeral keys, as the
+	// authorization server itself uses.
 	s.rs, err = resource.NewVerifier(
-		resource.Config{Limits: resource.Limits{MaxDPoPProofAge: 2 * time.Minute, MaxClockSkew: 30 * time.Second}},
+		resource.Config{
+			Assurance: resource.AssuranceDevelopment,
+			Limits:    resource.Limits{MaxDPoPProofAge: 2 * time.Minute, MaxClockSkew: 30 * time.Second},
+		},
 		resource.Dependencies{AccessTokens: resourceTokens, Replay: replay, Revocation: revocation, Clock: systemClock{}},
 	)
 	if err != nil {

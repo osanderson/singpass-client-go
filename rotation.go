@@ -1,11 +1,13 @@
 package singpass
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -255,12 +257,22 @@ func publishedEncryptionKeys(ctx context.Context, d keys.Decrypter, alg fapi.Key
 	return set.Keys, nil
 }
 
-// appendNewKIDs appends the keys of extra whose kid set doesn't have yet.
-func appendNewKIDs(set, extra []keys.PublicJWK) []keys.PublicJWK {
+// appendNewKIDs appends the keys of extra whose kid set doesn't have yet. A
+// kid already in set for the same key is skipped; for a different key it's an
+// error (RFC 7517 §4.5), since Singpass, selecting by kid, could only use one
+// of them.
+func appendNewKIDs(set, extra []keys.PublicJWK) ([]keys.PublicJWK, error) {
 	for _, k := range extra {
-		if !slices.ContainsFunc(set, func(s keys.PublicJWK) bool { return s.KeyID() == k.KeyID() }) {
+		i := slices.IndexFunc(set, func(s keys.PublicJWK) bool { return s.KeyID() == k.KeyID() })
+		if i < 0 {
 			set = append(set, k)
+			continue
+		}
+		a, errA := json.Marshal(set[i])
+		b, errB := json.Marshal(k)
+		if errA != nil || errB != nil || !bytes.Equal(a, b) {
+			return nil, fmt.Errorf("kid %q names two different keys; give each key its own kid", k.KeyID())
 		}
 	}
-	return set
+	return set, nil
 }
