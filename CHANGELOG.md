@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.15.0](https://github.com/osanderson/singpass-client-go/compare/v0.14.2...v0.15.0) (2026-10-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** Options.TolerateUserInfoSubjectClientID and MyinfoBusinessOptions.TolerateUserInfoSubjectClientID are removed, because FAPIgo v0.50.0 no longer tolerates a /userinfo sub equal to the client_id: delete the field. A kid naming two different keys (shared by the signing and encryption keys, or reused by a rotation key) is now refused by New, PublicJWKS and OfflineClientJWKS instead of one key being silently left out of the JWKS: give each key its own kid. See UPGRADING.md.
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.50.0 ([0ac4342](https://github.com/osanderson/singpass-client-go/commit/0ac43420ad3f264a88cb105ee36457008aabdf31))
+
 ## [0.14.2](https://github.com/osanderson/singpass-client-go/compare/v0.14.1...v0.14.2) (2026-10-04)
 
 
