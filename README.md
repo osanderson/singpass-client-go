@@ -54,7 +54,7 @@ DEMO_MOCK=1 go run ./cmd/server   # open http://localhost:8088
 go get github.com/osanderson/singpass-client-go
 ```
 
-Requires Go 1.26.6+ (FAPIgo's minimum). The package name is `singpass`.
+Requires Go 1.26.9+ (FAPIgo's minimum, which fixes GO-2026-6617). The package name is `singpass`.
 
 ## Quick start
 

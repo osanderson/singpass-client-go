@@ -97,3 +97,17 @@ func TestLoginContextValidation(t *testing.T) {
 		t.Errorf("message without AuthContextType: %v", err)
 	}
 }
+
+// TestPARExtensionDefinitionsAreValid runs the Singpass PAR extension
+// definitions through FAPIgo's own validation of a definition, so a field
+// FAPIgo starts requiring (as Sensitivity became in v0.52.0) is caught here.
+func TestPARExtensionDefinitionsAreValid(t *testing.T) {
+	if _, err := extension.NewRegistry(authContextTypeExt, authContextMessageExt, redirectURIHTTPSTypeExt, appLaunchURLExt); err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	for _, d := range []extension.Definition[string]{authContextTypeExt, authContextMessageExt, redirectURIHTTPSTypeExt, appLaunchURLExt} {
+		if d.Sensitivity != extension.NotSensitive {
+			t.Errorf("%s: Sensitivity = %v, want NotSensitive: none is secret", d.Name, d.Sensitivity)
+		}
+	}
+}
