@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/idfoundry/fapigo/server"
 )
 
 // Value returns a Myinfo data item with a value — the envelope /userinfo
@@ -34,7 +36,8 @@ type personaEntry struct {
 	UEN        string `json:"uen"`
 	EntityName string `json:"entity_name"`
 	// Sub overrides the id_token subject of a Singpass user; empty means a
-	// stable UUID derived from the NRIC.
+	// stable UUID derived from the NRIC. At most 255 printable ASCII
+	// characters (OIDC Core §2).
 	Sub string   `json:"sub"`
 	ACR string   `json:"acr"`
 	AMR []string `json:"amr"`
@@ -100,6 +103,9 @@ func ParsePersonas(data []byte, issuer Issuer) ([]Persona, error) {
 		}
 		p, err := e.persona(corppass)
 		if err != nil {
+			return nil, fmt.Errorf("persona %d: %w", i+1, err)
+		}
+		if err := checkSubject(p.Subject); err != nil {
 			return nil, fmt.Errorf("persona %d: %w", i+1, err)
 		}
 		if seen[p.Subject] {
@@ -170,4 +176,15 @@ func firstNonEmpty(s ...string) string {
 		}
 	}
 	return ""
+}
+
+// checkSubject reports a subject the server can't issue: OIDC Core §2 limits
+// "sub" to 255 ASCII characters, and FAPIgo refuses longer, non-ASCII or
+// control characters. Checked when personas load, so a bad one is named at
+// startup rather than failing its login with a 500.
+func checkSubject(sub string) error {
+	if _, err := server.NewSubjectID(sub); err != nil {
+		return fmt.Errorf("subject %q: %w", sub, err)
+	}
+	return nil
 }

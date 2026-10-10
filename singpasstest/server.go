@@ -194,6 +194,12 @@ func NewServer(cfg Config) (*Server, error) {
 		ln.Close()
 		return nil, errors.New("singpasstest: at least one persona is required")
 	}
+	for _, p := range s.personas {
+		if err := checkSubject(p.Subject); err != nil {
+			ln.Close()
+			return nil, fmt.Errorf("singpasstest: persona %q: %w", p.Name, err)
+		}
+	}
 	if err := s.build(); err != nil {
 		ln.Close()
 		return nil, err
@@ -634,7 +640,14 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request, handle server.
 	}
 	switch v := res.(type) {
 	case server.AuthorizationRedirect:
-		http.Redirect(w, r, v.Destination().String(), http.StatusFound)
+		// 303 after the sign-in page's POST, so the browser doesn't post the
+		// form on to the client (RFC 9700 §4.12; FAPI 2.0 recommends 303).
+		// An automatic approval is a GET, answered with 302 as before.
+		status := http.StatusFound
+		if r.Method == http.MethodPost {
+			status = http.StatusSeeOther
+		}
+		http.Redirect(w, r, v.Destination().String(), status)
 	case server.AuthorizationLocalError:
 		writeServerError(w, v.Error)
 	default:

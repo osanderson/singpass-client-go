@@ -100,3 +100,24 @@ func TestEnvelopeHelpers(t *testing.T) {
 		t.Errorf("Coded = %v", c)
 	}
 }
+
+// A subject the server couldn't issue (OIDC Core §2: at most 255 printable
+// ASCII characters) is refused when the personas load, naming the persona,
+// rather than failing its login with a 500.
+func TestPersonaSubjectsAreChecked(t *testing.T) {
+	for name, sub := range map[string]string{
+		"non-ASCII": "jürgen@example.jp",
+		"too long":  strings.Repeat("a", 256),
+		"control":   `abc\u0007def`,
+	} {
+		_, err := singpasstest.ParsePersonas([]byte(`[{"name":"X","nric":"S1234567D"},{"name":"Y","nric":"S7654321Z","sub":"`+sub+`"}]`), singpasstest.Singpass)
+		if err == nil || !strings.Contains(err.Error(), "persona 2: subject") {
+			t.Errorf("%s: ParsePersonas err = %v, want persona 2's subject refused", name, err)
+		}
+	}
+	bad := singpasstest.UserPersona("S1234567D", "Tan")
+	bad.Subject = strings.Repeat("x", 300)
+	if _, err := singpasstest.NewServer(singpasstest.Config{Personas: []singpasstest.Persona{bad}}); err == nil || !strings.Contains(err.Error(), "subject") {
+		t.Errorf("NewServer with a 300-byte subject: err = %v", err)
+	}
+}

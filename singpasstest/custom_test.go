@@ -86,7 +86,8 @@ func TestCustomLoginSingpass(t *testing.T) {
 	redirect, state, _ := c.BeginLogin(ctx)
 	resp = customLogin(t, redirect, url.Values{"nric": {"s7654321z"}, "name": {"Lee Mei Ling"}})
 	loc, err := url.Parse(resp.Header.Get("Location"))
-	if err != nil || resp.StatusCode != http.StatusFound {
+	// 303 after the sign-in page's POST (RFC 9700 §4.12).
+	if err != nil || resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("custom login: %d %v", resp.StatusCode, err)
 	}
 	id, err := c.Complete(ctx, loc.RawQuery, state)
@@ -139,5 +140,32 @@ func TestRicherDefaultPersonas(t *testing.T) {
 	foreigner := ps[2].UserInfo["person_info"].(map[string]any)
 	if foreigner["passtype"] == nil || !strings.HasPrefix(ps[2].SubAttributes["identity_number"].(string), "G") {
 		t.Error("the third persona should be a foreigner with a pass")
+	}
+}
+
+// The sign-in page's form is answered with 303, so the browser doesn't post it
+// on to the client (RFC 9700 §4.12); an automatic approval, a GET, keeps 302.
+func TestRedirectStatusAfterSignIn(t *testing.T) {
+	ctx := context.Background()
+	interactive := startServer(t, singpasstest.Config{Interactive: true})
+	c := myinfoClient(t, interactive)
+	redirect, _, _ := c.BeginLogin(ctx)
+	resp := customLogin(t, redirect, url.Values{"nric": {"S7654321Z"}})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("sign-in POST: %d, want 303", resp.StatusCode)
+	}
+
+	auto := startServer(t, singpasstest.Config{})
+	c = myinfoClient(t, auto)
+	redirect, _, _ = c.BeginLogin(ctx)
+	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	res, err := hc.Get(redirect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusFound {
+		t.Errorf("automatic approval: %d, want 302", res.StatusCode)
 	}
 }

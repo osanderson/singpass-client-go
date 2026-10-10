@@ -103,8 +103,9 @@ func (b *browser) signIn(authURL, decision string) string {
 		b.t.Fatal(err)
 	}
 	res.Body.Close()
+	// The fake answers its sign-in form with 303 (RFC 9700 §4.12).
 	callback, err := url.Parse(res.Header.Get("Location"))
-	if err != nil || res.StatusCode != http.StatusFound {
+	if err != nil || res.StatusCode != http.StatusSeeOther {
 		b.t.Fatalf("sign-in: %s, Location %q", res.Status, res.Header.Get("Location"))
 	}
 	return callback.RequestURI()
