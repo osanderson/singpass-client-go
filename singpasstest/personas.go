@@ -12,7 +12,8 @@ type Persona struct {
 	Name string
 	// Subject is the id_token "sub": a Singpass UUID for a person, or — on
 	// Corppass, where the subject is the organisation — its registration
-	// number (UEN).
+	// number (UEN). At most 255 printable ASCII characters (OIDC Core §2):
+	// NewServer refuses any other.
 	Subject string
 	// SubjectType is the id_token "sub_type". Empty means "user" on Singpass
 	// and "entity" on Corppass.
