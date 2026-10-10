@@ -737,29 +737,34 @@ var authContextTypeExt = extension.Definition[string]{
 	Cardinality:    extension.Single,
 	AllowedSources: extension.SourcePlainParameter,
 	MaxBytes:       128,
+	Sensitivity:    extension.NotSensitive,
 }
 
 // authContextMessageExt, redirectURIHTTPSTypeExt and appLaunchURLExt are the
 // other Singpass PAR parameters, sent the same way: the message shown to the
 // user during a Login (Login apps only), and the mobile-app redirect settings.
+// None of the four is secret, so each is NotSensitive and may appear in logs.
 var (
 	authContextMessageExt = extension.Definition[string]{
 		Name:           "authentication_context_message",
 		Cardinality:    extension.Single,
 		AllowedSources: extension.SourcePlainParameter,
 		MaxBytes:       maxAuthContextMessage,
+		Sensitivity:    extension.NotSensitive,
 	}
 	redirectURIHTTPSTypeExt = extension.Definition[string]{
 		Name:           "redirect_uri_https_type",
 		Cardinality:    extension.Single,
 		AllowedSources: extension.SourcePlainParameter,
 		MaxBytes:       32,
+		Sensitivity:    extension.NotSensitive,
 	}
 	appLaunchURLExt = extension.Definition[string]{
 		Name:           "app_launch_url",
 		Cardinality:    extension.Single,
 		AllowedSources: extension.SourcePlainParameter,
 		MaxBytes:       2048,
+		Sensitivity:    extension.NotSensitive,
 	}
 )
 

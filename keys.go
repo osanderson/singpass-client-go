@@ -77,20 +77,10 @@ func newKeyManager(sig crypto.Signer, sigKID string, dpop crypto.Signer) (*rotat
 		dpop = generated
 	}
 
-	km, err := keys.NewKeyManagerFromSigners(
-		map[keys.SigningPurpose]crypto.Signer{
-			keys.ClientAuthentication: sig,
-			keys.DPoPProofSigning:     dpop,
-		},
-		map[keys.SigningPurpose]fapi.SignatureAlgorithm{
-			keys.ClientAuthentication: fapi.ES256,
-			keys.DPoPProofSigning:     fapi.ES256,
-		},
-		map[keys.SigningPurpose]string{
-			keys.ClientAuthentication: sigKID,
-			keys.DPoPProofSigning:     "dpop-1",
-		},
-	)
+	km, err := keys.NewKeyManagerFromSigners([]keys.SignerSpec{
+		{Purpose: keys.ClientAuthentication, Algorithm: fapi.ES256, Signer: sig, KeyID: sigKID},
+		{Purpose: keys.DPoPProofSigning, Algorithm: fapi.ES256, Signer: dpop, KeyID: "dpop-1"},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("singpass: build key manager: %w", err)
 	}

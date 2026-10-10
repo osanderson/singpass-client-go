@@ -1,10 +1,10 @@
 module github.com/osanderson/singpass-client-go/examples/demo
 
-go 1.26.6
+go 1.26.9
 
 require github.com/osanderson/singpass-client-go v0.0.0
 
-require github.com/idfoundry/fapigo v0.50.0 // indirect
+require github.com/idfoundry/fapigo v0.52.1 // indirect
 
 // The library is developed alongside this example in the same repo and is not
 // published; resolve it from the local tree. go.work at the repo root does the
