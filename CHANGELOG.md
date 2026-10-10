@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.2](https://github.com/osanderson/singpass-client-go/compare/v0.15.1...v0.15.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.53.0 ([f62617d](https://github.com/osanderson/singpass-client-go/commit/f62617dfa94fc6761d2398326afc6d8ace9a57f2))
+* **singpasstest:** answer the sign-in page's form with 303, as RFC 9700 recommends; automatic approvals keep 302 ([f62617d](https://github.com/osanderson/singpass-client-go/commit/f62617dfa94fc6761d2398326afc6d8ace9a57f2))
+* **singpasstest:** check persona subjects at startup (at most 255 printable ASCII characters), instead of failing their login with a 500 ([f62617d](https://github.com/osanderson/singpass-client-go/commit/f62617dfa94fc6761d2398326afc6d8ace9a57f2))
+
 ## [0.15.1](https://github.com/osanderson/singpass-client-go/compare/v0.15.0...v0.15.1) (2026-10-10)
 
 
