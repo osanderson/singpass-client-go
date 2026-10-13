@@ -47,6 +47,13 @@ func TestCheckPublishedJWKS(t *testing.T) {
 	}
 	leaked.Keys[0]["d"] = "secret"
 	leakedJSON, _ := json.Marshal(leaked)
+	// The set with the signing key published for encryption.
+	wrongUse := jwkSet{Keys: []map[string]any{{}, set.Keys[1]}}
+	for k, v := range set.Keys[0] {
+		wrongUse.Keys[0][k] = v
+	}
+	wrongUse.Keys[0]["use"] = "enc"
+	wrongUseJSON, _ := json.Marshal(wrongUse)
 
 	for name, tc := range map[string]struct {
 		status int
@@ -58,6 +65,8 @@ func TestCheckPublishedJWKS(t *testing.T) {
 		"empty":          {200, `{"keys":[]}`, `missing the signing key "sig-1"`},
 		"stale key":      {200, string(other), `different signing key under kid "sig-1"`},
 		"private key":    {200, string(leakedJSON), "private key material"},
+		"wrong use":      {200, string(wrongUseJSON), `publishes key "sig-1" with use "enc", want "sig"`},
+		"too large":      {200, `{"keys":[]}` + strings.Repeat(" ", maxJWKSBytes), "larger than"},
 		"not a JWKS":     {200, `<html></html>`, "does not serve a JWKS"},
 		"not found":      {404, `not found`, "HTTP 404"},
 	} {
