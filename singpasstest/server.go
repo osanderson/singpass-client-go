@@ -254,6 +254,7 @@ func (s *Server) build() error {
 		Issuer:    issuer,
 		Endpoints: endpoints,
 		Profile:   server.ProfileFAPISecurity,
+		Subjects:  server.PublicSubjects(), // Singpass and Corppass send the same sub to every client
 		Algorithms: server.AlgorithmPolicy{
 			ClientAssertion:                     server.AlgorithmSet{signatureAlg},
 			RequestObject:                       server.AlgorithmSet{signatureAlg},
@@ -708,12 +709,12 @@ func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	var persona *Persona
 	s.mu.Lock()
-	if p, ok := s.custom[authz.Subject]; ok {
+	if p, ok := s.custom[authz.InternalSubject]; ok {
 		persona = &p
 	}
 	s.mu.Unlock()
 	for i := range s.personas {
-		if persona == nil && s.personas[i].Subject == authz.Subject {
+		if persona == nil && s.personas[i].Subject == authz.InternalSubject {
 			persona = &s.personas[i]
 		}
 	}
@@ -741,7 +742,7 @@ func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
 // userInfoClaims builds the /userinfo payload in the issuer's shape.
 func (s *Server) userInfoClaims(p Persona, authz resource.AuthorizationContext) (map[string]json.RawMessage, error) {
 	out := make(map[string]json.RawMessage)
-	sub := authz.Subject
+	sub := authz.ClientSubject
 	if s.cfg.Issuer == Corppass && s.cfg.CorppassUserInfoSubClientID {
 		sub = authz.ClientID // Corppass's former deviation
 	}
