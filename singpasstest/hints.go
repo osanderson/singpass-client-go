@@ -92,7 +92,8 @@ func (s *Server) hint(r *http.Request, param func(string) string, serr *server.E
 		return fmt.Sprintf("Sign the client_assertion with the private half of client %q's registered signing key, kid %q%s",
 			clientID, c.cfg.SigningKID, s.testKeysHint(clientID))
 
-	case desc == "client assertion verification failed" && strings.Contains(cause, "iss/sub"):
+	case desc == "client assertion verification failed" && strings.Contains(cause, "iss/sub"),
+		desc == "client_id does not match the client assertion's subject":
 		return fmt.Sprintf("The client_assertion's iss and sub must both be the client_id, %q", clientID)
 
 	case desc == "DPoP proof verification failed" && strings.Contains(cause, "htu does not match"):

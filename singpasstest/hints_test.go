@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -125,6 +126,101 @@ func TestRejectionHintsAudAndHTU(t *testing.T) {
 	}
 }
 
+// A client_assertion naming another client is rejected saying what its iss
+// and sub must be.
+func TestRejectionHintsAssertionIssuerSubject(t *testing.T) {
+	srv, _ := loggingServer(t, singpasstest.Config{})
+	k := newKeys(t)
+	register(t, srv, "mi", singpasstest.Myinfo, []string{"name"}, k)
+	par := srv.Issuer() + "/par"
+
+	for name, tc := range map[string]struct{ iss, sub string }{
+		"iss": {"someone-else", "mi"},
+		"sub": {"mi", "someone-else"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			status, body := postAs(t, par, clientAssertion(t, k, "sig-1", tc.iss, tc.sub, srv.Issuer()), newKeys(t).sig, par, parForm(randID()))
+			var e oauthError
+			_ = json.Unmarshal(body, &e)
+			if want := "The client_assertion's iss and sub must both be the client_id, 'mi'"; status != http.StatusUnauthorized || !strings.Contains(e.Description, want) {
+				t.Errorf("%d %q\nwant it to contain %q", status, e.Description, want)
+			}
+		})
+	}
+}
+
+// A token request whose redirect_uri or code_verifier isn't the login's, or
+// without a DPoP proof, is rejected saying what to send.
+func TestRejectionHintsTokenRequest(t *testing.T) {
+	srv, _ := loggingServer(t, singpasstest.Config{})
+	k := newKeys(t)
+	register(t, srv, "mi", singpasstest.Myinfo, []string{"name"}, k)
+
+	for name, tc := range map[string]struct {
+		redirectURI, verifier string
+		noDPoP                bool
+		want                  string
+	}{
+		"redirect_uri":  {redirectURI: "https://rp.example/other", want: "Send the token request the same redirect_uri as the pushed authorization request"},
+		"code_verifier": {redirectURI: redirectURI, verifier: strings.Repeat("x", 43), want: "Send the PKCE code_verifier of the login this code came from"},
+		"no DPoP":       {redirectURI: redirectURI, noDPoP: true, want: "Send a DPoP proof in the DPoP header, as Singpass and Corppass require"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			code, verifier, dpop := authorizationCode(t, srv, k)
+			if tc.verifier != "" {
+				verifier = tc.verifier
+			}
+			if tc.noDPoP {
+				dpop = nil
+			}
+			token := srv.Issuer() + "/token"
+			status, body := postAs(t, token, clientAssertion(t, k, "sig-1", "mi", "mi", srv.Issuer()), dpop, token, url.Values{
+				"grant_type": {"authorization_code"}, "code": {code}, "redirect_uri": {tc.redirectURI}, "code_verifier": {verifier},
+			})
+			var e oauthError
+			_ = json.Unmarshal(body, &e)
+			if status != http.StatusBadRequest || !strings.Contains(e.Description, tc.want) {
+				t.Errorf("%d %+v\nwant it to contain %q", status, e, tc.want)
+			}
+		})
+	}
+}
+
+// parForm is a pushed authorization request for client "mi" with PKCE
+// verifier's challenge.
+func parForm(verifier string) url.Values {
+	challenge := sha256.Sum256([]byte(verifier))
+	return url.Values{
+		"response_type": {"code"}, "scope": {"openid name"},
+		"redirect_uri": {redirectURI}, "state": {randID()}, "nonce": {randID()},
+		"code_challenge": {base64.RawURLEncoding.EncodeToString(challenge[:])}, "code_challenge_method": {"S256"},
+	}
+}
+
+// authorizationCode logs in as client "mi" by hand, returning the code, its
+// PKCE verifier and the DPoP key it's bound to.
+func authorizationCode(t *testing.T, srv *singpasstest.Server, k testKeys) (code, verifier string, dpop *ecdsa.PrivateKey) {
+	t.Helper()
+	verifier, dpop = randID()+randID(), newKeys(t).sig
+	par := srv.Issuer() + "/par"
+	status, body := postAs(t, par, clientAssertion(t, k, "sig-1", "mi", "mi", srv.Issuer()), dpop, par, parForm(verifier))
+	var pushed struct {
+		RequestURI string `json:"request_uri"`
+	}
+	if err := json.Unmarshal(body, &pushed); err != nil || status != http.StatusCreated {
+		t.Fatalf("PAR: %d %s", status, body)
+	}
+	query, err := srv.Authorize(context.Background(), srv.Issuer()+"/auth?"+url.Values{"client_id": {"mi"}, "request_uri": {pushed.RequestURI}}.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, _ := url.ParseQuery(query)
+	if q.Get("code") == "" {
+		t.Fatalf("no code in %q", query)
+	}
+	return q.Get("code"), verifier, dpop
+}
+
 // A code that can't be used is rejected saying why that usually happens.
 func TestRejectionHintUnusableCode(t *testing.T) {
 	srv, _ := loggingServer(t, singpasstest.Config{})
@@ -190,29 +286,44 @@ func postPAR(t *testing.T, par string, k testKeys, kid, aud, htu string) (int, o
 // for htu.
 func postAuthenticated(t *testing.T, endpoint string, k testKeys, kid, aud, htu string, form url.Values) (int, oauthError) {
 	t.Helper()
+	status, body := postAs(t, endpoint, clientAssertion(t, k, kid, "mi", "mi", aud), newKeys(t).sig, htu, form)
+	var e oauthError
+	_ = json.Unmarshal(body, &e)
+	return status, e
+}
+
+// clientAssertion is a client_assertion signed by k's signing key (kid).
+func clientAssertion(t *testing.T, k testKeys, kid, iss, sub, aud string) string {
+	t.Helper()
 	now := time.Now().Unix()
-	assertion := signJWT(t, k.sig, map[string]any{"alg": "ES256", "kid": kid},
-		map[string]any{"iss": "mi", "sub": "mi", "aud": aud, "jti": randID(), "iat": now, "exp": now + 60})
-	dpopKey := newKeys(t).sig
-	pub, _ := dpopKey.PublicKey.Bytes()
-	b64 := base64.RawURLEncoding.EncodeToString
-	proof := signJWT(t, dpopKey,
-		map[string]any{"typ": "dpop+jwt", "alg": "ES256", "jwk": map[string]string{"kty": "EC", "crv": "P-256", "x": b64(pub[1:33]), "y": b64(pub[33:])}},
-		map[string]any{"jti": randID(), "htm": "POST", "htu": htu, "iat": now})
+	return signJWT(t, k.sig, map[string]any{"alg": "ES256", "kid": kid},
+		map[string]any{"iss": iss, "sub": sub, "aud": aud, "jti": randID(), "iat": now, "exp": now + 60})
+}
+
+// postAs posts form to endpoint as client "mi" with assertion, and with a
+// DPoP proof for htu signed by dpopKey unless it's nil. It returns the status
+// and the response body.
+func postAs(t *testing.T, endpoint, assertion string, dpopKey *ecdsa.PrivateKey, htu string, form url.Values) (int, []byte) {
+	t.Helper()
 	form.Set("client_id", "mi")
 	form.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
 	form.Set("client_assertion", assertion)
 	req, _ := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("DPoP", proof)
+	if dpopKey != nil {
+		pub, _ := dpopKey.PublicKey.Bytes()
+		b64 := base64.RawURLEncoding.EncodeToString
+		req.Header.Set("DPoP", signJWT(t, dpopKey,
+			map[string]any{"typ": "dpop+jwt", "alg": "ES256", "jwk": map[string]string{"kty": "EC", "crv": "P-256", "x": b64(pub[1:33]), "y": b64(pub[33:])}},
+			map[string]any{"jti": randID(), "htm": "POST", "htu": htu, "iat": time.Now().Unix()}))
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer res.Body.Close()
-	var e oauthError
-	_ = json.NewDecoder(res.Body).Decode(&e)
-	return res.StatusCode, e
+	body, _ := io.ReadAll(res.Body)
+	return res.StatusCode, body
 }
 
 // signJWT returns a compact ES256 JWS of claims.
