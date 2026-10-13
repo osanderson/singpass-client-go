@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.4](https://github.com/osanderson/singpass-client-go/compare/v0.15.3...v0.15.4) (2026-10-13)
+
+
+### Bug Fixes
+
+* **singpasstest:** hint at a client_assertion sub that isn't the client_id ([#120](https://github.com/osanderson/singpass-client-go/issues/120)) ([22bfa7c](https://github.com/osanderson/singpass-client-go/commit/22bfa7c3e3d72d69208e9e172bfe1fb6a0484cc4))
+
 ## [0.15.3](https://github.com/osanderson/singpass-client-go/compare/v0.15.2...v0.15.3) (2026-10-13)
 
 
