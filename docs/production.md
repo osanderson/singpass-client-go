@@ -77,8 +77,12 @@ client, err := singpass.NewMyinfo(ctx, singpass.MyinfoOptions{
       `AssuranceProduction`.
 - [ ] **`Dependencies.AllowLoopbackHTTP` off, and `AllowedPrivateHosts`
       empty.** Both are refused under `AssuranceProduction` anyway.
-- [ ] **`HTTPClient` / `HTTPTimeout`** suit your egress: proxy, timeouts, and
-      access to `id.singpass.gov.sg` / `id.corppass.gov.sg`.
+- [ ] **`HTTPClient` / `HTTPTimeout`** suit your egress: timeouts, and
+      direct access to `id.singpass.gov.sg` / `id.corppass.gov.sg`. Under
+      `AssuranceProduction`, a client of your own must come from
+      `fapihttp.NewClient`, with its transport unchanged, and can't use an
+      HTTP proxy (`HTTPS_PROXY` included): route egress at the network level
+      instead.
 - [ ] **Myinfo Business: the `/userinfo` `sub` check.** Corppass has fixed its
       former `sub` = `client_id` deviation, confirmed on staging only. The
       library checks the `sub` strictly and, since v0.15.0, can't tolerate the

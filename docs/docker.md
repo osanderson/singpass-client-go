@@ -306,9 +306,10 @@ How your app trusts the CA depends on its language:
 | Java | import it into a truststore with `keytool -importcert` |
 | Go, with this library | an `http.Client` whose `RootCAs` holds it, as `Dependencies.HTTPClient` |
 
-In Go, this library also refuses by default to fetch discovery and keys from
-a name that resolves to a private address, which a Compose service does.
-List the fake server's names in `Dependencies.AllowedPrivateHosts`:
+In Go, this library also refuses by default to connect to a name that
+resolves to a private address, which a Compose service does. Build the
+client with FAPIgo's `fapihttp.NewClient`, as production requires, and list
+the fake server's names both there and in `Dependencies.AllowedPrivateHosts`:
 
 ```go
 ca, err := os.ReadFile("/certs/ca.pem")
@@ -317,11 +318,17 @@ if err != nil {
 }
 roots := x509.NewCertPool()
 roots.AppendCertsFromPEM(ca)
-transport := http.DefaultTransport.(*http.Transport).Clone()
-transport.TLSClientConfig = &tls.Config{RootCAs: roots}
+fakeHosts := []string{"singpass", "corppass"}
+cfg := fapihttp.RecommendedTransportConfig()
+cfg.RootCAs = roots
+cfg.AllowedPrivateHosts = fakeHosts
+httpClient, err := fapihttp.NewClient(cfg)
+if err != nil {
+	return err
+}
 deps := singpass.Dependencies{
-	HTTPClient:          &http.Client{Transport: transport},
-	AllowedPrivateHosts: []string{"singpass", "corppass"},
+	HTTPClient:          httpClient,
+	AllowedPrivateHosts: fakeHosts,
 }
 ```
 

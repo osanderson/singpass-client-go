@@ -116,7 +116,13 @@ type Dependencies struct {
 	Assurance AssuranceLevel
 
 	// HTTPClient is the base client for discovery, JWKS, PAR, token and
-	// /userinfo calls. Nil builds &http.Client{Timeout: HTTPTimeout}.
+	// /userinfo calls. Nil builds one with fapihttp.NewClient, whose
+	// transport refuses private and loopback addresses when it dials, with
+	// AllowLoopbackHTTP and AllowedPrivateHosts as its exceptions and
+	// HTTPTimeout as its Timeout. Under AssuranceProduction, a client you
+	// supply must come from fapihttp.NewClient too (copying it to change
+	// Timeout is fine), with its transport unchanged: for mutual TLS or a
+	// private CA, set fapihttp.TransportConfig's Certificates or RootCAs.
 	HTTPClient *http.Client
 
 	// HTTPTimeout bounds each outbound call. Zero means defaultHTTPTimeout. It
@@ -272,7 +278,9 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	// engine's PAR/token/userinfo calls.
 	base := deps.HTTPClient
 	if base == nil {
-		base = &http.Client{Timeout: deps.HTTPTimeout}
+		if base, err = defaultHTTPClient(deps); err != nil {
+			return nil, err
+		}
 	}
 	discovered, issuerKeys, err := discover(ctx, base, issuer, deps, urlOpts)
 	if err != nil {
@@ -290,10 +298,13 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 
 	cfg := engineConfig(opts, deps, issuer, discovered)
 
-	// The engine's PAR/token/userinfo HTTP client. A transparent wrapper over
-	// base that logs only when deps.Debug is set (otherwise it just delegates),
-	// so the default behaviour is a plain pass-through.
-	httpClient := newLoggingHTTPClient(base, deps.Debug, deps.Logger)
+	// The engine's PAR/token/userinfo HTTP client: base itself, which
+	// production requires, or with deps.Debug (refused there) a wrapper over
+	// it that logs each call.
+	var httpClient fapihttp.HTTPClient = base
+	if deps.Debug {
+		httpClient = newLoggingHTTPClient(base, deps.Debug, deps.Logger)
+	}
 
 	// NewFromDiscovery is New plus discovery-only checks: cfg.Issuer must
 	// equal the discovered issuer; it runs discovered.SupportsAlgorithms(
@@ -383,7 +394,45 @@ func checkAssurance(opts Options, deps Dependencies) error {
 			"Singpass binds each login to the DPoP key it started with, so with a key generated per process a callback that reaches " +
 			"another instance, or this one after a restart, fails with invalid_dpop_proof")
 	}
-	return checkKeyCustody(deps)
+	if err := checkKeyCustody(deps); err != nil {
+		return err
+	}
+	return checkProductionHTTPClient(deps.HTTPClient)
+}
+
+// checkProductionHTTPClient requires a supplied HTTPClient to be
+// fapihttp.NewClient's, intact and without a loopback exception, before
+// discovery uses it: only that transport keeps a fetched URL off internal
+// hosts. A test may replace it to reach the checks after discovery.
+var checkProductionHTTPClient = func(c *http.Client) error {
+	if c == nil {
+		return nil
+	}
+	h, ok := fapihttp.HardeningOf(c)
+	if !ok {
+		return errors.New("singpass: Dependencies.HTTPClient must come from fapihttp.NewClient under AssuranceProduction, with its transport unchanged " +
+			"(no proxy, dialer or TLS change, and not cloned or wrapped), or be left nil: for mutual TLS or a private CA, " +
+			"set fapihttp.TransportConfig's Certificates or RootCAs")
+	}
+	if h.AllowsLoopback() {
+		return errors.New("singpass: Dependencies.HTTPClient's transport allows loopback addresses, which is refused under AssuranceProduction")
+	}
+	return nil
+}
+
+// defaultHTTPClient is fapihttp.NewClient's hardened client, with deps'
+// loopback and private-host exceptions and HTTPTimeout.
+func defaultHTTPClient(deps Dependencies) (*http.Client, error) {
+	cfg := fapihttp.RecommendedTransportConfig()
+	cfg.AllowLoopbackHosts = deps.AllowLoopbackHTTP
+	cfg.AllowLoopbackHTTP = deps.AllowLoopbackHTTP
+	cfg.AllowedPrivateHosts = deps.AllowedPrivateHosts
+	c, err := fapihttp.NewClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("singpass: build HTTP client: %w", err)
+	}
+	c.Timeout = deps.HTTPTimeout
+	return c, nil
 }
 
 // discover fetches the issuer's discovery document, through a hardened
@@ -459,7 +508,7 @@ func engineConfig(opts Options, deps Dependencies, issuer fapi.URL, discovered c
 
 // engineDependencies is the FAPIgo client's dependencies, with the clock,
 // session store and randomness defaults applied.
-func engineDependencies(deps Dependencies, issuerKeys keys.IssuerKeySource, httpClient *loggingHTTPClient) client.Dependencies {
+func engineDependencies(deps Dependencies, issuerKeys keys.IssuerKeySource, httpClient fapihttp.HTTPClient) client.Dependencies {
 	clock := deps.Clock
 	if clock == nil {
 		clock = client.SystemClock{}

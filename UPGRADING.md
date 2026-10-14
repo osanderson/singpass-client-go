@@ -5,6 +5,62 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.16.0
+
+FAPIgo v0.56.0 checks, under `AssuranceProduction`, that every outbound call
+goes through `fapihttp.NewClient`'s hardened transport. That transport
+refuses private, loopback and link-local addresses when it dials, so a URL
+from fetched metadata can't reach your internal network, even if DNS
+changes between a check and the connection.
+
+### The default HTTP client is the hardened one
+
+With `Dependencies.HTTPClient` left nil, the library now builds its client
+with `fapihttp.NewClient` instead of `&http.Client{}`. It still uses
+`HTTPTimeout`, and `AllowLoopbackHTTP` and `AllowedPrivateHosts` are still
+its only exceptions in development. **Without this change, every production
+client would fail to start on FAPIgo v0.56.0**, so upgrade the library and
+FAPIgo together.
+
+Two things behave differently, in every environment:
+
+- **No proxy.** The default client ignores `HTTPS_PROXY` and `HTTP_PROXY`.
+  Under `AssuranceProduction` no proxy is allowed at all, so reach
+  `id.singpass.gov.sg` and `id.corppass.gov.sg` directly, routing egress at
+  the network level if you must.
+- **Private addresses are refused when connecting**, not only for a URL's
+  literal host. A Singpass or Corppass host that resolved to a private
+  address would now fail. They resolve to public addresses, so this only
+  affects a fake server, which `AllowedPrivateHosts` covers.
+
+### Production: a supplied `HTTPClient` must come from `fapihttp.NewClient`
+
+Under `AssuranceProduction`, `New` and the product constructors refuse a
+`Dependencies.HTTPClient` that `fapihttp.NewClient` didn't build, or whose
+transport was changed, cloned or wrapped (an OpenTelemetry `RoundTripper`,
+say), or that allows loopback addresses:
+
+```
+singpass: Dependencies.HTTPClient must come from fapihttp.NewClient under AssuranceProduction, …
+```
+
+**What to change:** leave `HTTPClient` nil, or build it with
+`fapihttp.NewClient`, putting any TLS settings in its config:
+
+```go
+cfg := fapihttp.RecommendedTransportConfig()
+cfg.Certificates = []tls.Certificate{clientCert} // mutual TLS
+cfg.RootCAs = privateRoots                         // a private CA
+httpClient, err := fapihttp.NewClient(cfg)
+if err != nil {
+	return err
+}
+httpClient.Timeout = 15 * time.Second // setting Timeout is fine
+deps := singpass.Dependencies{HTTPClient: httpClient /* … */}
+```
+
+Development is unchanged: any `*http.Client` still works there.
+
 ## v0.15.0
 
 ### `TolerateUserInfoSubjectClientID` is removed
