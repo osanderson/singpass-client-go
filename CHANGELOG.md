@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.5](https://github.com/osanderson/singpass-client-go/compare/v0.15.4...v0.15.5) (2026-10-14)
+
+
+### Documentation
+
+* point non-Go users to the fake server image from the README's top ([#122](https://github.com/osanderson/singpass-client-go/issues/122)) ([d546cf6](https://github.com/osanderson/singpass-client-go/commit/d546cf65dc66fb8f4efc6ec43761009f570ed0a1))
+
 ## [0.15.4](https://github.com/osanderson/singpass-client-go/compare/v0.15.3...v0.15.4) (2026-10-13)
 
 
