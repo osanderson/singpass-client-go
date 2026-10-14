@@ -32,7 +32,8 @@ Singpass pieces.
 - **Optional `net/http` helper** — login, callback, logout and JWKS routes; you
   render the pages.
 - **Test without onboarding** — `singpasstest` runs a fake Singpass/Corppass
-  server in-process for integration tests, `singpass-fake-server` runs it
+  server in-process for integration tests, the
+  [`singpass-fake-server` Docker image](#testing-in-any-language) runs it
   standalone for apps in any language, and the demo runs against it with one
   environment variable.
 - **Production pieces included** — `Environment: singpass.Production`, durable
@@ -47,6 +48,22 @@ git clone https://github.com/osanderson/singpass-client-go
 cd singpass-client-go/examples/demo
 DEMO_MOCK=1 go run ./cmd/server   # open http://localhost:8088
 ```
+
+### Testing in any language
+
+Not using Go? The fake Singpass and Corppass servers are a Docker image, for
+local development and CI with apps in any language:
+
+```sh
+docker run --rm -p 5156:5156 -p 5157:5157 ghcr.io/osanderson/singpass-fake-server
+```
+
+Singpass is then at `http://localhost:5156/fapi` and Corppass at
+`http://localhost:5157`, each with discovery, PAR, DPoP, `private_key_jwt`,
+encrypted id_tokens and `/userinfo` as the real FAPI 2.0 endpoints do them,
+built-in test clients and users, and a dashboard at `/_fake/`. See
+[Testing your integration](#testing-your-integration) and
+[docs/docker.md](docs/docker.md) for Docker Compose, GitHub Actions and HTTPS.
 
 ## Install
 
