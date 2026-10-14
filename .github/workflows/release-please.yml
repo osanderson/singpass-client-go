@@ -67,7 +67,19 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
           IMAGE: ghcr.io/${{ github.repository_owner }}/singpass-fake-server
         run: |
-          notes=$(gh release view "$TAG" --json body --jq .body)
-          printf '%s\n\n### Fake server image\n\nRun the fake Singpass and Corppass servers for testing, from any language:\n\n```sh\ndocker run --rm -p 5156:5156 -p 5157:5157 %s:%s\n```\n\nSee [docs/docker.md](https://github.com/%s/blob/%s/docs/docker.md).\n' \
-            "$notes" "$IMAGE" "${TAG#v}" "$GH_REPO" "$TAG" > notes.md
+          {
+            gh release view "$TAG" --json body --jq .body
+            cat <<NOTES
+
+          ### Fake server image
+
+          Run the fake Singpass and Corppass servers for testing, from any language:
+
+          \`\`\`sh
+          docker run --rm -p 5156:5156 -p 5157:5157 $IMAGE:${TAG#v}
+          \`\`\`
+
+          See [docs/docker.md](https://github.com/$GH_REPO/blob/$TAG/docs/docker.md).
+          NOTES
+          } > notes.md
           gh release edit "$TAG" --notes-file notes.md
