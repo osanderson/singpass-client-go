@@ -17,7 +17,7 @@
   |---|---|---|
   | `Sessions SessionStore` | `singpass.NewMemorySessionStore(0)` (in-memory, non-durable; expires abandoned logins, caps pending ones) | a durable store (required under `AssuranceProduction`) |
   | `Assurance AssuranceLevel` | `AssuranceDevelopment` | `singpass.AssuranceProduction` |
-  | `HTTPClient` / `HTTPTimeout` | `&http.Client{Timeout: 15s}` | your own client / timeout |
+  | `HTTPClient` / `HTTPTimeout` | `fapihttp.NewClient`'s hardened client, `Timeout: 15s` | a timeout; a client of your own must also come from `fapihttp.NewClient` |
   | `Clock` / `Random` | `SystemClock{}` / `crypto/rand.Reader` | leave `Random` unset: production requires `crypto/rand.Reader` |
   | `KeyCustody` | none declared | `KeyCustody{Durable: true}` — required under `AssuranceProduction` |
   | `BeginLoginRetries` | `0` (no retries) | up to `3`, with backoff, on temporary failures |

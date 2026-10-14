@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/tls"
+
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -14,6 +14,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/idfoundry/fapigo/fapihttp"
 
 	singpass "github.com/osanderson/singpass-client-go"
 	"github.com/osanderson/singpass-client-go/singpasstest"
@@ -32,7 +34,7 @@ func TestImage(t *testing.T) {
 	}
 	hc := http.DefaultClient
 	if ca := os.Getenv("SMOKE_CA_FILE"); ca != "" {
-		hc = trustingClient(t, ca)
+		hc = trustingClient(t, ca, sp, cp)
 	}
 	smokeLogins(t, hc, sp, cp)
 }
@@ -59,9 +61,11 @@ func smokeLogins(t *testing.T, hc *http.Client, sp, cp string) {
 	}
 }
 
-// trustingClient returns an HTTP client that trusts the CA certificates in
-// the PEM file caFile.
-func trustingClient(t *testing.T, caFile string) *http.Client {
+// trustingClient returns fapihttp.NewClient's hardened client, as
+// docs/docker.md recommends, trusting the CA certificates in the PEM file
+// caFile and allowing the issuers' hosts, which resolve to private or
+// loopback addresses.
+func trustingClient(t *testing.T, caFile string, issuers ...string) *http.Client {
 	t.Helper()
 	pemBytes, err := os.ReadFile(caFile)
 	if err != nil {
@@ -71,9 +75,19 @@ func trustingClient(t *testing.T, caFile string) *http.Client {
 	if !pool.AppendCertsFromPEM(pemBytes) {
 		t.Fatalf("%s holds no certificate", caFile)
 	}
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
-	return &http.Client{Transport: tr}
+	cfg := fapihttp.RecommendedTransportConfig()
+	cfg.RootCAs = pool
+	cfg.AllowLoopbackHosts = true
+	for _, issuer := range issuers {
+		if u, err := url.Parse(issuer); err == nil && u.Hostname() != "" {
+			cfg.AllowedPrivateHosts = append(cfg.AllowedPrivateHosts, u.Hostname())
+		}
+	}
+	hc, err := fapihttp.NewClient(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hc
 }
 
 // fetchTestClientKeys reads the test clients' private JWKS from the server.
