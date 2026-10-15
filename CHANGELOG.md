@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.16.0](https://github.com/osanderson/singpass-client-go/compare/v0.15.5...v0.16.0) (2026-10-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** the default HTTP client is fapihttp.NewClient's: it ignores HTTPS_PROXY/HTTP_PROXY and refuses private addresses when it dials. Under AssuranceProduction, a Dependencies.HTTPClient must come from fapihttp.NewClient with its transport unchanged. See UPGRADING.md (v0.16.0).
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.56.0, with a hardened default HTTP client ([707aa0f](https://github.com/osanderson/singpass-client-go/commit/707aa0f350e91b445041db6b56544253a41768c8))
+
 ## [0.15.5](https://github.com/osanderson/singpass-client-go/compare/v0.15.4...v0.15.5) (2026-10-14)
 
 
