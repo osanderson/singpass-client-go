@@ -313,7 +313,7 @@ func New(ctx context.Context, opts Options, deps Dependencies) (*Client, error) 
 	// failure on the first live response; and it upgrades
 	// cfg.AuthorizationResponseIssPolicy to RequireAuthorizationResponseIss from
 	// discovered.AuthorizationResponseIssSupported (RFC 9207 §2.4), on top of the
-	// TolerateAbsent baseline set in engineConfig. cfg.Endpoints is already
+	// baseline set in engineConfig. cfg.Endpoints is already
 	// set, so it is used as given.
 	engine, err := client.NewFromDiscovery(discovered, cfg, engineDependencies(deps, issuerKeys, httpClient))
 	if err != nil {
@@ -468,6 +468,10 @@ func engineConfig(opts Options, deps Dependencies, issuer fapi.URL, discovered c
 	if assurance == 0 {
 		assurance = client.AssuranceDevelopment
 	}
+	issPolicy := client.TolerateAbsentAuthorizationResponseIss
+	if assurance == client.AssuranceProduction {
+		issPolicy = client.RequireAuthorizationResponseIss
+	}
 	return client.Config{
 		Issuer:      issuer,
 		ClientID:    fapi.ClientID(opts.ClientID),
@@ -484,14 +488,14 @@ func engineConfig(opts Options, deps Dependencies, issuer fapi.URL, discovered c
 		// to AssuranceProduction and supply a durable SessionStore. The zero
 		// value defaults to AssuranceDevelopment above.
 		Assurance: assurance,
-		// RFC 9207 iss enforcement. The policy has no default and is required, so
-		// set an explicit baseline: tolerate a callback without "iss" for an
-		// issuer that does not advertise the parameter. NewFromDiscovery
-		// upgrades this to RequireAuthorizationResponseIss when discovery's
-		// AuthorizationResponseIssSupported is set (RFC 9207 §2.4 MUST-rejects a
-		// missing "iss" once the issuer is known to always send one) — it only
-		// ever raises the bar, never lowers this baseline.
-		AuthorizationResponseIssPolicy: client.TolerateAbsentAuthorizationResponseIss,
+		// RFC 9207 iss enforcement. The policy has no default and is required.
+		// Production requires "iss" in every callback, as FAPI 2.0 does (FAPIgo
+		// refuses anything less there); Singpass and Corppass always send it.
+		// Development tolerates a callback without it, for a test issuer that
+		// doesn't advertise the parameter. Either way NewFromDiscovery raises
+		// this to RequireAuthorizationResponseIss when discovery's
+		// AuthorizationResponseIssSupported is set (RFC 9207 §2.4).
+		AuthorizationResponseIssPolicy: issPolicy,
 		// The following four are set to their zero-value defaults purely to
 		// state the flow explicitly (each field's zero value already selects the
 		// same behaviour): PAR commits the code to the DPoP key with an actual

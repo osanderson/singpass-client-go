@@ -11,7 +11,7 @@
 #
 # See docs/docker.md.
 
-# The library (via FAPIgo) needs Go 1.26.9+.
+# The library (via FAPIgo) needs Go 1.26.10+.
 # Base images are pinned by digest (Dependabot keeps the tag and digest current),
 # so a re-pushed tag can't change what is built and published. The builder runs
 # on the build machine's platform and cross-compiles, so a multi-platform build

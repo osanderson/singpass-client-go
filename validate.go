@@ -85,7 +85,7 @@ func isLoopback(host string) bool {
 }
 
 // validateScopes checks the requested scopes: "openid" must be one of them,
-// and each must be a single non-empty token, listed once.
+// and each must be a single non-empty RFC 6749 scope-token, listed once.
 func validateScopes(scopes []string) []error {
 	if len(scopes) == 0 {
 		return []error{errors.New(`no Scopes: include "openid", plus the scopes your app is approved for`)}
@@ -98,6 +98,8 @@ func validateScopes(scopes []string) []error {
 			errs = append(errs, errors.New("an entry in Scopes is empty"))
 		case strings.ContainsAny(s, " \t\n"):
 			errs = append(errs, fmt.Errorf("scope %q in Scopes contains whitespace: list each scope separately", s))
+		case !isScopeToken(s):
+			errs = append(errs, fmt.Errorf("scope %q in Scopes has a character a scope can't contain (RFC 6749 §3.3 allows printable ASCII except \" and \\)", s))
 		case seen[s]:
 			errs = append(errs, fmt.Errorf("scope %q is listed more than once in Scopes", s))
 		}
@@ -107,6 +109,17 @@ func validateScopes(scopes []string) []error {
 		errs = append(errs, errors.New(`"openid" is missing from Scopes`))
 	}
 	return errs
+}
+
+// isScopeToken reports whether s is one RFC 6749 §3.3 scope-token:
+// printable ASCII other than space, '"' and '\\'.
+func isScopeToken(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c < 0x21 || c > 0x7e || c == '"' || c == '\\' {
+			return false
+		}
+	}
+	return true
 }
 
 // maxAuthContextMessage is Singpass's limit on authentication_context_message.

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	fapi "github.com/idfoundry/fapigo"
+	"github.com/idfoundry/fapigo/client"
 	"github.com/idfoundry/fapigo/fapihttp"
 )
 
@@ -220,5 +222,25 @@ func TestDefaultHTTPClientIsHardened(t *testing.T) {
 				t.Errorf("Timeout = %v, want HTTPTimeout", c.Timeout)
 			}
 		})
+	}
+}
+
+// TestProductionRequiresAuthorizationResponseIss checks the RFC 9207 baseline:
+// production requires "iss" in the callback even before discovery raises it,
+// as FAPIgo refuses anything less there, while development tolerates a test
+// issuer that leaves it out.
+func TestProductionRequiresAuthorizationResponseIss(t *testing.T) {
+	for _, tc := range []struct {
+		assurance AssuranceLevel
+		want      client.AuthorizationResponseIssPolicy
+	}{
+		{0, client.TolerateAbsentAuthorizationResponseIss},
+		{AssuranceDevelopment, client.TolerateAbsentAuthorizationResponseIss},
+		{AssuranceProduction, client.RequireAuthorizationResponseIss},
+	} {
+		cfg := engineConfig(baseOptions(), Dependencies{Assurance: tc.assurance}, fapi.URL{}, client.DiscoveredMetadata{})
+		if cfg.AuthorizationResponseIssPolicy != tc.want {
+			t.Errorf("assurance %v: AuthorizationResponseIssPolicy = %v, want %v", tc.assurance, cfg.AuthorizationResponseIssPolicy, tc.want)
+		}
 	}
 }

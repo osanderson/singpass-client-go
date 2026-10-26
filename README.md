@@ -71,7 +71,7 @@ built-in test clients and users, and a dashboard at `/_fake/`. See
 go get github.com/osanderson/singpass-client-go
 ```
 
-Requires Go 1.26.9+ (FAPIgo's minimum, which fixes GO-2026-6617). The package name is `singpass`.
+Requires Go 1.26.10+ (FAPIgo's minimum, which fixes GO-2026-6809). The package name is `singpass`.
 
 ## Quick start
 

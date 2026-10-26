@@ -24,6 +24,8 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 		"no scopes":            {func(o *Options) { o.Scopes = nil }, false, []string{"no Scopes"}},
 		"no openid":            {func(o *Options) { o.Scopes = []string{"name"} }, false, []string{`"openid" is missing from Scopes`}},
 		"joined scopes":        {func(o *Options) { o.Scopes = []string{"openid name"} }, false, []string{"contains whitespace", `"openid" is missing from Scopes`}},
+		"quote in scope":       {func(o *Options) { o.Scopes = []string{"openid", `na"me`} }, false, []string{"a character a scope can't contain"}},
+		"non-ASCII scope":      {func(o *Options) { o.Scopes = []string{"openid", "namé"} }, false, []string{"a character a scope can't contain"}},
 		"duplicate scope":      {func(o *Options) { o.Scopes = []string{"openid", "name", "name"} }, false, []string{`"name" is listed more than once`}},
 		"several problems": {func(o *Options) { o.ClientID = ""; o.Scopes = []string{"name"} }, false,
 			[]string{"ClientID is required", `"openid" is missing from Scopes`}},
