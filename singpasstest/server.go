@@ -291,7 +291,7 @@ func (s *Server) build() error {
 		Keys:                   serverKeys,
 		AccessTokens:           accessTokens,
 		Revocation:             revocation,
-		ClientCertificateTrust: server.NoClientCertificateChainTrust{},
+		ClientCertificateTrust: server.NoPKIClientAuthentication{}, // every client uses private_key_jwt; none uses tls_client_auth
 		Clock:                  systemClock{},
 		Random:                 rand.Reader,
 	})
