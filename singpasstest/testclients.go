@@ -158,17 +158,19 @@ func (s *Server) handleTestClientKeys(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	var contentType string
+	var body []byte
 	switch r.PathValue("file") {
 	case "jwks.json":
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(TestClientJWKS())
+		contentType, body = "application/json", TestClientJWKS()
 	case "sig.pem":
-		w.Header().Set("Content-Type", "application/x-pem-file")
-		_, _ = w.Write(pkcs8PEM(testClientSigningKey))
+		contentType, body = "application/x-pem-file", pkcs8PEM(testClientSigningKey)
 	case "enc.pem":
-		w.Header().Set("Content-Type", "application/x-pem-file")
-		_, _ = w.Write(pkcs8PEM(testClientEncryptionKey))
+		contentType, body = "application/x-pem-file", pkcs8PEM(testClientEncryptionKey)
 	default:
 		http.NotFound(w, r)
+		return
 	}
+	w.Header().Set("Content-Type", contentType)
+	_, _ = w.Write(body)
 }

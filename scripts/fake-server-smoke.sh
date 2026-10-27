@@ -39,11 +39,12 @@ trap cleanup EXIT
 
 # wait_healthy waits for container $1's health check to pass.
 wait_healthy() {
+  local container=$1
   for _ in $(seq 60); do
-    [[ $(docker inspect -f '{{.State.Health.Status}}' "$1") == healthy ]] && return 0
+    [[ $(docker inspect -f '{{.State.Health.Status}}' "$container") == healthy ]] && return 0
     sleep 1
   done
-  echo "$1 never became healthy" >&2
+  echo "$container never became healthy" >&2
   return 1
 }
 

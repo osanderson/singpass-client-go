@@ -61,6 +61,10 @@ func formParam(form server.FormRequest) func(string) string {
 	return func(name string) string { return formValue(form, name) }
 }
 
+// assertionFailed is FAPIgo's error description for a client_assertion that
+// fails verification; the cause says why.
+const assertionFailed = "client assertion verification failed"
+
 // hint says how to fix the mistake serr reports, if it is a usual one.
 func (s *Server) hint(r *http.Request, param func(string) string, serr *server.Error) string {
 	clientID := param("client_id")
@@ -84,15 +88,15 @@ func (s *Server) hint(r *http.Request, param func(string) string, serr *server.E
 		return fmt.Sprintf("The client_assertion's header has kid %q, but client %q's signing key is kid %q%s",
 			jwtHeader(param("client_assertion")).Kid, clientID, c.cfg.SigningKID, s.testKeysHint(clientID))
 
-	case desc == "client assertion verification failed" && strings.Contains(cause, "aud does not match"):
+	case desc == assertionFailed && strings.Contains(cause, "aud does not match"):
 		return fmt.Sprintf("The client_assertion's aud is %s; it must be the issuer, %q, not the PAR or token endpoint",
 			audString(jwtClaims(param("client_assertion"))["aud"]), s.issuer)
 
-	case desc == "client assertion verification failed" && strings.Contains(cause, "invalid signature") && registered:
+	case desc == assertionFailed && strings.Contains(cause, "invalid signature") && registered:
 		return fmt.Sprintf("Sign the client_assertion with the private half of client %q's registered signing key, kid %q%s",
 			clientID, c.cfg.SigningKID, s.testKeysHint(clientID))
 
-	case desc == "client assertion verification failed" && strings.Contains(cause, "iss/sub"),
+	case desc == assertionFailed && strings.Contains(cause, "iss/sub"),
 		desc == "client_id does not match the client assertion's subject":
 		return fmt.Sprintf("The client_assertion's iss and sub must both be the client_id, %q", clientID)
 

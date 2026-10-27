@@ -169,17 +169,9 @@ func TestLoginAsRejectsBadHeaders(t *testing.T) {
 			if h == nil {
 				h = tc.as.Header()
 			}
-			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, redirectURL, nil)
-			req.Header = h
-			res, err := http.DefaultClient.Do(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var e oauthError
-			_ = json.NewDecoder(res.Body).Decode(&e)
-			res.Body.Close()
-			if res.StatusCode != http.StatusBadRequest || e.Error != "invalid_request" || !strings.Contains(e.Description, tc.want) {
-				t.Fatalf("got %d %+v, want 400 invalid_request containing %q", res.StatusCode, e, tc.want)
+			status, e := getWithHeader(t, redirectURL, h)
+			if status != http.StatusBadRequest || e.Error != "invalid_request" || !strings.Contains(e.Description, tc.want) {
+				t.Fatalf("got %d %+v, want 400 invalid_request containing %q", status, e, tc.want)
 			}
 
 			// The rejected request didn't use up the login.
@@ -192,6 +184,22 @@ func TestLoginAsRejectsBadHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+// getWithHeader GETs u with header h, and returns the status and the OAuth
+// error in the body, if any.
+func getWithHeader(t *testing.T, u string, h http.Header) (int, oauthError) {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+	req.Header = h
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var e oauthError
+	_ = json.NewDecoder(res.Body).Decode(&e)
+	return res.StatusCode, e
 }
 
 func TestAuthorizeNeedsLoginAsWhenInteractive(t *testing.T) {

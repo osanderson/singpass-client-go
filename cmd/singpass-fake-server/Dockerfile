@@ -29,7 +29,9 @@ RUN go mod download
 
 COPY . .
 ARG TARGETOS TARGETARCH
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /singpass-fake-server ./cmd/singpass-fake-server
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" \
+    -o /singpass-fake-server ./cmd/singpass-fake-server
 
 # An empty /certs for FAKE_TLS_CA_DIR, owned by the image's non-root user so a
 # named volume mounted there is writable.

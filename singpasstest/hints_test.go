@@ -76,24 +76,7 @@ func TestRejectionHints(t *testing.T) {
 			"scope 'vehicles.make' is not permitted for this client. Register the scope for client 'mi'; it has openid name"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			o := tc.opts
-			if o.ClientID == "" {
-				o.ClientID = "mi"
-			}
-			if o.RedirectURI == "" {
-				o.RedirectURI = redirectURI
-			}
-			if o.Scopes == nil {
-				o.Scopes = []string{"openid", "name"}
-			}
-			if o.SigningKey == nil {
-				o.SigningKey = k.sig
-			}
-			if o.SigningKID == "" {
-				o.SigningKID = "sig-1"
-			}
-			o.Issuer, o.EncryptionKey, o.EncryptionKID = srv.Issuer(), k.enc, "enc-1"
-			c, err := singpass.NewMyinfo(ctx, o, devDeps)
+			c, err := singpass.NewMyinfo(ctx, miOptions(tc.opts, srv, k), devDeps)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -106,6 +89,28 @@ func TestRejectionHints(t *testing.T) {
 			}
 		})
 	}
+}
+
+// miOptions is o for client "mi" with keys k at srv, with every field o
+// leaves unset filled in.
+func miOptions(o singpass.MyinfoOptions, srv *singpasstest.Server, k testKeys) singpass.MyinfoOptions {
+	if o.ClientID == "" {
+		o.ClientID = "mi"
+	}
+	if o.RedirectURI == "" {
+		o.RedirectURI = redirectURI
+	}
+	if o.Scopes == nil {
+		o.Scopes = []string{"openid", "name"}
+	}
+	if o.SigningKey == nil {
+		o.SigningKey = k.sig
+	}
+	if o.SigningKID == "" {
+		o.SigningKID = "sig-1"
+	}
+	o.Issuer, o.EncryptionKey, o.EncryptionKID = srv.Issuer(), k.enc, "enc-1"
+	return o
 }
 
 // A client_assertion with the wrong aud, and a DPoP proof with the wrong htu,
