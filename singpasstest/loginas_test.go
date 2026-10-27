@@ -160,29 +160,37 @@ func TestLoginAsRejectsBadHeaders(t *testing.T) {
 			if tc.corppass {
 				srv, c = cp, cpc
 			}
-			ctx := context.Background()
-			redirectURL, state, err := c.BeginLogin(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
 			h := tc.header
 			if h == nil {
 				h = tc.as.Header()
 			}
-			status, e := getWithHeader(t, redirectURL, h)
-			if status != http.StatusBadRequest || e.Error != "invalid_request" || !strings.Contains(e.Description, tc.want) {
-				t.Fatalf("got %d %+v, want 400 invalid_request containing %q", status, e, tc.want)
-			}
-
-			// The rejected request didn't use up the login.
-			query, err := srv.Authorize(ctx, redirectURL)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := c.Complete(ctx, query, state); err != nil {
-				t.Fatalf("login after rejected headers: %v", err)
-			}
+			checkRejectedHeaders(t, srv, c, h, tc.want)
 		})
+	}
+}
+
+// checkRejectedHeaders starts a login on c and checks that srv rejects its
+// authorization request with headers h as invalid_request, with want in the
+// description, and that the login then still completes.
+func checkRejectedHeaders(t *testing.T, srv *singpasstest.Server, c *singpass.Client, h http.Header, want string) {
+	t.Helper()
+	ctx := context.Background()
+	redirectURL, state, err := c.BeginLogin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, e := getWithHeader(t, redirectURL, h)
+	if status != http.StatusBadRequest || e.Error != "invalid_request" || !strings.Contains(e.Description, want) {
+		t.Fatalf("got %d %+v, want 400 invalid_request containing %q", status, e, want)
+	}
+
+	// The rejected request didn't use up the login.
+	query, err := srv.Authorize(ctx, redirectURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Complete(ctx, query, state); err != nil {
+		t.Fatalf("login after rejected headers: %v", err)
 	}
 }
 
