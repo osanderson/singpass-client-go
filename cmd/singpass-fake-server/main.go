@@ -156,6 +156,12 @@ var jwksPollInterval = 2 * time.Second
 // -singpass-url is FAKE_SINGPASS_URL, and so on.
 const envPrefix = "FAKE_"
 
+// The URL schemes the servers are reached at: http, or https with TLS.
+const (
+	httpScheme  = "http://"
+	httpsScheme = "https://"
+)
+
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("singpass-fake-server", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -193,35 +199,19 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err := tlsFlags.check(); err != nil {
 		return err
 	}
-	var specs []serverSpec
-	for _, sc := range []serverSpec{
+	specs := serverSpecs([]serverSpec{
 		{"Singpass", singpasstest.Singpass, *spAddr, *spURL},
 		{"Corppass", singpasstest.Corppass, *cpAddr, *cpURL},
-	} {
-		if sc.addr == "" {
-			continue
-		}
-		if tlsFlags.on() {
-			sc.url = httpsURL(sc.url, sc.addr)
-		}
-		specs = append(specs, sc)
-	}
+	}, tlsFlags)
 	if *healthcheck {
 		return checkHealth(ctx, specs, tlsFlags)
 	}
-	var cfg config
-	if *cfgPath != "" {
-		var err error
-		if cfg, err = loadConfig(*cfgPath); err != nil {
-			return err
-		}
-	}
 	if one.ID != "" {
 		one.RedirectURIs, one.Scopes = splitList(*redirects), splitList(*scopes)
-		if err := one.check(); err != nil {
-			return fmt.Errorf("-client-id: %w", err)
-		}
-		cfg.Clients = append(cfg.Clients, one)
+	}
+	cfg, err := clientsConfig(*cfgPath, one)
+	if err != nil {
+		return err
 	}
 	if *onlyPersonas && *personasPath == "" {
 		return errors.New("-only-personas needs -personas")
@@ -229,15 +219,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	users := testUsers{path: *personasPath, only: *onlyPersonas}
 	withTestClients := *testClients || len(cfg.Clients) == 0
 
-	var tlsConfig *tls.Config
-	if tlsFlags.on() {
-		var err error
-		if tlsConfig, err = tlsFlags.serverConfig(certHosts(specs)); err != nil {
-			return err
-		}
-		if tlsFlags.caDir != "" {
-			fmt.Fprintf(stdout, "HTTPS with a test CA: trust %s in your app\n", filepath.Join(tlsFlags.caDir, caCertFile))
-		}
+	tlsConfig, err := serverTLSConfig(tlsFlags, specs, stdout)
+	if err != nil {
+		return err
 	}
 
 	servers := map[string]*singpasstest.Server{}
@@ -274,6 +258,56 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	<-ctx.Done()
 	fmt.Fprintln(stderr, "shutting down")
 	return nil
+}
+
+// serverSpecs returns the servers that are enabled (have a listen address),
+// each with an https URL when TLS is on.
+func serverSpecs(all []serverSpec, tlsFlags tlsSettings) []serverSpec {
+	var specs []serverSpec
+	for _, sc := range all {
+		if sc.addr == "" {
+			continue
+		}
+		if tlsFlags.on() {
+			sc.url = httpsURL(sc.url, sc.addr)
+		}
+		specs = append(specs, sc)
+	}
+	return specs
+}
+
+// clientsConfig returns the clients to register: those in the -config file
+// at path, if any, and one, if it has an ID.
+func clientsConfig(path string, one clientConfig) (config, error) {
+	var cfg config
+	if path != "" {
+		var err error
+		if cfg, err = loadConfig(path); err != nil {
+			return config{}, err
+		}
+	}
+	if one.ID != "" {
+		if err := one.check(); err != nil {
+			return config{}, fmt.Errorf("-client-id: %w", err)
+		}
+		cfg.Clients = append(cfg.Clients, one)
+	}
+	return cfg, nil
+}
+
+// serverTLSConfig returns the servers' TLS configuration, or nil without TLS.
+func serverTLSConfig(tlsFlags tlsSettings, specs []serverSpec, stdout io.Writer) (*tls.Config, error) {
+	if !tlsFlags.on() {
+		return nil, nil
+	}
+	tlsConfig, err := tlsFlags.serverConfig(certHosts(specs))
+	if err != nil {
+		return nil, err
+	}
+	if tlsFlags.caDir != "" {
+		fmt.Fprintf(stdout, "HTTPS with a test CA: trust %s in your app\n", filepath.Join(tlsFlags.caDir, caCertFile))
+	}
+	return tlsConfig, nil
 }
 
 // flagsFromEnv sets each flag not given on the command line from its
@@ -314,9 +348,9 @@ type serverSpec struct {
 func httpsURL(u, addr string) string {
 	switch {
 	case u == "":
-		return "https://" + addr
-	case strings.HasPrefix(u, "http://"):
-		return "https://" + strings.TrimPrefix(u, "http://")
+		return httpsScheme + addr
+	case strings.HasPrefix(u, httpScheme):
+		return httpsScheme + strings.TrimPrefix(u, httpScheme)
 	}
 	return u
 }
@@ -344,13 +378,13 @@ func certHosts(specs []serverSpec) []string {
 func checkHealth(ctx context.Context, specs []serverSpec, t tlsSettings) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	scheme, transport := "http://", http.DefaultTransport.(*http.Transport).Clone()
+	scheme, transport := httpScheme, http.DefaultTransport.(*http.Transport).Clone()
 	if t.on() {
 		roots, err := t.rootCAs()
 		if err != nil {
 			return err
 		}
-		scheme = "https://"
+		scheme = httpsScheme
 		transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
 	}
 	for _, sc := range specs {

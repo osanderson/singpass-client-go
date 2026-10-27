@@ -1,7 +1,7 @@
 package singpasstest
 
 import (
-	_ "embed"
+	_ "embed" // for the //go:embed dashboard template
 	"encoding/json"
 	"html/template"
 	"net/http"
