@@ -276,6 +276,7 @@ func (s *Server) build() error {
 			AccessTokenLifetime:        30 * time.Minute,
 			IDTokenLifetime:            10 * time.Minute,
 			MaxIDTokenClaimsBytes:      4096,
+			MaxAccessTokenClaimsBytes:  6144,
 			RefreshTokenLifetime:       time.Hour,
 			MaxDPoPProofAge:            2 * time.Minute,
 			MaxClockSkew:               30 * time.Second,
@@ -309,12 +310,19 @@ func (s *Server) build() error {
 	if err != nil {
 		return err
 	}
+	// /userinfo is reached at the server's own URL; the DPoP proof's htu is
+	// checked against it and the request's path.
+	resourceURL, err := fapi.ParseEndpointURL(s.base, loopback)
+	if err != nil {
+		return err
+	}
 	// Development assurance: in-memory stores and ephemeral keys, as the
 	// authorization server itself uses.
 	s.rs, err = resource.NewVerifier(
 		resource.Config{
-			Assurance: resource.AssuranceDevelopment,
-			Limits:    resource.Limits{MaxDPoPProofAge: 2 * time.Minute, MaxClockSkew: 30 * time.Second},
+			Assurance:    resource.AssuranceDevelopment,
+			Limits:       resource.Limits{MaxDPoPProofAge: 2 * time.Minute, MaxClockSkew: 30 * time.Second},
+			ResourceURLs: []fapi.URL{resourceURL},
 		},
 		resource.Dependencies{AccessTokens: resourceTokens, Replay: replay, Revocation: revocation, Clock: systemClock{}},
 	)
@@ -691,11 +699,19 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUserInfo(w http.ResponseWriter, r *http.Request) {
-	u, _ := url.Parse(s.base)
-	u.Path, u.RawQuery = r.URL.Path, r.URL.RawQuery
 	// From the request itself, so a repeated Authorization header is
-	// refused (RFC 9110 §5.3) rather than the first one used.
-	authz, err := s.rs.Verify(r.Context(), resource.VerifyRequestFromHTTP(r, u))
+	// refused (RFC 9110 §5.3) rather than the first one used. The URL the
+	// client called is the server's URL and the request's path, as at the
+	// other endpoints, so a BaseURL with a path prefix (behind a proxy that
+	// strips it) works here too.
+	req := resource.VerifyRequestFromHTTP(r)
+	called, err := url.Parse(s.base + r.URL.EscapedPath())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.URL = called
+	authz, err := s.rs.Verify(r.Context(), req)
 	if err != nil {
 		// The RFC 6750 / RFC 9449 challenge: no error code for a request
 		// without credentials, the DPoP error otherwise.
