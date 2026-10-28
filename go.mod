@@ -3,7 +3,7 @@ module github.com/osanderson/singpass-client-go
 go 1.26.10
 
 require (
-	github.com/idfoundry/fapigo v0.61.0
+	github.com/idfoundry/fapigo v0.65.1
 	modernc.org/sqlite v1.60.1
 )
 
