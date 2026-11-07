@@ -271,7 +271,10 @@ With no configuration it registers built-in test clients — `login-test`,
 this fake only. To use your app's own keys, register it with
 `-client-id`, `-client-product`, `-client-redirect-uris`, `-client-scopes`
 and `-client-jwks-url`, or register several clients from a JSON file with
-`-config`. Every flag can also be set from an environment variable
+`-config`. Register every scope your app requests: a request for more than
+4 KiB of scopes the client isn't registered for fails with `invalid_request`
+and "scope must not be longer than 4096 bytes", not `invalid_scope`. Every
+flag can also be set from an environment variable
 (`-singpass-url` is `FAKE_SINGPASS_URL`). See the
 [command's documentation](https://pkg.go.dev/github.com/osanderson/singpass-client-go/cmd/singpass-fake-server).
 

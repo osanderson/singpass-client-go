@@ -5,6 +5,20 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.16.4
+
+FAPIgo v0.70.0 adds checks that can refuse configuration or requests that
+were accepted before. None of them needs a code change.
+
+- **An `Issuer` ending in a bare `#` is refused.** It used to be parsed away
+  silently, and `New` now fails with "URL must not contain a fragment". Drop
+  the `#`. A `RedirectURI` containing `#` was already refused.
+- **The fake server (`singpasstest`) bounds pushed requests.** `state`,
+  `nonce`, `login_hint` and `acr_values` may be at most 4 KiB, and `scope` at
+  most 4 KiB or the length of the client's registered scopes, whichever is
+  larger. One `request_uri` can open the sign-in page at most eight times, so
+  a ninth reload fails with `invalid_request_uri`.
+
 ## v0.16.0
 
 FAPIgo v0.56.0 checks, under `AssuranceProduction`, that every outbound call
