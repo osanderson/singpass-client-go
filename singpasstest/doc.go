@@ -30,6 +30,9 @@
 //     staging allows.
 //   - A pushed authorization request without the openid scope is refused
 //     (invalid_scope).
+//   - A scope longer than both 4 KiB and the client's registered scopes
+//     joined with spaces is refused (invalid_request), before its values
+//     are checked. A client registered for every scope can request them all.
 //
 // Test users are Personas: fictitious people and a company, with Myinfo data
 // in the real envelope shape (see DefaultPersonas). Logins are approved
