@@ -7,10 +7,10 @@
 #
 #   docker build -f examples/demo/Dockerfile -t singpass-demo .
 
-# The library (via FAPIgo) needs Go 1.26.10+.
+# The library (via FAPIgo) needs Go 1.26.11+.
 # Base images are pinned by digest (Dependabot keeps the tag and digest current),
 # so a re-pushed tag can't change what is built and deployed.
-FROM golang:1.27@sha256:e432b43af23a9328d56a7c499be0476810aa344acbcf65fc7c455d4ff5a40602 AS builder
+FROM golang:1.27@sha256:01aa404fa56b604b6f48e90c1d6e2c79fe5cd78f9592f78d80303fbe171cdcc0 AS builder
 
 WORKDIR /src
 
