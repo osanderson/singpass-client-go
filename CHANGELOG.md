@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.6](https://github.com/osanderson/singpass-client-go/compare/v0.16.5...v0.16.6) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deps:** bump FAPIgo to v0.73.0 ([#149](https://github.com/osanderson/singpass-client-go/issues/149)) ([6ce1427](https://github.com/osanderson/singpass-client-go/commit/6ce14275b29c1d17564da840171a8df2aa6da8bf))
+* **deps:** bump modernc.org/sqlite from 1.61.1 to 1.62.0 ([#146](https://github.com/osanderson/singpass-client-go/issues/146)) ([66a686f](https://github.com/osanderson/singpass-client-go/commit/66a686fa049da2841ca8989b329ccb0bef4d06c5))
+
 ## [0.16.5](https://github.com/osanderson/singpass-client-go/compare/v0.16.4...v0.16.5) (2026-11-11)
 
 
