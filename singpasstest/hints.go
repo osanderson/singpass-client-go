@@ -65,6 +65,10 @@ func formParam(form server.FormRequest) func(string) string {
 // fails verification; the cause says why.
 const assertionFailed = "client assertion verification failed"
 
+// assertionAudPrefix starts FAPIgo's error description for a client_assertion
+// whose aud isn't accepted. It names the issuer but not the aud that was sent.
+const assertionAudPrefix = "client assertion aud must be"
+
 // hint says how to fix the mistake serr reports, if it is a usual one.
 func (s *Server) hint(r *http.Request, param func(string) string, serr *server.Error) string {
 	clientID := param("client_id")
@@ -88,7 +92,7 @@ func (s *Server) hint(r *http.Request, param func(string) string, serr *server.E
 		return fmt.Sprintf("The client_assertion's header has kid %q, but client %q's signing key is kid %q%s",
 			jwtHeader(param("client_assertion")).Kid, clientID, c.cfg.SigningKID, s.testKeysHint(clientID))
 
-	case desc == assertionFailed && strings.Contains(cause, "aud does not match"):
+	case strings.HasPrefix(desc, assertionAudPrefix):
 		return fmt.Sprintf("The client_assertion's aud is %s; it must be the issuer, %q, not the PAR or token endpoint",
 			audString(jwtClaims(param("client_assertion"))["aud"]), s.issuer)
 
