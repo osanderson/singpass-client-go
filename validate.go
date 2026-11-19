@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/url"
 	"strings"
+
+	fapi "github.com/idfoundry/fapigo"
 )
 
 // validateOptions reports every problem with opts that Singpass or Corppass
@@ -46,8 +48,21 @@ func validateOptions(opts Options, production bool) error {
 // validateRedirectURI checks the redirect URI is one Singpass can register
 // and redirect to: absolute, without a fragment, with a host name rather than
 // an IP address (the developer portal refuses those), and https — or
-// http://localhost for local development, which Singpass staging allows.
+// http://localhost for local development, which Singpass staging allows. It
+// must also be written exactly as the redirect to it is sent: lowercase scheme
+// and host, characters RFC 3986 doesn't allow percent-encoded, no "." or ".."
+// path segment and no empty port.
 func validateRedirectURI(raw string, production bool) error {
+	if err := checkRedirectURIScheme(raw, production); err != nil {
+		return err
+	}
+	if err := fapi.CheckRedirectURIForm(raw); err != nil {
+		return fmt.Errorf("RedirectURI %q: %w", raw, err)
+	}
+	return nil
+}
+
+func checkRedirectURIScheme(raw string, production bool) error {
 	if raw == "" {
 		return errors.New("RedirectURI is required: use the redirect URI registered in the developer portal")
 	}

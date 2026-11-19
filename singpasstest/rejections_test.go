@@ -149,3 +149,17 @@ func TestServerRejectsMalformedRequests(t *testing.T) {
 		t.Errorf("/jwks: %d with %d keys", res.StatusCode, len(set.Keys))
 	}
 }
+
+// A redirect URI must be registered exactly as the redirect to it is sent, so
+// one with an uppercase host is refused with the form to register instead.
+func TestRegisterClientRefusesUnsentRedirectForm(t *testing.T) {
+	srv := startServer(t, singpasstest.Config{})
+	k := newKeys(t)
+	err := srv.RegisterClient(singpasstest.Client{
+		ID: "rp", App: singpasstest.Login, RedirectURIs: []string{"https://RP.example/callback"}, Scopes: []string{"name"},
+		SigningKey: &k.sig.PublicKey, SigningKID: "s", EncryptionKey: &k.enc.PublicKey, EncryptionKID: "e",
+	})
+	if err == nil || !strings.Contains(err.Error(), `"https://rp.example/callback"`) {
+		t.Fatalf("RegisterClient = %v, want an error giving the lowercase form", err)
+	}
+}
