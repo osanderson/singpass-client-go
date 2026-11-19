@@ -155,7 +155,8 @@ singpass-keygen -dir keys/login -sig-kid login-sig-1 -enc-kid login-enc-1 -check
 
 From a running app, `client.CheckPublishedJWKS(ctx, url)` does the same, e.g.
 as a readiness check. The constructors also check your options up front:
-a missing `openid` scope, a malformed, non-https or IP-address redirect URI and
+a missing `openid` scope, a malformed, non-https or IP-address redirect URI
+or one not written exactly as it is sent (such as an uppercase host), and
 an empty key ID fail at startup, with an error naming the option, rather than at
 Singpass.
 

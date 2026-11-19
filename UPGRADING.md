@@ -5,6 +5,23 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.16.7
+
+FAPIgo v0.74.0 and v0.75.0 require a redirect URI to be written exactly as
+the redirect to it is sent. Nearly every URI already is. One that isn't is
+now refused, and needs a configuration change but no code change.
+
+- **`New` refuses a `RedirectURI` that isn't in its sent form.** That means
+  an uppercase letter in the scheme or host (`https://App.example.com/cb`),
+  a character RFC 3986 doesn't allow left unencoded (a space, `<`, a
+  non-ASCII letter, in the path or the query), a `.` or `..` path segment,
+  or an empty port (`https://app.example.com:/cb`). The error names
+  `RedirectURI` and, where there is one, the form to use. Register that
+  form in the developer portal and set `RedirectURI` to match.
+- **The fake server refuses to register such a redirect URI.**
+  `singpasstest`'s `RegisterClient` returns an error giving the form to
+  register, and `singpass-fake-server` fails to start with it.
+
 ## v0.16.4
 
 FAPIgo v0.70.0 adds checks that can refuse configuration or requests that
