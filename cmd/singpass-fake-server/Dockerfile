@@ -16,7 +16,7 @@
 # so a re-pushed tag can't change what is built and published. The builder runs
 # on the build machine's platform and cross-compiles, so a multi-platform build
 # needs no emulation.
-FROM --platform=$BUILDPLATFORM golang:1.27@sha256:01aa404fa56b604b6f48e90c1d6e2c79fe5cd78f9592f78d80303fbe171cdcc0 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS builder
 
 WORKDIR /src
 
