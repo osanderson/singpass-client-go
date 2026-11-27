@@ -65,10 +65,11 @@ func TestSharedDPoPKeySpansInstances(t *testing.T) {
 
 // Without one, the code is bound to the first instance's DPoP key and the
 // second instance's token request is refused, as Singpass refuses it
-// (invalid_dpop_proof there, invalid_grant from the fake server).
+// (invalid_dpop_proof there; from the fake server, invalid_grant for a code
+// it doesn't know with that DPoP key).
 func TestPerProcessDPoPKeysDontSpanInstances(t *testing.T) {
 	err := crossInstanceLogin(t, nil)
-	if err == nil || !strings.Contains(err.Error(), "dpop_jkt") {
+	if err == nil || !strings.Contains(err.Error(), "share one DPoP key") {
 		t.Fatalf("err = %v, want the code's DPoP key binding to refuse it", err)
 	}
 }

@@ -88,7 +88,7 @@ func TestCallbackPassesSessionTTL(t *testing.T) {
 		Cookies:       CookieConfig{SessionTTL: 7 * time.Minute},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/login/callback?state=abc&code=x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/login/callback?state="+singpass.CallbackState("abc")+"&code=x", nil)
 	req.AddCookie(&http.Cookie{Name: "sp_state_login", Value: "abc"})
 	rec := httptest.NewRecorder()
 	h.Callback(app)(rec, req)

@@ -69,7 +69,12 @@ func cookieNamed(rec *httptest.ResponseRecorder, name string) *http.Cookie {
 	return nil
 }
 
+// callbackRequest is a callback for the login whose state is state, carrying
+// cookieState in the state cookie. An empty state leaves the URL's out.
 func callbackRequest(state, cookieState string) *http.Request {
+	if state != "" {
+		state = singpass.CallbackState(state)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/login/callback?code=c&state="+state, nil)
 	if cookieState != "" {
 		req.AddCookie(&http.Cookie{Name: "sp_state_login", Value: cookieState})

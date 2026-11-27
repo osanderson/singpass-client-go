@@ -230,11 +230,12 @@ func (h *Handlers) Callback(a *App) http.HandlerFunc {
 	stateCookie := h.cookies.stateName(a.Name)
 	return func(w http.ResponseWriter, r *http.Request) {
 		setNoStore(w)
-		// Defense in depth: the callback's state must match the cookie we set at
-		// /{name}/login. FAPIgo independently validates state/nonce/iss against
-		// its own session store; this is a belt-and-braces check at the HTTP edge.
+		// Defense in depth: the callback's state must be the one derived from
+		// the cookie we set at /{name}/login. FAPIgo independently validates
+		// state/nonce/iss against its own session store; this is a
+		// belt-and-braces check at the HTTP edge.
 		c, err := r.Cookie(stateCookie)
-		if err != nil || c.Value == "" || c.Value != r.URL.Query().Get("state") {
+		if err != nil || c.Value == "" || singpass.CallbackState(c.Value) != r.URL.Query().Get("state") {
 			h.log.Warn("callback state mismatch", "app", a.Name)
 			http.SetCookie(w, h.cookies.clear(stateCookie))
 			h.onError(w, r, a, ErrStateMismatch)

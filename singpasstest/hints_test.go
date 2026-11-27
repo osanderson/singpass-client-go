@@ -154,8 +154,8 @@ func TestRejectionHintsAssertionIssuerSubject(t *testing.T) {
 	}
 }
 
-// A token request whose redirect_uri or code_verifier isn't the login's, or
-// without a DPoP proof, is rejected saying what to send.
+// A token request with an unregistered redirect_uri or another login's
+// code_verifier, or without a DPoP proof, is rejected saying what to send.
 func TestRejectionHintsTokenRequest(t *testing.T) {
 	srv, _ := loggingServer(t, singpasstest.Config{})
 	k := newKeys(t)
@@ -166,8 +166,8 @@ func TestRejectionHintsTokenRequest(t *testing.T) {
 		noDPoP                bool
 		want                  string
 	}{
-		"redirect_uri":  {redirectURI: "https://rp.example/other", want: "Send the token request the same redirect_uri as the pushed authorization request"},
-		"code_verifier": {redirectURI: redirectURI, verifier: strings.Repeat("x", 43), want: "Send the PKCE code_verifier of the login this code came from"},
+		"redirect_uri":  {redirectURI: "https://rp.example/other", want: "Client 'mi''s redirect URIs are https://rp.example/callback"},
+		"code_verifier": {redirectURI: redirectURI, verifier: strings.Repeat("x", 43), want: "only works with the login's own redirect_uri, PKCE code_verifier and DPoP key"},
 		"no DPoP":       {redirectURI: redirectURI, noDPoP: true, want: "Send a DPoP proof in the DPoP header, as Singpass and Corppass require"},
 	} {
 		t.Run(name, func(t *testing.T) {

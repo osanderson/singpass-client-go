@@ -8,17 +8,17 @@ import (
 )
 
 // FuzzCallbackSession: a callback is accepted only when the browser's state
-// is non-empty and equals the callback's own state.
+// is non-empty and the callback's own state is the one derived from it.
 func FuzzCallbackSession(f *testing.F) {
 	state := strings.Repeat("A", 43)
-	f.Add("code=x&state="+state, state)
+	f.Add("code=x&state="+CallbackState(state), state)
 	f.Add("state=a&state=b", "a")
 	f.Add("%zz", "")
 	f.Add("state=", "")
 	f.Fuzz(func(t *testing.T, rawQuery, state string) {
 		if _, err := callbackSession(rawQuery, state); err == nil {
 			q, _ := url.ParseQuery(rawQuery)
-			if state == "" || q.Get("state") != state {
+			if state == "" || q.Get("state") != CallbackState(state) {
 				t.Fatalf("accepted state %q for callback %q", state, rawQuery)
 			}
 		}

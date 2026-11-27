@@ -5,6 +5,25 @@ tightens behaviour, newest first. Patch releases (`x.y.Z`) never need code
 changes. The [CHANGELOG](CHANGELOG.md) lists every change; this page shows how
 to adapt to the ones that need edits.
 
+## v0.17.0
+
+FAPIgo v0.80.0 stops sending the login state as the callback's `state`.
+
+- **The callback's `state` is no longer the state `BeginLogin` returned.**
+  It's a one-way digest of it, so a callback URL, which other parties can
+  read, doesn't reveal the login state kept with the browser. `Complete`
+  and the `web` handlers are updated. If your own callback handler compares
+  the URL's `state` with the stored state before calling `Complete`, compare
+  it with `singpass.CallbackState(stored)` instead, or leave the check to
+  `Complete`.
+- **Logins in progress during the deploy fail once** with
+  `ErrLoginExpired`, because they were stored under the old state. Users
+  just log in again.
+- **The fake server can no longer say which part of a token request was
+  wrong.** It finds a code by its `redirect_uri`, PKCE verifier and DPoP key,
+  so getting any of them wrong gives `invalid_grant` with "code is invalid,
+  expired, or already used", and a hint that lists all three.
+
 ## v0.16.7
 
 FAPIgo v0.74.0 and v0.75.0 require a redirect URI to be written exactly as

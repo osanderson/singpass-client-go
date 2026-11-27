@@ -1,6 +1,8 @@
 package singpass
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -73,14 +75,30 @@ func retryDelay(attempt int) time.Duration {
 	return d + rand.N(d/4+1)
 }
 
+// callbackStatePrefix is what FAPIgo's client hashes before a session handle
+// to derive the "state" it sends (client.stateForHandle, unexported).
+const callbackStatePrefix = "fapigo client authorization state\x00"
+
+// CallbackState returns the "state" parameter of the callback for the login
+// whose BeginLogin state is loginState. The login state itself is never sent:
+// the authorization request carries a one-way digest of it, so a callback URL,
+// which other parties can read, doesn't reveal it. Use CallbackState to check,
+// before calling Complete, that a callback belongs to the login kept with this
+// browser; Complete makes the same check.
+func CallbackState(loginState string) string {
+	sum := sha256.Sum256([]byte(callbackStatePrefix + loginState))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
 // callbackSession checks the callback's state against the login state kept
-// with the browser, and returns FAPIgo's session handle for it.
+// with the browser, and returns FAPIgo's session handle for it. FAPIgo checks
+// the binding again; this check names the failure as ErrLoginExpired.
 func callbackSession(rawQuery, state string) (client.SessionHandle, error) {
 	if state == "" {
 		return client.SessionHandle{}, fmt.Errorf("singpass: no login in progress in this browser: %w", ErrLoginExpired)
 	}
 	q, err := url.ParseQuery(rawQuery)
-	if err != nil || q.Get("state") != state {
+	if err != nil || q.Get("state") != CallbackState(state) {
 		return client.SessionHandle{}, fmt.Errorf("singpass: callback state doesn't match this browser's login: %w", ErrLoginExpired)
 	}
 	handle, err := client.ParseSessionHandle(state)
