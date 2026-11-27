@@ -133,7 +133,12 @@ func (s *Server) hint(r *http.Request, param func(string) string, serr *server.E
 			"with client_id and request_uri once each"
 
 	case strings.HasPrefix(desc, "code is invalid, expired, or already used"):
-		return "A code works once, soon after the login, and this server keeps codes in memory, so a restart forgets them"
+		// The server finds a code by its redirect_uri, PKCE challenge and DPoP
+		// key too, so a request getting any of them wrong lands here.
+		return "A code works once, soon after the login, and this server keeps codes in memory, so a restart forgets them. " +
+			"It also only works with the login's own redirect_uri, PKCE code_verifier and DPoP key: send the token request " +
+			"the same redirect_uri and DPoP key as the pushed authorization request (with several app instances, share one " +
+			"DPoP key, or send each callback to the instance that started the login)"
 	}
 	return ""
 }

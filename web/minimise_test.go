@@ -98,7 +98,7 @@ func TestCallbackSessionIdentityNil(t *testing.T) {
 
 // callbackRequestFor is a callback for app with a matching state cookie.
 func callbackRequestFor(app, state string) *http.Request {
-	req := httptest.NewRequest(http.MethodGet, "/"+app+"/callback?code=c&state="+state, nil)
+	req := httptest.NewRequest(http.MethodGet, "/"+app+"/callback?code=c&state="+singpass.CallbackState(state), nil)
 	req.AddCookie(&http.Cookie{Name: "sp_state_" + app, Value: state})
 	return req
 }

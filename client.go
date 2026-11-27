@@ -605,8 +605,10 @@ func (c *Client) PublicJWKS(ctx context.Context) ([]byte, error) {
 // request and returns the URL to redirect the browser to, plus the login's
 // state. Keep the state with the browser — typically in an HttpOnly,
 // SameSite=Lax cookie — and pass it to Complete at the callback: it binds the
-// callback to the browser that started the login. With
-// Dependencies.BeginLoginRetries set, a temporary failure is retried.
+// callback to the browser that started the login. The state is never sent:
+// the callback's own "state" parameter is a digest of it (see CallbackState),
+// so don't compare the two directly. With Dependencies.BeginLoginRetries set,
+// a temporary failure is retried.
 func (c *Client) BeginLogin(ctx context.Context) (redirectURL string, state string, err error) {
 	return c.BeginLoginWith(ctx, LoginContext{})
 }
