@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/osanderson/singpass-client-go/compare/v0.16.7...v0.17.0) (2026-11-27)
+
+
+### Features
+
+* bump FAPIgo to v0.87.0, and add CallbackState ([#155](https://github.com/osanderson/singpass-client-go/issues/155)) ([8073d2e](https://github.com/osanderson/singpass-client-go/commit/8073d2e622cd93a8d8a873f1f42b789a29f2eaed))
+
 ## [0.16.7](https://github.com/osanderson/singpass-client-go/compare/v0.16.6...v0.16.7) (2026-11-19)
 
 
